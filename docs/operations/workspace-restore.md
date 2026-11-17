@@ -8,15 +8,22 @@ Rebuilds the platform workspace (Debian 13, x86-64) after the home directory is 
 
 Survives: everything pushed to GitHub, and `/opt/ai-lab` if the disk persists (the profile reapplies either way). Lost by design: uncommitted work, the local `gh` login, Claude Code session state, caches. The rule in each repository's CLAUDE.md is to commit and push after each completed checklist item.
 
-## One-time: cut the first release tag (you)
+## One-time: cut the first release tag (you, as repository admin)
 
-The restore clones the latest release tag anonymously. Claude never creates tags. After the restore PR is merged and before the first reset test:
+The restore clones the latest release tag anonymously. Claude never creates tags. After the restore PR is merged and before the first reset test, create `v0.1.0` **with your admin account, not the workspace's machine account**: the `release-tags` ruleset ([GitHub setup, section 7.2](github-setup.md)) lets only the repository admin role create `v*` tags, so a push from the workspace is refused with "Cannot create ref due to creations being restricted". That refusal is the guardrail working, not a fault.
+
+From a terminal authenticated as the admin account (your own machine, not the workspace):
 
 ```bash
-git switch main && git pull --ff-only
-git tag -a v0.1.0 -m "Stage 1: workspace foundation"
+git clone https://github.com/<owner>/ai-lab-infrastructure.git
+cd ai-lab-infrastructure
+git tag -a v0.1.0 -m "Stage 1: workspace foundation" origin/main
 git push origin v0.1.0
 ```
+
+Or in the GitHub web UI as admin: **Releases**, **Draft a new release**, create the tag `v0.1.0` on `main`, publish. Either way the tag points at the commit you want restored, so check it is the current head of `main` first.
+
+If a tag was created locally on the workspace by mistake, remove it there: `git tag -d v0.1.0`.
 
 ## Restore
 
