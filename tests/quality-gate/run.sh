@@ -250,7 +250,7 @@ test_dispatcher() {
   # Q-2 --list, --only, --skip, --base
   gate "$repo" --list
   rc_is "Q-2 --list exits 0" 0
-  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint gate-tests"
+  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint python gate-tests"
   n=$(awk '{print $1}' <<<"$OUT" | grep -Ev '^(ID|CHECK)$' | tr '\n' ' ' | sed 's/ $//')
   if [[ $n == "$expected" ]]; then ok "Q-2 --list shows check ids in order"; else fail "Q-2 --list shows check ids in order" "got: $n"; fi
   out_has "Q-2 --list shows the tool" "shellcheck"
@@ -386,6 +386,13 @@ for f in "$CHECKS"/*.sh; do
   id=$(basename "$f" .sh)
   if want "$id" && [[ -d $FIXTURES/$id ]]; then run_notool "$id"; fi
 done
+if want python; then
+  tmp=$(mktemp -d "$WORK/bytecode.XXXXXX")
+  cp -R "$FIXTURES/python/pass-ok/." "$tmp/"
+  files=$(list_files "$tmp")
+  (cd "$tmp" && "$BASH" "$CHECKS/python.sh" <<<"$files" >/dev/null 2>&1) || true
+  if [[ -z $(find "$tmp" -name '__pycache__' -o -name '*.pyc') ]]; then ok "python: writes no bytecode"; else fail "python: writes no bytecode"; fi
+fi
 if want yaml; then
   run_adapters yaml yamllint 'a.yml:3:1: [error] too many blank lines (1 > 0) (empty-lines)' \
     'a.yml:3: [error] too many blank lines (1 > 0) (empty-lines)' a.yml

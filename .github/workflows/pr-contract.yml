@@ -1,0 +1,41 @@
+name: pr-contract
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
+
+permissions: {}
+
+concurrency:
+  group: pr-contract-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      # The base commit, so a pull request cannot change the checker that judges it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      # Only two trusted values reach the script, through env. It fetches the title, body,
+      # branch, and files itself, so PR text never passes through an expression or a shell.
+      - name: Check the pull request contract
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ ! -f scripts/pr-contract ]]; then
+            echo "pr-contract: skipped: bootstrap (no checker on the base branch yet)"
+            exit 0
+          fi
+          python3 -I scripts/pr-contract --repo "$REPO" --pr "$PR_NUMBER"

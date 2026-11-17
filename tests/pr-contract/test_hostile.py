@@ -19,6 +19,7 @@ HOSTILE_STRINGS = [
 
 def run_cli(pr, client=None, files=None):
     client = client or MemClient()
+    client.prs[pr.number] = pr
     if files is not None:
         client.files[pr.number] = files
     out = io.StringIO()
