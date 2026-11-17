@@ -2,5 +2,7 @@
 # Test stub: records the call, never runs anything.
 set -euo pipefail
 printf 'sudo %s\n' "$*" >>"$STUB_LOG"
-if [[ ${1:-} == "-n" && -n ${STUB_SUDO_NEEDS_PASSWORD:-} ]]; then exit 1; fi
+# Real sudo: tickets are per terminal. A plain `sudo -n` succeeds after `sudo -v` in the same terminal, but
+# Ansible's become runs elsewhere and fails. Only `-k` (ignore the cached ticket) shows that a password is needed.
+if [[ " $* " == *" -n "* && " $* " == *" -k "* && -n ${STUB_SUDO_NEEDS_PASSWORD:-} ]]; then exit 1; fi
 exit 0

@@ -28,11 +28,11 @@ If a tag was created locally on the workspace by mistake, remove it there: `git 
 ## Restore
 
 1. Open a plain SSH terminal to the workspace.
-2. Clone the repository at the latest release tag, anonymously over HTTPS, outside `~/work` (so the working clone stays on `main`):
+2. Clone the repository at the latest release tag (`<latest-tag>`, for example `v0.1.1`), anonymously over HTTPS, outside `~/work` (so the working clone stays on `main`):
 
    ```bash
-   git clone --depth 1 --branch v0.1.0 https://github.com/<owner>/ai-lab-infrastructure.git ~/restore-v0.1.0
-   cd ~/restore-v0.1.0
+   git clone --depth 1 --branch <latest-tag> https://github.com/<owner>/ai-lab-infrastructure.git ~/restore-<latest-tag>
+   cd ~/restore-<latest-tag>
    ```
 
 3. Read the plan. This changes nothing (no sudo, no apt, no writes, no token prompt, no clone); it runs the playbook in check mode when Ansible is already installed:
@@ -47,7 +47,7 @@ If a tag was created locally on the workspace by mistake, remove it there: `git 
    workspace/restore.sh
    ```
 
-   - It calls `sudo -v` first. The sudo password prompt belongs to `sudo`; the script never reads a password. If Ansible still needs the password afterwards (a per-terminal sudo ticket), it asks Ansible to prompt for it.
+   - It calls `sudo -v` first. The sudo password prompt belongs to `sudo`; the script never reads a password. Sudo tickets are per terminal and are not shared with Ansible, so when sudo needs a password Ansible asks for it once more (`BECOME password:`). Expect two password prompts in total; with passwordless sudo, none.
    - If `ansible-core` is missing it installs it with `sudo apt-get install -y --no-install-recommends ansible-core python3-apt`, then applies `ansible/builder.yml` (the `builder` profile) with local Ansible.
    - It restores `~/.claude/settings.json` and `~/.claude/CLAUDE.md` from `workspace/claude-user/`. A differing file is backed up as `<name>.bak.<timestamp>` first. Credentials, `~/.claude/remote/`, and session state are never touched.
    - It sets the git identity to the machine account and its GitHub noreply address, built from the public profile lookup (no address is stored in the repository).
@@ -87,7 +87,7 @@ The static check cannot prove Claude Code enforces the rules. In a new Claude Co
 You run this once after the restore PR is merged and the tag exists. It resets the home directory, so make sure everything you want is pushed.
 
 1. Push or discard all work. Note the time.
-2. Simulate the reset (keeps `~/restore-v0.1.0` if you already cloned it; adjust to taste):
+2. Simulate the reset (keeps `~/restore-<latest-tag>` if you already cloned it; adjust to taste):
 
    ```bash
    mkdir -p ~/reset-backup && mv ~/work ~/.claude ~/.config/gh ~/.gitconfig ~/reset-backup/ 2>/dev/null || true
