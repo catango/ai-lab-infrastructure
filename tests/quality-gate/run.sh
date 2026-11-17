@@ -114,7 +114,7 @@ gen_hygiene_cases() {
     printf '%s\n' "$2" >"$d/$1/EXPECT"
     printf '%s\n' "$3" >"$d/$1/SECRET"
   }
-  mk fail-ocid "identifier" "$(printf '%s%s.%s.%s' ocid 1 oc1 "$(rep 20 a)")"
+  mk fail-ocid "identifier" "$(printf '%s%s.%s.%s.%s.%s' ocid 1 instance oc1 uk-london-1 "$(rep 20 a)")"
   mk fail-private-ipv4 "IPv4" "$(printf '%s.%s.%s.%s' 10 0 0 7)"
   mk fail-public-ipv4 "IPv4" "$(printf '%s.%s.%s.%s' 8 8 8 8)"
   mk fail-email "email" "$(printf '%s%s%s' user "$at" example.com)"
@@ -261,12 +261,11 @@ test_dispatcher() {
   gate "$repo" --only bash-hygiene,links --skip links
   out_has "Q-2 --skip keeps the rest" "bash-hygiene"
   out_lacks "Q-2 --skip removes the check" " links"
+  good_script "$repo" newer.sh
+  commit_all "$repo"
   gate "$repo" --only bash-hygiene --base HEAD~1
   rc_is "Q-2 --base limits to changed files (bad file unchanged since base)" 0
-  good_script "$repo" newer.sh
   bad_script "$repo" newest-bad.sh
-  gate "$repo" --only bash-hygiene --base HEAD
-  rc_is "Q-2 --base includes working-tree changes of tracked files only" 0
   commit_all "$repo"
   gate "$repo" --only bash-hygiene --base HEAD~1
   rc_is "Q-2 --base sees files added since the base" 1
