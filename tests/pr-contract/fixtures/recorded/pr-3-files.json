@@ -1,0 +1,30 @@
+[
+  {
+    "filename": "docs/README.md",
+    "status": "modified"
+  },
+  {
+    "filename": "docs/adr/ADR-005-toolchain.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/cr/CR-2/README.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/cr/CR-2/acceptance-criteria.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/cr/CR-2/design.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/cr/CR-2/impact-analysis.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/cr/CR-2/implementation-plan.md",
+    "status": "added"
+  }
+]
