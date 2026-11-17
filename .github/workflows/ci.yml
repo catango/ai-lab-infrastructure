@@ -30,6 +30,15 @@ jobs:
           python3 -I scripts/toolchain install --profile builder --prefix "$RUNNER_TEMP/toolchain"
           echo "$RUNNER_TEMP/toolchain/bin" >> "$GITHUB_PATH"
 
+      # Ansible is the one bootstrap tool that comes from the distribution archive (design 3.5).
+      - name: Install ansible-core for the ansible check (package archive, only when missing)
+        shell: bash
+        run: |
+          if ! command -v ansible-playbook >/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y --no-install-recommends ansible-core
+          fi
+
       - name: Quality gate
         shell: bash
         run: ./scripts/quality-gate.sh --strict
@@ -66,3 +75,45 @@ jobs:
           python3 -I scripts/toolchain verify --profile builder --prefix "$prefix" --arch "$ARCH" --download --skip-apt
           python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH" | tee "$RUNNER_TEMP/second-run.txt"
           grep -qx 'changed=0' "$RUNNER_TEMP/second-run.txt"
+
+  # Applies the whole builder profile in a pinned Debian 13 container (as root, so no become), twice,
+  # to prove it converges and is idempotent, then runs the engine's verification.
+  builder-profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    container:
+      image: debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # What workspace/restore.sh does first: Ansible must exist before it can apply a profile.
+      - name: Bootstrap Ansible from the Debian archive
+        shell: bash
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates
+
+      - name: Apply the builder profile
+        shell: bash
+        run: ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml
+
+      - name: Apply it again (must change nothing)
+        shell: bash
+        run: |
+          ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml | tee "$RUNNER_TEMP/second-apply.txt"
+          grep -Eq 'changed=0 +unreachable=0 +failed=0' "$RUNNER_TEMP/second-apply.txt"
+
+      - name: Verify the toolchain
+        shell: bash
+        run: python3 -I scripts/toolchain verify --profile builder --prefix /opt/ai-lab
+
+      # The opt-in role: writes once, is idempotent, and refuses to replace a file it did not write.
+      - name: Opt-in role test
+        shell: bash
+        env:
+          AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
+        run: tests/ansible/opt-in-role-test.sh

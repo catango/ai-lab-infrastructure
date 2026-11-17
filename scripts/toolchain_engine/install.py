@@ -173,12 +173,14 @@ def _install_pip(prefix, tool, root, runner, state, dry_run, out):
     return "install", None
 
 
-def install(manifest, profile, prefix, arch, fetcher, runner, root, only, dry_run, out):
+def install(manifest, profile, prefix, arch, fetcher, runner, root, only, dry_run, out, source=None):
     prefix = Path(prefix)
     result = Result()
     state = {}
     for tool in manifest.for_profile(profile):
         if only and tool.name != only:
+            continue
+        if source and tool.source != source:
             continue
         label = f"{tool.name} {tool.version}" if tool.version else tool.name
         try:

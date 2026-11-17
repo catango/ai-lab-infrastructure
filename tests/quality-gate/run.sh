@@ -253,7 +253,7 @@ test_dispatcher() {
   # Q-2 --list, --only, --skip, --base
   gate "$repo" --list
   rc_is "Q-2 --list exits 0" 0
-  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint toolchain python gate-tests"
+  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint ansible toolchain python gate-tests"
   n=$(awk '{print $1}' <<<"$OUT" | grep -Ev '^(ID|CHECK)$' | tr '\n' ' ' | sed 's/ $//')
   if [[ $n == "$expected" ]]; then ok "Q-2 --list shows check ids in order"; else fail "Q-2 --list shows check ids in order" "got: $n"; fi
   out_has "Q-2 --list shows the tool" "shellcheck"

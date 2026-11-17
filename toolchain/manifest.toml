@@ -173,6 +173,14 @@ package     = "python3"
 smoke       = ["python3", "--version"]
 
 # Needed to create the tool virtual environment.
+# Needed by Ansible's apt module on Debian and Ubuntu.
+[tools.python3-apt]
+version_min = "2.6"
+profiles    = ["builder"]
+source      = "apt"
+package     = "python3-apt"
+smoke       = ["python3", "-c", "import apt"]
+
 [tools.python3-venv]
 version_min = "3.11"
 profiles    = ["builder"]

@@ -1,0 +1,14 @@
+- name: Put the toolchain on PATH for login shells
+  ansible.builtin.copy:
+    dest: /etc/profile.d/ai-lab.sh
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ai-lab-infrastructure (shell_env role). Do not edit.
+      case ":${PATH}:" in
+        *":{{ toolchain_prefix }}/bin:"*) ;;
+        *) PATH="{{ toolchain_prefix }}/bin:${PATH}" ;;
+      esac
+      export PATH
+  become: "{{ ai_lab_become }}"

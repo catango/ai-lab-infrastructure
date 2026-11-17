@@ -1,0 +1,25 @@
+# System packages of the profile. The package list comes from the manifest (apt entries).
+- name: Read the profile's apt packages from the manifest
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - list
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --source
+      - apt
+      - --format
+      - json
+  register: apt_base_list
+  changed_when: false
+  check_mode: false
+
+- name: Install the apt packages (signed distribution archive; minimum versions are checked by verify)
+  ansible.builtin.apt:
+    name: "{{ apt_base_list.stdout | from_json | map(attribute='package') | list }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: "{{ ai_lab_become }}"

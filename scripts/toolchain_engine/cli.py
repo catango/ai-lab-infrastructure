@@ -3,6 +3,7 @@
 Exit codes: 0 success, 1 verification or install failure (check: invalid manifest), 2 usage or manifest error.
 """
 import argparse
+import json
 import platform
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ from . import manifest as manifest_module
 from .errors import ManifestError, UsageError
 from .fetch import HttpsFetcher
 from .install import install
-from .manifest import ARCHES, PROFILES
+from .manifest import ARCHES, PROFILES, SOURCES
 from .runner import run_command
 from .verify import verify
 
@@ -40,11 +41,14 @@ def _parser():
     listing = sub.add_parser("list")
     listing.add_argument("--profile", required=True, choices=PROFILES)
     listing.add_argument("--arch", choices=ARCHES)
+    listing.add_argument("--source", choices=SOURCES)
+    listing.add_argument("--format", choices=("text", "json"), default="text")
     inst = sub.add_parser("install")
     inst.add_argument("--profile", required=True, choices=PROFILES)
     inst.add_argument("--prefix", required=True)
     inst.add_argument("--arch", choices=ARCHES)
     inst.add_argument("--only")
+    inst.add_argument("--source", choices=SOURCES)
     inst.add_argument("--dry-run", action="store_true")
     ver = sub.add_parser("verify")
     ver.add_argument("--profile", required=True, choices=PROFILES)
@@ -82,7 +86,12 @@ def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
         manifest = manifest_module.parse(manifest_module.load(path))
         if args.command == "list":
             arch = args.arch
-            for tool in manifest.for_profile(args.profile):
+            tools = [t for t in manifest.for_profile(args.profile) if not args.source or t.source == args.source]
+            if args.format == "json":
+                print(json.dumps([{"name": t.name, "source": t.source, "version": t.version, "version_min": t.version_min,
+                                   "package": t.package, "binaries": list(t.binaries)} for t in tools], indent=2), file=out)
+                return 0
+            for tool in tools:
                 version = tool.version or (f">={tool.version_min}" if tool.version_min else "lock")
                 print(f"{tool.name} {version} {tool.source}" + (f" {arch}" if arch and tool.source == "download" else ""), file=out)
             return 0
@@ -92,7 +101,7 @@ def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
             if args.only and args.only not in manifest.tools:
                 raise UsageError("unknown tool for --only")
             result = install(manifest, args.profile, args.prefix, arch, fetcher or HttpsFetcher(), runner, root, args.only,
-                             args.dry_run, out)
+                             args.dry_run, out, source=args.source)
             print(f"toolchain: {result.changed} {'would change' if args.dry_run else 'installed'}, {result.skipped} skipped, {result.failed} failed", file=out)
             print(f"changed={result.changed}", file=out)
             return 1 if result.failed else 0

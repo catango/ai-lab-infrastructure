@@ -1,0 +1,31 @@
+# The lab profile (Ubuntu 24.04, ARM64) is a placeholder in Stage 1: it keeps the structure under
+# --syntax-check and fails when applied. Stage 3 implements it (ADR-005 O5-5).
+- name: Apply the lab profile (placeholder)
+  hosts: all
+  connection: local
+  gather_facts: true
+  vars:
+    toolchain_profile: lab
+  pre_tasks:
+    - name: Preflight, the lab profile supports one platform only
+      tags: [preflight]
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == lab_expected_os
+          - ansible_facts['distribution_major_version'] == lab_expected_major
+          - ansible_facts['architecture'] == lab_expected_arch
+        quiet: true
+        fail_msg: >-
+          lab profile requires {{ lab_expected_os }} {{ lab_expected_major }} on {{ lab_expected_arch }}
+          (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
+          on {{ ansible_facts['architecture'] }})
+    - name: Stop, the lab profile is not implemented yet
+      ansible.builtin.fail:
+        msg: lab profile is implemented in Stage 3
+  # Roles the lab profile will use. They are listed so --syntax-check validates them; the play fails above first.
+  roles:
+    - apt_base
+    - toolchain
+    - python_tools
+    - shell_env
+    - verify

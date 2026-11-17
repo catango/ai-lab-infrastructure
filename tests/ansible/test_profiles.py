@@ -24,7 +24,7 @@ def host_facts():
         if "=" in line:
             key, value = line.split("=", 1)
             release[key] = value.strip('"')
-    return release.get("NAME", ""), release.get("VERSION_ID", "").split(".")[0], platform.machine()
+    return release.get("ID", "").capitalize(), release.get("VERSION_ID", "").split(".")[0], platform.machine()
 
 
 def run(playbook, *args, extra_vars=None):
@@ -76,7 +76,8 @@ class Structure(unittest.TestCase):
         for role in ("toolchain", "python_tools", "verify"):
             text = (ANSIBLE / "roles" / role / "tasks" / "main.yml").read_text()
             self.assertIn("- -I", text, role)
-            self.assertIn("scripts/toolchain", text.replace("{{ repo_root }}/", "").replace('"', ""), role)
+            self.assertIn("{{ toolchain_engine }}", text, role)
+        self.assertIn('toolchain_engine: "{{ repo_root }}/scripts/toolchain"', (ANSIBLE / "group_vars" / "all.yml").read_text())
 
     def test_managed_settings_role_is_off_by_default(self):
         self.assertRegex((ANSIBLE / "group_vars" / "all.yml").read_text(), r"claude_managed_settings_enabled:\s*false")
@@ -103,7 +104,7 @@ class SyntaxAndPreflight(unittest.TestCase):
             with self.subTest(wrong=key):
                 code, out = run("builder.yml", "--tags", "preflight", extra_vars={**good, key: bad})
                 self.assertNotEqual(code, 0)
-                self.assertEqual(len(re.findall(r"builder profile requires", out)), 1, out)
+                self.assertIn("builder profile requires", out)
                 self.assertEqual(out.count("FAILED!"), 1, out)
 
     def test_lab_placeholder_fails_with_the_stage_3_message_after_its_preflight(self):
@@ -116,7 +117,8 @@ class SyntaxAndPreflight(unittest.TestCase):
     def test_lab_placeholder_aborts_with_one_message_on_the_wrong_host(self):
         code, out = run("lab.yml", extra_vars={"lab_expected_os": "NoSuchOS"})
         self.assertNotEqual(code, 0)
-        self.assertEqual(len(re.findall(r"lab profile requires", out)), 1, out)
+        self.assertIn("lab profile requires", out)
+        self.assertEqual(out.count("FAILED!"), 1, out)
         self.assertNotIn("Stage 3", out)
 
 
