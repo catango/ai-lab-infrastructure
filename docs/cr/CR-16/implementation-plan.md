@@ -11,7 +11,7 @@ Starts only after the design PR is merged (ADR-003 section 4). Each implementati
 | 3 | `lab` | `terraform/lab/`, cloud-init template, tests for the validations and the cloud-init content | PR 2 merged and applied; V2-5, V2-6 answered | C-1 to C-5 for the lab root |
 | 4 | `oci-seed-finish` | `docs/operations/oci-seed.md`, `docs/README.md` and CR-16 README updates, the acceptance evidence table; `Closes #16` | PRs 1 to 3 and the approver's acceptance run | D-1 to D-3, B, L, K |
 
-PR 2 can be reviewed in parallel with PR 1, but it needs the gate to run its tests. PR 3 should be opened only after the approver has applied the bootstrap stack, because it needs the compartment from the outputs.
+PR 2 can be reviewed in parallel with PR 1, but it needs the gate to run its tests. PR 3 may be drafted in parallel with PR 2, because the lab code only needs the bootstrap output names. It is merged and applied only after the approver has applied the bootstrap stack, because the lab apply needs the compartment from the outputs.
 
 ## 2. Checklist per PR
 
@@ -40,7 +40,9 @@ Each is listed with its exact commands or Console steps in the runbook and in th
 | When | Action |
 |---|---|
 | Before PR 1 | Run the read-only S2e command in Cloud Shell and report the highest Terraform version offered (V2-3) |
-| Before PR 2 | Run the read-only quota-family listing in Cloud Shell (V2-1), and tell me the budget amount and who receives alerts (design Q3) |
+| Before PR 2 | Run the read-only quota-family listing in Cloud Shell (V2-1), and give the budget amount and who receives alerts (design Q3). Q3 is not decided yet |
+| Before the lab apply | Confirm with IT whether outbound SSH from the last corporate hop works (O-9), and confirm that the address that receives Oracle's notices is monitored (RR-S2-3) |
+| Any time | Decide whether Pay As You Go should be reconsidered (it would reopen D6); ask Oracle support about reclamation behavior (V2-8, V2-9) if the documentation is unclear |
 | After PR 2 merges | Build the bootstrap zip, create the stack in Resource Manager, enter the variables, review the plan, apply |
 | Before PR 3 | Create the lab VM login key pair on Windows with the OS-bundled OpenSSH (ADR-001 section 4); report the egress result (O-9) |
 | After PR 3 merges | Build the lab zip, create the stack, enter the variables (including the public key and the allowed range), review the plan, apply |

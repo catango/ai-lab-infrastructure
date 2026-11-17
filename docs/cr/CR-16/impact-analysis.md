@@ -61,6 +61,7 @@ The approver, not Claude, performs these. Each is listed with exact steps in the
 - Implementation PRs: each is independent and revertible in the repository.
 - OCI: destroy the lab stack from the Console. The block volume has `prevent_destroy`, so the approver first removes that protection in a reviewed PR, or deletes the volume by hand after copying its data. Then destroy the bootstrap stack. The compartment can be deleted only when it is empty.
 - Quotas are removed by destroying the bootstrap stack. No other tenancy resource depends on them.
+- The Vault and its key are deleted only after a pending-deletion window of 7 to 30 days. The security compartment cannot be deleted until that window ends, so a full teardown of the bootstrap stack takes at least that long, and the key's `prevent_destroy` has to be removed in a reviewed PR first.
 
 ## 8. Alternatives considered
 
