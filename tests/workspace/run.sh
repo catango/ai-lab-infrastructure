@@ -39,6 +39,7 @@ OWNER=$(config_get owner)
 MACHINE=$(config_get machine_login)
 REPO_NAME=ai-lab-infrastructure
 TOKEN="canary-token-0123456789abcdef"
+AT="@"
 
 # content and layout of a home directory; clones' .git directories are left out (git fetch rewrites them)
 snapshot() {
@@ -350,7 +351,7 @@ if selected verify; then
   v_out
   expect_fail "R-8 a wrong git user.name fails V-5" V-5
   good_state
-  git config --file "$H/.gitconfig" user.email someone@example.org
+  git config --file "$H/.gitconfig" user.email "someone$AT""example.org"
   v_out
   expect_fail "R-8 a non-noreply git email fails V-5" V-5
 
@@ -387,7 +388,9 @@ if selected static; then
   deny_user=$(jq -r '.permissions.deny[]' "$ROOT/workspace/claude-user/settings.json" | LC_ALL=C sort)
   check "required-deny.txt equals the deny rules of .claude/settings.json" "$(when_ok test "$deny_settings" == "$deny_required")"
   check "the user-level settings carry the same deny rules" "$(when_ok test "$deny_user" == "$deny_required")"
-  check "the user-level settings disable bypass mode and project MCP servers" "$(when_ok jq -e '.permissions.disableBypassPermissionsMode == "disable" and .enableAllProjectMcpServers == false' "$ROOT/workspace/claude-user/settings.json" >/dev/null)"
+  jq_rc=0
+  jq -e '.permissions.disableBypassPermissionsMode == "disable" and .enableAllProjectMcpServers == false' "$ROOT/workspace/claude-user/settings.json" >/dev/null || jq_rc=$?
+  check "the user-level settings disable bypass mode and project MCP servers" "$jq_rc"
   names=$(grep -vE '^[[:space:]]*(#|$)' "$ROOT/workspace/repos.txt" || true)
   check "repos.txt lists plain repository names, including this one" "$([[ -n $names && -z $(grep -vE '^[A-Za-z0-9._-]+$' <<<"$names" || true) && -n $(grep -x "$REPO_NAME" <<<"$names" || true) ]] && echo 0 || echo 1)"
   runbook="$ROOT/docs/operations/workspace-restore.md"

@@ -1,0 +1,2 @@
+# One repository name per line. The owner is taken from config/project.yaml.
+ai-lab-infrastructure
