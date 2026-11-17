@@ -16,8 +16,15 @@ Open only the document and section relevant to the task. Decision status is trac
 | [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, workspace restore, guardrails | Accepted |
 | [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2 |
 | [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted |
+| [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Proposed (accepted by merge of the CR-2 design PR) |
 
-ADR-004 to ADR-010 are listed in baseline section 7 and are written as design PRs.
+ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written as design PRs.
+
+## Change requests
+
+| CR | Summary | Status |
+|---|---|---|
+| [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation | Design PR open |
 
 ## Operations
 
