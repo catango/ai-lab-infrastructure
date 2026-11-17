@@ -9,10 +9,10 @@
 | `ansible/` | New `builder` playbook and roles; `lab` placeholder | Implementation |
 | `workspace/` | New `restore.sh`, `verify.sh`, `repos.txt`, `claude-user/`, helpers | Implementation |
 | `scripts/quality-gate.sh`, `scripts/checks/` | New | Implementation |
-| `scripts/pr-contract`, `tests/` | New | Implementation |
+| `scripts/pr-contract`, `scripts/pr-body`, `tests/` | New | Implementation |
 | `.github/workflows/`, `.github/dependabot.yml` | New CI skeleton | Implementation |
 | `docs/operations/workspace-restore.md` | New runbook | Implementation |
-| `CLAUDE.md` | Wording change for `gh pr create --template` (design question 10) and the `fd` and `quality-gate` notes, in a separate change PR | After approval |
+| `CLAUDE.md` | Wording change for `gh pr create --template` (design decision 10) and the `fd` and `quality-gate` notes, in a separate change PR | After approval |
 
 Nothing in the repository changes in the design PR other than files under `docs/` (PC-4).
 
@@ -20,7 +20,7 @@ Nothing in the repository changes in the design PR other than files under `docs/
 
 | Item | Effect |
 |---|---|
-| ADR-001 section 4a | Implemented as written. Two interpretations are flagged: local tracking branches instead of checkouts (question 13); the noreply email built at run time. |
+| ADR-001 section 4a | Implemented as written. Two interpretations are flagged: local tracking branches instead of checkouts (decision 13); the noreply email built at run time. |
 | ADR-001 section 5 | Guardrail list becomes a machine-checked list (`required-deny.txt`). Workspace managed settings stay opt-in. |
 | ADR-003 sections 6 and 7 | `pr-contract` implemented. Verification item V3-1 finding: `gh pr create --template` does not work without a terminal. |
 | Baseline section 6, stage 1 | Entry criterion "ADR-005 approved (builder part)" is met by merging this design PR, which carries ADR-005. |
@@ -30,7 +30,7 @@ Nothing in the repository changes in the design PR other than files under `docs/
 ## 3. Security and privacy
 
 - The repository is public. The design uses placeholders only. The `public-repo-hygiene` check enforces this for later PRs.
-- Supply chain: all downloads are checksum-pinned for two architectures; extraction is hardened; apt is the one documented exception (question 1).
+- Supply chain: all downloads are checksum-pinned for two architectures; extraction is hardened; apt is the one documented exception (decision 1).
 - Token T1 handling follows ADR-001 D16. The script never receives the token through argv, environment, or files. It refuses to run inside a Claude Code session.
 - CI adds no secrets and no Claude invocation. All jobs run with least-privilege tokens. Residual risk RR-S1-1 (workflow editable by the PR) is mitigated by PC-6 and the approver's review.
 
@@ -46,7 +46,7 @@ Nothing in the repository changes in the design PR other than files under `docs/
 - GitHub-hosted `ubuntu-24.04-arm` runners are available for this public repository (to confirm in implementation).
 - The workspace has network access to GitHub and to the Debian archive. Corporate proxies or TLS interception are not known to exist; if they do, downloads may need a CA bundle (to confirm in the reset test).
 - Python 3.12 or later exists on every target (Debian 13 and Ubuntu 24.04 ship it).
-- Linters not present on the workspace today (`yamllint`, Markdown linter, `terraform` or `tofu`, `ansible`, `fd`) arrive with the builder profile. Until then they are reported as not run.
+- Linters not present on the workspace today (`yamllint`, `pymarkdownlnt`, `tofu`, `ansible`, `fd`) arrive with the builder profile. Until then they are reported as not run.
 
 ## 6. Cost and capacity
 

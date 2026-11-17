@@ -45,6 +45,7 @@ toolchain/
     builder.lock             # hash-locked pip requirements (universal resolution, both arches)
 scripts/
   toolchain                  # install engine: check | list | install | verify
+  pr-body                    # prints a PR body skeleton from a template (section 6.4)
 ansible/
   ansible.cfg
   inventory/localhost.yml
@@ -56,7 +57,6 @@ ansible/
     toolchain/               # calls scripts/toolchain install --profile
     python_tools/            # venv + hash-locked pip
     shell_env/               # PATH for the install prefix
-    rootless_podman/         # builder only
     claude_managed_settings/ # optional, default off (section 3.6)
     verify/                  # calls scripts/toolchain verify
 ```
@@ -68,7 +68,7 @@ A tool is one table under `tools`. `source` selects one of three install sources
 | `source` | Meaning | Trust anchor |
 |---|---|---|
 | `download` | Release artifact fetched by URL, verified by SHA-256 | Checksum in the manifest, reviewed in a toolchain PR |
-| `apt` | Package from the target release's signed archive | Distribution archive signature (see 3.5 and open question 1) |
+| `apt` | Package from the target release's signed archive | Distribution archive signature (see 3.5 and decision 1 in section 9) |
 | `pip` | Hash-locked Python packages in a venv | `--require-hashes` against `toolchain/python/builder.lock` |
 
 Illustrative `download` entry (values are placeholders; real versions and checksums are chosen and verified during implementation):
@@ -102,7 +102,7 @@ Illustrative `apt` and `pip` entries:
 
 ```toml
 [tools.git]
-version_min = "<epoch:upstream>"        # see open question 1
+version_min = "<epoch:upstream>"        # decision 1: minimum, not exact
 profiles    = ["builder", "lab"]
 source      = "apt"
 package     = "git"
@@ -153,7 +153,7 @@ Install semantics:
 - `builder.yml` pre-tasks assert Debian 13 and `x86_64` and fail with one clear message otherwise.
 - `lab.yml` is a placeholder in Stage 1. It asserts Ubuntu 24.04 and `aarch64`, lists the roles it will use, and then fails with "lab profile is implemented in Stage 3". It must pass `ansible-playbook --syntax-check` so the structure is validated early.
 - Roles are idempotent. The `toolchain` role maps the install engine's result to `changed` (stdout line `changed=<n>`), and runs it with `--dry-run` under Ansible check mode.
-- Privilege: only `apt_base`, `shell_env`, `rootless_podman`, and writes under `/opt/ai-lab` use `become`. When Ansible already runs as root (the CI container), `become` is disabled.
+- Privilege: only `apt_base`, `shell_env`, and writes under `/opt/ai-lab` use `become`. When Ansible already runs as root (the CI container), `become` is disabled.
 - Test levels used by this CR (aligned with ADR-001 O-1 and D15):
   - L1, static, on any host: `scripts/toolchain check`, `ansible-playbook --syntax-check` for both profiles, the quality gate.
   - L2, executed on GitHub runners: install and smoke for amd64 (`ubuntu-24.04`) and arm64 (`ubuntu-24.04-arm`); full `builder` profile apply inside a pinned `debian:13` container.
@@ -164,9 +164,8 @@ Install semantics:
 | Group | Contents | Source |
 |---|---|---|
 | Repository tooling | `gh`, `yq` (mikefarah), `rg`, `fd`, `jq` | `download` (`jq` may be `apt`) |
-| Validation | `shellcheck`, `actionlint`, OpenTofu (`fmt`, `validate`), `yamllint`, a Markdown linter | `download`; `pip` for `yamllint` and the Markdown linter |
+| Validation | `shellcheck`, `actionlint`, OpenTofu (`fmt`, `validate`), `yamllint`, `pymarkdownlnt` | `download`; `pip` for `yamllint` and `pymarkdownlnt` |
 | Runtime | `python3`, `python3-venv`, `ansible-core`, `git`, `curl`, `ca-certificates`, `tmux` | `apt` |
-| Containers | Rootless Podman, `uidmap`, `passt` | `apt` (O-10 proposal; open question 4) |
 
 Notes:
 
@@ -177,7 +176,7 @@ Notes:
 
 ### 3.6 Guardrails on the workspace
 
-ADR-001 section 5 allows managed settings on the workspace only if root is available and no corporate managed settings exist. Stage 1 does not write managed settings. It restores user-level settings and relies on the repository `.claude/settings.json` (RR-8, lower assurance). The role `claude_managed_settings` exists as an opt-in (`claude_managed_settings_enabled: false`) and refuses to run if `/etc/claude-code/managed-settings.json` already exists (merge, never replace). Whether to enable it is open question 5.
+ADR-001 section 5 allows managed settings on the workspace only if root is available and no corporate managed settings exist. Stage 1 does not write managed settings. It restores user-level settings and relies on the repository `.claude/settings.json` (RR-8, lower assurance). The role `claude_managed_settings` exists as an opt-in (`claude_managed_settings_enabled: false`) and refuses to run if `/etc/claude-code/managed-settings.json` already exists (merge, never replace). Decision 5: it stays off in Stage 1.
 
 ## 4. `workspace/restore.sh` (part b)
 
@@ -235,7 +234,7 @@ Each step prints elapsed time. The summary line reports total time against the 1
 - The token is read only from an interactive terminal: `IFS= read -rs -p 'Token T1: ' token` with the prompt on stderr. Nothing is echoed. There is no argument, environment variable, or file input path for the token.
 - It is passed to `gh auth login --hostname github.com --with-token` on stdin through a here-string. `read` and here-strings are shell builtins, so the token never appears in `argv` or in the process list. It is never written to a log, never stored in shell history (the script is not interactive and `HISTFILE` is unset), and `token` is unset immediately afterward.
 - Immediately after login the script checks, through the API response headers only: the classic-token scope header contains `repo` and `workflow`; the authenticated login equals `machine_login`. `read:org` is reported as a warning if missing, pending the "verify" note in ADR-001 section 2. The script does not call `gh auth token`.
-- Where the system has no keyring, `gh` may store the token in `~/.config/gh/`. The home directory is ephemeral by design (D16). Behavior is verified during implementation (open question 6).
+- Where the system has no keyring, `gh` may store the token in `~/.config/gh/`. The home directory is ephemeral by design (D16). If no keyring exists, `gh` stores it there and the script continues (decision 6). `verify.sh` then reports a `WARN` that the token is stored in a file and `FAIL`s if that file is readable by anyone but the owner (mode other than 0600). Behavior is verified during implementation.
 - Dry-run never reaches this step.
 
 ### 4.6 Verification (`workspace/verify.sh`)
@@ -245,8 +244,8 @@ Read-only. One line per check: `PASS`/`FAIL`/`WARN <id>: <detail>`. Exit 0 if no
 | ID | Check |
 |---|---|
 | V-1 | Every `builder` tool: smoke command output matches the manifest version (`scripts/toolchain verify`). |
-| V-2 | Guardrails: for each repository in `~/work/`, `.claude/settings.json` contains every deny rule in the canonical list (`workspace/claude-user/required-deny.txt`), `disableBypassPermissionsMode` is set, `enableAllProjectMcpServers` is false, and no `.mcp.json` exists. Static check only; the behavioral probe is a documented manual step (open question 3). |
-| V-3 | Token: login equals `machine_login`; scopes include `repo` and `workflow`; expiry header is reported with a warning under 14 days. |
+| V-2 | Guardrails: for each repository in `~/work/`, `.claude/settings.json` contains every deny rule in the canonical list (`workspace/claude-user/required-deny.txt`), `disableBypassPermissionsMode` is set, `enableAllProjectMcpServers` is false, and no `.mcp.json` exists. Static check only; the behavioral probe is a documented manual step in the runbook (decision 3). |
+| V-3 | Token: login equals `machine_login`; scopes include `repo` and `workflow`; expiry header is reported with a warning under 14 days; if the token is stored in a file under `~/.config/gh/`, a warning is reported and the file mode must be 0600. |
 | V-4 | No OCI credentials (AC1-3): no `~/.oci/`, no `oci` binary on `PATH`, no variable whose name starts with `OCI_` (names only), no key file referenced by an OCI config. |
 | V-5 | Git identity: `user.name` equals `machine_login`; `user.email` ends with the noreply domain. |
 | V-6 | Clones: each repository in `repos.txt` exists with `origin` pointing at the expected repository. |
@@ -255,7 +254,7 @@ Verification ends with: `verify: <n> passed, <n> failed, <n> warnings`.
 
 ### 4.7 Bootstrap and release tag
 
-ADR-001 step 2 clones the latest release tag anonymously. Creating tags is the user's action (CLAUDE.md). The first tag is needed before the first real reset test (open question 7). `restore.sh` run from the tag clone applies the profile from that tag; the working clone in `~/work/` is `main` and may be ahead of it.
+ADR-001 step 2 clones the latest release tag anonymously. Creating tags is the user's action (CLAUDE.md). The first tag, `v0.1.0`, is cut by the user after the restore implementation PR merges and before the reset test (decision 7). `restore.sh` run from the tag clone applies the profile from that tag; the working clone in `~/work/` is `main` and may be ahead of it.
 
 ## 5. `scripts/quality-gate.sh` (part c)
 
@@ -291,7 +290,7 @@ The dispatcher turns these into `PASS`, `FAIL`, `SKIP (no files)`, or `SKIP (too
 | `shellcheck` | All shell scripts (`*.sh` and files with a bash shebang) | `shellcheck` |
 | `bash-hygiene` | Bash scripts start with `set -euo pipefail` (within the first 15 lines) and are executable | none |
 | `yaml` | YAML files lint cleanly | `yamllint` |
-| `markdown` | Markdown files lint cleanly | Markdown linter from the manifest |
+| `markdown` | Markdown files lint cleanly | `pymarkdownlnt` (from the manifest) |
 | `links` | Relative Markdown links resolve to existing files | none |
 | `actionlint` | Workflow syntax and expression errors | `actionlint` |
 | `workflow-policy` | Every `uses:` is a full 40-character SHA with a version comment (local `./` allowed); no `pull_request_target`; every workflow has a top-level `permissions:`; no `${{ github.event.* }}` or `${{ github.head_ref }}` inside `run:` blocks; no `curl` or `wget` piped to a shell | none |
@@ -358,6 +357,10 @@ Tests (`tests/pr-contract/`, run by the quality gate) use recorded API fixtures 
 
 Residual risk RR-S1-1: `pull_request` workflows run the workflow file from the PR merge commit, so a PR can edit `pr-contract.yml`. PC-6 forces a justification for such changes, and the approver's review of the latest push remains the authority (ADR-003 section 5). `pr-contract` is a consistency check, not a security boundary.
 
+### 6.4 PR body helper (`scripts/pr-body`)
+
+`gh pr create --template` needs a terminal, so Claude Code cannot use it (decision 10). `scripts/pr-body <type>` prints the template for `<type>` (`design`, `implementation`, `change`, `infra`, `toolchain`) unchanged, including the `<!-- PR type: ... -->` marker that PC-2 requires. Claude fills the sections and passes the file to `gh pr create --draft --body-file`. The script only reads `.github/PULL_REQUEST_TEMPLATE/<type>.md`, accepts only the five type names, and writes to stdout. A follow-up change PR updates the wording in CLAUDE.md.
+
 ## 7. CI skeleton (part e)
 
 ### 7.1 Workflows
@@ -407,23 +410,29 @@ Required status checks are configured by the user in the ruleset (CLAUDE.md: Cla
 |---|---|---|
 | RR-S1-1 | PR can edit the `pr-contract` workflow (6.3) | PC-6 justification; approver review is the authority |
 | RR-S1-2 | Upstream artifact is replaced after the checksum is recorded | Checksums are pinned in reviewed PRs; mismatch fails closed; signatures where available |
-| RR-S1-3 | Debian archive packages are not exactly pinned | Signed archive; versions reported by `verify`; open question 1 |
+| RR-S1-3 | Debian archive packages are not exactly pinned | Signed archive; versions reported by `verify`; decision 1 |
 | RR-S1-4 | Workspace guardrails are lower assurance than managed settings (RR-8) | Unchanged from ADR-001; repository rulesets; no OCI credentials on the workspace |
-| RR-S1-5 | `gh` may store T1 in plaintext in the ephemeral home | Accepted in D16; verified during implementation |
+| RR-S1-5 | `gh` may store T1 in plaintext in the ephemeral home | Accepted in D16 (decision 6); `verify` warns and enforces mode 0600 |
 | RR-S1-6 | The 15-minute target depends on download speed and apt mirrors | Time is reported per step; the target is measured in the AC1-7 test |
 
-## 9. Open questions for the user
+## 9. Decisions on the open questions
 
-1. **APT pinning.** CLAUDE.md says to pin every version. Exact apt pins break whenever Debian publishes a security update. Proposal: `apt` tools use a minimum version, rely on the signed archive, and `verify` prints the installed version; every non-apt tool is exactly pinned. Approve this exception, or require exact apt pins (with the maintenance cost)?
-2. **Manifest format.** TOML (stdlib parser on both OSes) or YAML (matches `config/project.yaml`, needs PyYAML or `yq` before the first install)?
-3. **Guardrail test (AC1-5).** The ADR asks for a scripted test that denied commands are refused. This design verifies rule presence statically and keeps the behavioral probe manual (this session's step 1 is the model). Is that enough, or should `verify.sh` also start a headless Claude Code run (needs authentication and model usage)?
-4. **Container runtime.** Include rootless Podman in `builder` now (O-10 proposal), or defer until a project needs it?
-5. **Workspace managed settings.** Enable `claude_managed_settings` on the workspace if root is available and no corporate managed settings exist, or stay with user-level and repository settings only (RR-8)?
-6. **Token storage.** If the workspace has no keyring, is `gh` writing T1 in plaintext into the ephemeral home acceptable (D16 suggests yes), or should the script abort in that case?
-7. **Release tag.** `restore.sh` is bootstrapped from the latest release tag, and only you create tags. When should the first tag be cut (proposal: after the restore implementation PR merges, before the AC1-7 reset test)?
-8. **Linters.** Which Markdown linter: `markdownlint-cli2` (needs Node and an npm lockfile) or a Python one such as `pymarkdownlnt` (hash-locked pip, one fewer ecosystem; proposed)? `terraform` or `tofu` for `fmt` and `validate` (OpenTofu proposed)?
-9. **Dependabot.** May the implementation add `.github/dependabot.yml` for Actions SHA pins and the pip lock? It configures version updates only and changes no repository setting.
-10. **`gh pr create --template`.** In this session the command fails without a terminal ("must provide `--title` and `--body`"), which affects ADR-003 verification item V3-1 and CLAUDE.md. Proposal: Claude Code seeds the body from the template file (marker line kept) and uses `--body-file`; a follow-up PR updates CLAUDE.md wording. Acceptable?
-11. **Class 1 fixes to accepted ADRs.** PC-5 as designed blocks any change under `docs/adr/` in implementation and change PRs. Should a Class 1 typo fix to an accepted ADR through a `change/` PR be allowed, or must it always use a design PR?
-12. **Labels.** The label `class:3` (ADR-003 section 3) does not exist in the repository, so issue #2 has no label. Do you want to create it (labels are repository configuration), or should I propose the exact `gh label create` command for you to run?
-13. **Open PR branches on restore.** ADR-001 says the restore "checks out" open draft-PR branches. This design creates local tracking branches for all open PRs of the machine account and leaves the working tree on `main` (one working tree cannot hold several checkouts). Is that the intended behavior?
+The approver accepted the proposals for all thirteen questions raised in the first version of this design. They are recorded here and reflected in the sections above.
+
+| # | Topic | Decision |
+|---|---|---|
+| 1 | APT pinning | Apt tools use a minimum version and rely on the signed archive; `verify` prints the installed version. Every non-apt tool is exactly pinned. This is a documented exception to the CLAUDE.md "pin every version" rule. |
+| 2 | Manifest format | TOML. |
+| 3 | Guardrail test (AC1-5) | Static rule check in `verify.sh` plus a documented manual probe in the runbook. No headless Claude run in `verify.sh`. |
+| 4 | Container runtime | Deferred. Rootless Podman is not in the `builder` profile; add it through a toolchain PR when a project needs it. |
+| 5 | Workspace managed settings | Not used in Stage 1: user-level and repository settings only (RR-8). The `claude_managed_settings` role exists and is off. |
+| 6 | Token storage | Plaintext in the ephemeral home is accepted when no keyring exists. `verify` warns and enforces mode 0600. The script does not abort. |
+| 7 | First release tag | `v0.1.0`, created by the user after the restore implementation PR merges and before the AC1-7 reset test. |
+| 8 | Linters | `pymarkdownlnt` for Markdown; OpenTofu for `fmt` and `validate`. |
+| 9 | Dependabot | Yes: `.github/dependabot.yml` for `github-actions` and the pip lock directory, weekly, version updates only. |
+| 10 | PR templates | `scripts/pr-body <type>` seeds the body; PRs use `--body-file`. CLAUDE.md wording is fixed in a separate Class 1 change PR. Finding recorded against ADR-003 V3-1. |
+| 11 | Class 1 fixes to accepted ADRs | PC-5 stays strict: any change under `docs/adr/` goes through a design PR. Revisit only if it causes real friction. |
+| 12 | `class:3` label | Created by the user (repository configuration). Not part of this CR. |
+| 13 | Open PR branches on restore | Local tracking branches only, with a `git switch` hint printed per branch. |
+
+Remaining open questions: none. Actions that stay with the user are listed in the implementation plan, section 4.

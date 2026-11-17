@@ -32,6 +32,7 @@ Criteria from accepted ADRs that this CR must satisfy are cross-referenced in th
 | R-7 | Open PRs of the machine account have local tracking branches after restore. | Recorded run | ADR-001 section 4a step 5 |
 | R-8 | `verify.sh` fails (exit 1) when: a tool version differs, a required deny rule is missing, token scopes lack `repo` or `workflow`, an `OCI_` variable or `~/.oci/` exists, or the git identity is wrong. | One negative test per check | AC1-3, AC1-5 |
 | R-9 | `verify.sh` output never contains token or environment variable values. | Test with a canary variable value and a canary token string | AC1-8 |
+| R-10 | When the token is stored in a file, `verify.sh` warns, and fails if the file mode is not 0600. | Test with a temporary `HOME` | AC1-8 |
 
 ## Quality gate (Q)
 
@@ -62,6 +63,7 @@ Criteria from accepted ADRs that this CR must satisfy are cross-referenced in th
 | P-9 | API failure, rate limit, and malformed response each produce a non-zero exit. | Tests with a failing client | |
 | P-10 | The workflow passes only `--repo` and `--pr` to the script and runs it from the base checkout. | `workflow-policy` check plus review | ADR-003 section 6 |
 | P-11 | The check works with a read-only `GITHUB_TOKEN` on this public repository. | CI run on a test PR | V3-4 |
+| P-12 | `scripts/pr-body <type>` prints the unchanged template including the PC-2 marker for each of the five types, rejects any other argument, and writes nothing to disk. | Tests | ADR-003 V3-1 |
 
 ## CI (C)
 

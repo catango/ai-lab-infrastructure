@@ -7,11 +7,11 @@ Starts only after the design PR is merged (ADR-003 section 4). Each implementati
 | # | PR (branch slug) | Content | Needs | Acceptance criteria |
 |---|---|---|---|---|
 | 1 | `quality-gate` | `scripts/quality-gate.sh`, `scripts/checks/`, fixtures and tests; minimal `ci.yml` with the `quality-gate` job (using the runner's tools until the toolchain exists) | Design merged | Q-1 to Q-9, part of C-1, C-2, C-6, C-7 |
-| 2 | `pr-contract` | `scripts/pr-contract`, `tests/pr-contract/`, `.github/workflows/pr-contract.yml`, bootstrap handling for the first PR | PR 1 (gate runs its tests) | P-1 to P-11, rest of C-1, C-2 |
+| 2 | `pr-contract` | `scripts/pr-contract`, `scripts/pr-body`, `tests/pr-contract/`, `.github/workflows/pr-contract.yml`, bootstrap handling for the first PR | PR 1 (gate runs its tests) | P-1 to P-12, rest of C-1, C-2 |
 | 3 | `toolchain` | `toolchain/manifest.toml`, `toolchain/python/builder.lock`, `scripts/toolchain`, tests; real versions, URLs, checksums for both architectures; `toolchain-amd64` and `toolchain-arm64` matrix job | PR 1; design merged (ADR-005 accepted by that merge) | T-1 to T-7, T-10, C-3 |
 | 4 | `builder-profile` | `ansible/` with `builder.yml`, roles, `lab.yml` placeholder; `builder-profile` container job | PR 3 | T-8, T-9, T-4 |
 | 5 | `restore` | `workspace/` (`restore.sh`, `verify.sh`, `repos.txt`, `claude-user/`, helpers), runbook `docs/operations/workspace-restore.md` | PR 4 | R-1 to R-9, D-1 |
-| 6 | `ci-finish` | `.github/dependabot.yml` (if approved), `docs/README.md` updates, CI summary polish, AC evidence table in the PR body; `Closes #2` | PRs 1 to 5 | C-4, C-5, D-2, D-3 |
+| 6 | `ci-finish` | `.github/dependabot.yml` (approved, decision 9), `docs/README.md` updates, CI summary polish, AC evidence table in the PR body; `Closes #2` | PRs 1 to 5 | C-4, C-5, D-2, D-3 |
 
 PRs 1 and 2 can be reviewed in either order, but PR 2 depends on the quality gate to run its tests. PRs 3 and 4 follow the toolchain before restore because restore applies the profile.
 
@@ -52,7 +52,7 @@ Each PR body carries the checkpoint list below (adapted per PR). Commit and push
 
 ### PR 4: builder profile
 
-1. Roles in the order `apt_base`, `toolchain`, `python_tools`, `shell_env`, `rootless_podman`, `verify`.
+1. Roles in the order `apt_base`, `toolchain`, `python_tools`, `shell_env`, `verify`.
 2. Container job on a `debian:13` image pinned by digest; applies the playbook twice to prove idempotence.
 3. `lab.yml` placeholder with the Stage 3 failure message and syntax-check coverage.
 
@@ -73,9 +73,9 @@ Each PR body carries the checkpoint list below (adapted per PR). Commit and push
 | Action | Needed for | Notes |
 |---|---|---|
 | Run `sudo` commands and `restore.sh` | PR 4 manual check, PR 5 | Claude proposes exact commands (CLAUDE.md: never `sudo`) |
-| Create the first release tag | Restore bootstrap | Question 7 |
+| Create the first release tag | Restore bootstrap | Decision 7: `v0.1.0`, after PR 5 merges |
 | Require checks in the ruleset | After PR 1, 2, 3, 4 are green | Names in design section 7.4 |
-| Create the `class:3` label | Optional | Question 12 |
+| Create the `class:3` label | Optional; not part of this CR | Decision 12 |
 | Run the home reset and time it | R-4 (AC1-7) | After PR 5 merges |
 | Review, approve, merge every PR | All | |
 

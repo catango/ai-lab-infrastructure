@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** (becomes Accepted when the design PR for CR-2 is merged by the approver) |
+| Status | **Proposed** (becomes Accepted when the design PR for CR-2 is merged by the approver). Open questions were resolved by the approver before review; see CR-2 design section 9 |
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-2 (issue #2) |
@@ -34,7 +34,7 @@
 6. **Ansible provides structure, not logic.** `ansible/builder.yml` and `ansible/lab.yml` select roles; tool membership comes from the manifest `profiles` field. Ansible is bootstrapped from the Debian archive by `workspace/restore.sh`.
 7. **Verification levels.** L1 static (manifest check, Ansible syntax check, quality gate); L2 executed on GitHub runners (install and smoke on amd64 and arm64, `builder` apply in a pinned `debian:13` container); L3 on the real host (workspace restore test; lab VM in Stage 3).
 8. **Changes to the manifest** are toolchain PRs (ADR-003, branch `toolchain/`), each recording the checksum and signature verification evidence.
-9. **Builder content (proposed).** `gh`, `yq`, `rg`, `fd`, `jq`, `shellcheck`, `actionlint`, OpenTofu, a YAML linter, a Markdown linter, Python 3, `ansible-core`, `git`, `curl`, `tmux`, and rootless Podman (O-10 proposal). Claude Code is not installed by this profile.
+9. **Builder content.** `gh`, `yq`, `rg`, `fd`, `jq`, `shellcheck`, `actionlint`, OpenTofu, `yamllint`, `pymarkdownlnt`, Python 3, `ansible-core`, `git`, `curl`, and `tmux`. A container runtime is deferred until a project needs it (O-10). Claude Code is not installed by this profile.
 
 ## 3. Alternatives considered
 
@@ -42,8 +42,8 @@
 |---|---|
 | Ansible `get_url` and `unarchive` as the only mechanism | Rejected: cannot be reused by CI and verification; two code paths per architecture. |
 | Tool managers (mise, asdf, aqua, Nix) | Rejected: additional trust surface and bootstrap dependency. |
-| YAML manifest | Open: needs PyYAML or `yq` before the first install (CR-2 design, question 2). |
-| Exact pins for apt packages | Open: break on every security update of the Debian archive (CR-2 design, question 1). |
+| YAML manifest | Rejected: needs PyYAML or `yq` before the first install. |
+| Exact pins for apt packages | Rejected: they break on every security update of the Debian archive. Apt uses a minimum version (documented exception to the pin rule). |
 | Shell installer script | Rejected: safe archive extraction and manifest validation are easier to implement and test in Python. |
 
 ## 4. Consequences
@@ -56,21 +56,21 @@
 **Negative:**
 - Each tool upgrade is a PR that records two checksums.
 - Python 3 is a prerequisite on every target (already present on Debian 13 and Ubuntu 24.04).
-- Apt packages are not exactly pinned unless open question 1 resolves otherwise.
+- Apt packages are not exactly pinned (documented exception).
 
 **Residual risks:**
 - **RR-S1-2.** An upstream artifact can be replaced after its checksum is recorded. Mitigation: pinned checksums in reviewed PRs, fail-closed mismatch, signatures where available.
 - **RR-S1-3.** Archive packages are not exactly pinned. Mitigation: signed archive, versions reported by verification.
 
-## 5. Open items
+## 5. Resolved and remaining items
 
-| ID | Item |
-|---|---|
-| O5-1 | APT pinning policy (CR-2 design, question 1). |
-| O5-2 | Manifest format confirmation (question 2). |
-| O5-3 | Markdown linter and OpenTofu versus Terraform (question 8). |
-| O5-4 | Container runtime in `builder` (question 4). |
-| O5-5 | `lab` profile content, including ARM64 and Ubuntu specifics (Stage 3, addressed by an amendment or successor design). |
+| ID | Item | Outcome |
+|---|---|---|
+| O5-1 | APT pinning policy | Resolved: minimum version, installed version reported. |
+| O5-2 | Manifest format | Resolved: TOML. |
+| O5-3 | Markdown linter; OpenTofu or Terraform | Resolved: `pymarkdownlnt`; OpenTofu. |
+| O5-4 | Container runtime in `builder` | Resolved: deferred until needed. |
+| O5-5 | `lab` profile content, including ARM64 and Ubuntu specifics | Remaining: Stage 3, by an amendment or successor design. |
 
 ## 6. Acceptance criteria (verified in the implementation PRs)
 
