@@ -68,6 +68,12 @@ class Verify(Base):
         self.assertIn("2.39.5", out)
         self.assertTrue(any(c[0][:2] == ["dpkg", "--compare-versions"] for c in self.calls))
 
+    def test_skip_apt_leaves_apt_tools_out(self):
+        code, out, _ = self.verify("--skip-apt")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("gitlike", out)
+        self.assertFalse(any(c[0][0] == "dpkg-query" for c in self.calls))
+
     def test_verify_without_install_fails(self):
         import shutil
         shutil.rmtree(self.prefix)

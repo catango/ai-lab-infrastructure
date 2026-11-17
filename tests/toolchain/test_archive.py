@@ -55,7 +55,7 @@ class Valid(unittest.TestCase):
         data = zip_bytes([("top/bin/alpha", b"#!/bin/sh\n", 0o100755), ("top/README", b"r", 0o100644)])
         error, files = extract(data, "zip")
         self.assertIsNone(error)
-        modes = {entry[0]: entry[3] for entry in files}
+        modes = {entry[0]: entry[3] for entry in files if entry[1] == "file"}
         self.assertEqual(modes["bin/alpha"], 0o755)
 
 

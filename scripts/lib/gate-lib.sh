@@ -39,3 +39,6 @@ gate_all_workflow_files() { gate_select '^\.github/(workflows/[^/]+|actions/.+)\
 
 # gate_linter_line: normalise "path:line:col: text" to "path:line: text" (stdin to stdout).
 gate_linter_line() { sed -E 's/^([^:]+):([0-9]+):[0-9]+: /\1:\2: /'; }
+
+# gate_relative: strip the working directory from the start of each line (some linters print absolute paths).
+gate_relative() { awk -v root="$(pwd -P)/" 'index($0, root) == 1 { $0 = substr($0, length(root) + 1) } { print }'; }

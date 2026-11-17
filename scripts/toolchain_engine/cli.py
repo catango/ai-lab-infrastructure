@@ -1,0 +1,104 @@
+"""Command line: toolchain [--manifest FILE] [--root DIR] check | list | install | verify.
+
+Exit codes: 0 success, 1 verification or install failure (check: invalid manifest), 2 usage or manifest error.
+"""
+import argparse
+import platform
+import sys
+from pathlib import Path
+
+from . import manifest as manifest_module
+from .errors import ManifestError, UsageError
+from .fetch import HttpsFetcher
+from .install import install
+from .manifest import ARCHES, PROFILES
+from .runner import run_command
+from .verify import verify
+
+DEFAULT_ROOT = Path(__file__).resolve().parents[2]
+_MACHINES = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+
+
+def detect_arch(machine=None):
+    machine = platform.machine() if machine is None else machine
+    if machine not in _MACHINES:
+        raise UsageError("unsupported host architecture (expected x86_64 or aarch64)")
+    return _MACHINES[machine]
+
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message):
+        raise UsageError("invalid usage: toolchain [--manifest FILE] [--root DIR] check|list|install|verify (see docs/cr/CR-2/design.md 3.3)")
+
+
+def _parser():
+    parser = _Parser(prog="toolchain", add_help=False)
+    parser.add_argument("--manifest")
+    parser.add_argument("--root")
+    sub = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
+    sub.add_parser("check")
+    listing = sub.add_parser("list")
+    listing.add_argument("--profile", required=True, choices=PROFILES)
+    listing.add_argument("--arch", choices=ARCHES)
+    inst = sub.add_parser("install")
+    inst.add_argument("--profile", required=True, choices=PROFILES)
+    inst.add_argument("--prefix", required=True)
+    inst.add_argument("--arch", choices=ARCHES)
+    inst.add_argument("--only")
+    inst.add_argument("--dry-run", action="store_true")
+    ver = sub.add_parser("verify")
+    ver.add_argument("--profile", required=True, choices=PROFILES)
+    ver.add_argument("--prefix", required=True)
+    ver.add_argument("--arch", choices=ARCHES)
+    ver.add_argument("--download", action="store_true")
+    ver.add_argument("--skip-smoke", action="store_true")
+    ver.add_argument("--skip-apt", action="store_true", help="leave apt tools to the builder-profile check")
+    return parser
+
+
+def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
+    out = out or sys.stdout
+    err = err or sys.stderr
+    try:
+        args = _parser().parse_args(sys.argv[1:] if argv is None else argv)
+        root = Path(args.root) if args.root else DEFAULT_ROOT
+        path = Path(args.manifest) if args.manifest else root / "toolchain" / "manifest.toml"
+        if not path.is_file():
+            raise UsageError("manifest not found")
+        if args.command == "check":
+            try:
+                errors = manifest_module.check_file(path, root)
+            except ManifestError as error:
+                raise UsageError(str(error)) from None
+            for line in errors:
+                print(line, file=out)
+            print("toolchain: manifest ok" if not errors else f"toolchain: {len(errors)} manifest error(s)", file=out)
+            return 1 if errors else 0
+        errors = manifest_module.check_file(path, root)
+        if errors:
+            for line in errors:
+                print(line, file=err)
+            raise UsageError("the manifest is invalid (run: scripts/toolchain check)")
+        manifest = manifest_module.parse(manifest_module.load(path))
+        if args.command == "list":
+            arch = args.arch
+            for tool in manifest.for_profile(args.profile):
+                version = tool.version or (f">={tool.version_min}" if tool.version_min else "lock")
+                print(f"{tool.name} {version} {tool.source}" + (f" {arch}" if arch and tool.source == "download" else ""), file=out)
+            return 0
+        arch = args.arch or detect_arch()
+        runner = runner or run_command
+        if args.command == "install":
+            if args.only and args.only not in manifest.tools:
+                raise UsageError("unknown tool for --only")
+            result = install(manifest, args.profile, args.prefix, arch, fetcher or HttpsFetcher(), runner, root, args.only,
+                             args.dry_run, out)
+            print(f"toolchain: {result.changed} {'would change' if args.dry_run else 'installed'}, {result.skipped} skipped, {result.failed} failed", file=out)
+            print(f"changed={result.changed}", file=out)
+            return 1 if result.failed else 0
+        failed = verify(manifest, args.profile, args.prefix, arch, args.download, args.skip_smoke, fetcher or HttpsFetcher(), runner, out,
+                        skip_apt=args.skip_apt)
+        return 1 if failed else 0
+    except UsageError as error:
+        print(f"toolchain: error: {error}", file=err)
+        return 2
