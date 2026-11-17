@@ -100,7 +100,7 @@ class SyntaxAndPreflight(unittest.TestCase):
     def test_builder_preflight_aborts_with_one_message_on_any_other_host(self):
         name, major, arch = host_facts()
         good = {"builder_expected_os": name, "builder_expected_major": major, "builder_expected_arch": arch}
-        for key, bad in (("builder_expected_os", "Ubuntu"), ("builder_expected_major", "99"), ("builder_expected_arch", "riscv64")):
+        for key, bad in (("builder_expected_os", "NoSuchOS"), ("builder_expected_major", "99"), ("builder_expected_arch", "riscv64")):
             with self.subTest(wrong=key):
                 code, out = run("builder.yml", "--tags", "preflight", extra_vars={**good, key: bad})
                 self.assertNotEqual(code, 0)
