@@ -15,7 +15,7 @@ concurrency:
 jobs:
   quality-gate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -23,22 +23,46 @@ jobs:
         with:
           persist-credentials: false
 
-      # TEMPORARY (CR-2 PR 1): the toolchain (CR-2 PR 3) does not exist yet, so this job uses the
-      # runner image's own tools and installs a missing one only from the image's package manager.
-      # actionlint and pymarkdown are neither on the image nor in its package archive, so those two
-      # checks are skipped here until the toolchain job provides them.
-      - name: Install missing linters from the package archive
+      # The builder toolchain (checksum-verified, hash-locked) provides every linter in a temporary prefix.
+      - name: Install the builder toolchain
         shell: bash
         run: |
-          missing=()
-          for tool in shellcheck yamllint; do
-            command -v "$tool" >/dev/null || missing+=("$tool")
-          done
-          if [[ ${#missing[@]} -gt 0 ]]; then
-            sudo apt-get update -q
-            sudo apt-get install -y --no-install-recommends "${missing[@]}"
-          fi
+          python3 -I scripts/toolchain install --profile builder --prefix "$RUNNER_TEMP/toolchain"
+          echo "$RUNNER_TEMP/toolchain/bin" >> "$GITHUB_PATH"
 
       - name: Quality gate
         shell: bash
-        run: ./scripts/quality-gate.sh --strict --skip actionlint,markdown
+        run: ./scripts/quality-gate.sh --strict
+
+  toolchain:
+    name: toolchain-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs every builder tool for this architecture, runs each smoke command and compares the
+      # version, re-downloads every artifact to compare checksums, and installs again to prove it is
+      # idempotent (no change, no download).
+      - name: Install, verify, and re-run
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          prefix="$RUNNER_TEMP/toolchain"
+          python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH"
+          python3 -I scripts/toolchain verify --profile builder --prefix "$prefix" --arch "$ARCH" --download --skip-apt
+          python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH" | tee "$RUNNER_TEMP/second-run.txt"
+          grep -qx 'changed=0' "$RUNNER_TEMP/second-run.txt"

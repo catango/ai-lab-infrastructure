@@ -186,6 +186,9 @@ run_adapters() { # normalisation of linter output, tested with stand-in tools (n
   out=$(cd "$tmp" && STUB_OUTPUT="$raw" STUB_RC=1 PATH="$bin" "$BASH" "$CHECKS/$id.sh" <<<"$file" 2>&1) || rc=$?
   if [[ $rc -eq 1 ]] && contains "$out" "$want_line"; then ok "$id: adapter normalises $tool output"; else fail "$id: adapter normalises $tool output" "rc=$rc"; fi
   rc=0
+  out=$(cd "$tmp" && STUB_OUTPUT="$tmp/$raw" STUB_RC=1 PATH="$bin" "$BASH" "$CHECKS/$id.sh" <<<"$file" 2>&1) || rc=$?
+  if [[ $rc -eq 1 ]] && contains "$out" "$want_line" && ! contains "$out" "$tmp"; then ok "$id: adapter makes absolute paths relative"; else fail "$id: adapter makes absolute paths relative" "rc=$rc"; fi
+  rc=0
   out=$(cd "$tmp" && STUB_OUTPUT="" STUB_RC=0 PATH="$bin" "$BASH" "$CHECKS/$id.sh" <<<"$file" 2>&1) || rc=$?
   if [[ $rc -eq 0 && -z $out ]]; then ok "$id: adapter passes clean $tool run"; else fail "$id: adapter passes clean $tool run" "rc=$rc"; fi
 }
@@ -250,7 +253,7 @@ test_dispatcher() {
   # Q-2 --list, --only, --skip, --base
   gate "$repo" --list
   rc_is "Q-2 --list exits 0" 0
-  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint python gate-tests"
+  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint toolchain python gate-tests"
   n=$(awk '{print $1}' <<<"$OUT" | grep -Ev '^(ID|CHECK)$' | tr '\n' ' ' | sed 's/ $//')
   if [[ $n == "$expected" ]]; then ok "Q-2 --list shows check ids in order"; else fail "Q-2 --list shows check ids in order" "got: $n"; fi
   out_has "Q-2 --list shows the tool" "shellcheck"

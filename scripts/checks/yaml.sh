@@ -13,5 +13,5 @@ gate_require_tool yamllint
 readonly CONFIG='{extends: default, rules: {line-length: disable, document-start: disable, truthy: {check-keys: false}, comments: {min-spaces-from-content: 1}, indentation: {spaces: consistent, indent-sequences: whatever}}}'
 out=$(yamllint -d "$CONFIG" -f parsable -- "${files[@]}" 2>&1) || true
 if [[ -z $out ]]; then exit 0; fi
-gate_linter_line <<<"$out"
+gate_relative <<<"$out" | gate_linter_line
 exit 1
