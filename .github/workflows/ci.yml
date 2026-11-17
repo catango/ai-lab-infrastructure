@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # TEMPORARY (CR-2 PR 1): the toolchain (CR-2 PR 3) does not exist yet, so this job uses the
+      # runner image's own tools and installs a missing one only from the image's package manager.
+      # actionlint and pymarkdown are neither on the image nor in its package archive, so those two
+      # checks are skipped here until the toolchain job provides them.
+      - name: Install missing linters from the package archive
+        shell: bash
+        run: |
+          missing=()
+          for tool in shellcheck yamllint; do
+            command -v "$tool" >/dev/null || missing+=("$tool")
+          done
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            sudo apt-get update -q
+            sudo apt-get install -y --no-install-recommends "${missing[@]}"
+          fi
+
+      - name: Quality gate
+        shell: bash
+        run: ./scripts/quality-gate.sh --strict --skip actionlint,markdown
