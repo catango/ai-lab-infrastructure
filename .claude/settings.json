@@ -54,6 +54,10 @@
       "Bash(oci *)",
       "Bash(sudo *)",
       "Bash(env)",
+      "Bash(env *)",
+      "Bash(declare -x*)",
+      "Bash(export -p*)",
+      "Bash(set)",
       "Bash(printenv*)",
       "Read(~/.config/gh/**)",
       "Read(~/.ssh/**)"
