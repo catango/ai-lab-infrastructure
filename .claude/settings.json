@@ -60,7 +60,15 @@
       "Bash(set)",
       "Bash(printenv*)",
       "Read(~/.config/gh/**)",
-      "Read(~/.ssh/**)"
+      "Read(~/.ssh/**)",
+      "Bash(* ~/.ssh/*)",
+      "Bash(* ~/.config/gh/*)",
+      "Bash(* $HOME/.ssh/*)",
+      "Bash(* $HOME/.config/gh/*)",
+      "Bash(* ${HOME}/.ssh/*)",
+      "Bash(* ${HOME}/.config/gh/*)",
+      "Bash(* */.ssh/*)",
+      "Bash(* */.config/gh/*)"
     ],
     "ask": [
       "Bash(gh api *)",
