@@ -248,7 +248,11 @@ if selected failure; then
   mkcase
   RUN_ENV=(STUB_SUDO_NEEDS_PASSWORD=1)
   capture restore_tty
-  check "when the sudo ticket is not shared, Ansible is asked to prompt (the script never reads a password)" "$(when_ok grep -q 'ansible-playbook .*--ask-become-pass' "$LOG")" "$(cat "$LOG")"
+  check "R-4 when sudo needs a password, Ansible is asked to prompt for it (tickets are not shared with become)" "$(when_ok grep -q 'ansible-playbook .*--ask-become-pass' "$LOG")" "$(cat "$LOG")"
+  check "the sudo test ignores the cached ticket (sudo -n -k)" "$(when_ok grep -qF 'sudo -n -k true' "$LOG")"
+  mkcase
+  capture restore_tty
+  check "with passwordless sudo Ansible is not asked for a password" "$([[ -z $(grep -F -- '--ask-become-pass' "$LOG" || true) ]] && echo 0 || echo 1)" "$(cat "$LOG")"
 fi
 
 # ---------------------------------------------------------------- verify.sh

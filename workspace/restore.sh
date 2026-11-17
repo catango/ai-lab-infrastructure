@@ -125,8 +125,12 @@ if ! command -v ansible-playbook >/dev/null 2>&1; then
   sudo apt-get update -q || step_fail "apt-get update failed"
   sudo apt-get install -y --no-install-recommends ansible-core python3-apt || step_fail "could not install ansible-core"
 fi
+# sudo tickets are per terminal: the `sudo -v` above does not carry over to Ansible's become, which runs in
+# its own session and fails with "a password is required". `-k` ignores the cached ticket, so this succeeds
+# only when sudo needs no password; otherwise Ansible prompts once ("BECOME password:") and the script never
+# reads the password itself.
 become_args=()
-if ! sudo -n true 2>/dev/null; then become_args=(--ask-become-pass); fi
+if ! sudo -n -k true 2>/dev/null; then become_args=(--ask-become-pass); fi
 export ANSIBLE_CONFIG="$ROOT/ansible/ansible.cfg"
 ansible-playbook -i "$ROOT/ansible/inventory/localhost.yml" "${become_args[@]}" -e "toolchain_prefix=$PREFIX" \
   "$ROOT/ansible/builder.yml" || step_fail "the builder profile did not apply"
