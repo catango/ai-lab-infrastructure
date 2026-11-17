@@ -72,9 +72,23 @@ jobs:
         run: |
           prefix="$RUNNER_TEMP/toolchain"
           python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH"
-          python3 -I scripts/toolchain verify --profile builder --prefix "$prefix" --arch "$ARCH" --download --skip-apt
+          python3 -I scripts/toolchain verify --profile builder --prefix "$prefix" --arch "$ARCH" --download --skip-apt | tee "$RUNNER_TEMP/verify.txt"
           python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH" | tee "$RUNNER_TEMP/second-run.txt"
           grep -qx 'changed=0' "$RUNNER_TEMP/second-run.txt"
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          {
+            echo "### toolchain-$ARCH"
+            echo
+            echo '~~~~text'
+            cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
+            echo '~~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Applies the whole builder profile in a pinned Debian 13 container (as root, so no become), twice,
   # to prove it converges and is idempotent, then runs the engine's verification.
@@ -99,7 +113,7 @@ jobs:
 
       - name: Apply the builder profile
         shell: bash
-        run: ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml
+        run: ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml | tee "$RUNNER_TEMP/first-apply.txt"
 
       - name: Apply it again (must change nothing)
         shell: bash
@@ -109,7 +123,7 @@ jobs:
 
       - name: Verify the toolchain
         shell: bash
-        run: python3 -I scripts/toolchain verify --profile builder --prefix /opt/ai-lab
+        run: python3 -I scripts/toolchain verify --profile builder --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
 
       # The opt-in role: writes once, is idempotent, and refuses to replace a file it did not write.
       - name: Opt-in role test
@@ -117,3 +131,20 @@ jobs:
         env:
           AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
         run: tests/ansible/opt-in-role-test.sh
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### builder-profile"
+            echo
+            echo '~~~~text'
+            echo "first apply:"
+            grep -E 'workspace +:' "$RUNNER_TEMP/first-apply.txt" 2>/dev/null || echo "  (no recap)"
+            echo "second apply (must show changed=0):"
+            grep -E 'workspace +:' "$RUNNER_TEMP/second-apply.txt" 2>/dev/null || echo "  (no recap)"
+            echo
+            cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
+            echo '~~~~'
+          } >> "$GITHUB_STEP_SUMMARY"

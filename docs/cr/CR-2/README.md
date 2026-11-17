@@ -4,8 +4,8 @@
 |---|---|
 | Issue | #2 |
 | Class | 3 |
-| Status | Design PR open, open questions resolved (informational only; approval is the merge of the design PR, ADR-003 section 5) |
-| ADR | [ADR-005](../../adr/ADR-005-toolchain.md) (Proposed) |
+| Status | Implemented in six PRs (quality gate, `pr-contract`, toolchain, builder profile, restore, finish). Open: the timed reset test (R-4, AC1-7), run by the approver. Approval of the design was the merge of the design PR (ADR-003 section 5) |
+| ADR | [ADR-005](../../adr/ADR-005-toolchain.md) (accepted by the merge of the design PR) |
 | Stage | 1 of the build sequence (baseline section 6) |
 
 ## Summary
@@ -25,5 +25,5 @@ and the CI skeleton with an ARM64 job. Design only: no scripts, roles, or workfl
 
 ## Next step
 
-Open questions are resolved (design section 9). The approver reviews and merges the design PR.
-Implementation PRs follow the plan.
+The approver merges the last implementation PR, creates the release tag `v0.1.0`, and runs the reset test
+([runbook](../../operations/workspace-restore.md)). The acceptance evidence table is in the body of the last implementation PR.
