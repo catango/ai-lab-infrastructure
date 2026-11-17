@@ -1,0 +1,44 @@
+# Calls the install engine; Ansible does not download or verify anything itself (S1-4).
+# The engine prints `changed=<n>`, which becomes the task's changed state. In check mode it runs with --dry-run.
+
+- name: Install the Python tools (hash-locked wheels in a virtual environment) (plan only, check mode)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - install
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --prefix
+      - "{{ toolchain_prefix }}"
+      - --arch
+      - "{{ arch_map[ansible_facts['architecture']] }}"
+      - --source
+      - pip
+      - --dry-run
+  register: python_tools_plan
+  changed_when: "'changed=0' not in python_tools_plan.stdout_lines"
+  check_mode: false
+  when: ansible_check_mode
+  become: "{{ ai_lab_become }}"
+
+- name: Install the Python tools (hash-locked wheels in a virtual environment)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - install
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --prefix
+      - "{{ toolchain_prefix }}"
+      - --arch
+      - "{{ arch_map[ansible_facts['architecture']] }}"
+      - --source
+      - pip
+  register: python_tools_result
+  changed_when: "'changed=0' not in python_tools_result.stdout_lines"
+  when: not ansible_check_mode
+  become: "{{ ai_lab_become }}"

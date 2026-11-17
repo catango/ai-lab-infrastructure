@@ -68,6 +68,17 @@ class Install(Base):
         code, out, err = self.install("--only", "nosuchtool")
         self.assertEqual(code, 2)
 
+    def test_source_filter(self):
+        code, out, _ = self.install("--source", "apt")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.fetcher.calls, [])
+        self.assertIn("gitlike", out)
+        self.assertNotIn("alpha", out)
+        code, out, _ = self.install("--source", "download")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.fetcher.calls, [AMD64_URL])
+        self.assertNotIn("gitlike", out)
+
     def test_apt_tools_are_not_installed_by_the_engine(self):
         code, out, _ = self.install()
         self.assertIn("gitlike", out)

@@ -1,0 +1,7 @@
+- name: A broken playbook
+  hosts: all
+  roles:
+    - role_that_does_not_exist
+  tasks:
+    - name: Bad
+      ansible.builtin.debug: [unclosed

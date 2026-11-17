@@ -1,0 +1,27 @@
+# The builder profile: the workspace (Debian 13, x86-64). Tool membership is the manifest's `profiles` field.
+- name: Apply the builder profile
+  hosts: all
+  connection: local
+  gather_facts: true
+  vars:
+    toolchain_profile: builder
+  pre_tasks:
+    - name: Preflight, the builder profile supports one platform only
+      tags: [preflight]
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == builder_expected_os
+          - ansible_facts['distribution_major_version'] == builder_expected_major
+          - ansible_facts['architecture'] == builder_expected_arch
+        quiet: true
+        fail_msg: >-
+          builder profile requires {{ builder_expected_os }} {{ builder_expected_major }} on {{ builder_expected_arch }}
+          (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
+          on {{ ansible_facts['architecture'] }})
+  roles:
+    - apt_base
+    - toolchain
+    - python_tools
+    - shell_env
+    - verify
+    - claude_managed_settings

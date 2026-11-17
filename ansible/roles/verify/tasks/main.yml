@@ -1,0 +1,23 @@
+# Evidence that the profile is complete: every smoke command and every apt minimum version.
+- name: Verify the toolchain (smoke commands and minimum versions)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - verify
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --prefix
+      - "{{ toolchain_prefix }}"
+      - --arch
+      - "{{ arch_map[ansible_facts['architecture']] }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Check that the PATH snippet is in place
+  ansible.builtin.stat:
+    path: /etc/profile.d/ai-lab.sh
+  register: verify_profile_snippet
+  failed_when: not verify_profile_snippet.stat.exists
+  when: not ansible_check_mode

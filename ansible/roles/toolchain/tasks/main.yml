@@ -1,0 +1,49 @@
+# Calls the install engine; Ansible does not download or verify anything itself (S1-4).
+# The engine prints `changed=<n>`, which becomes the task's changed state. In check mode it runs with --dry-run.
+- name: Create the install prefix
+  ansible.builtin.file:
+    path: "{{ toolchain_prefix }}"
+    state: directory
+    mode: "0755"
+  become: "{{ ai_lab_become }}"
+- name: Install the download tools (checksum-verified before extraction) (plan only, check mode)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - install
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --prefix
+      - "{{ toolchain_prefix }}"
+      - --arch
+      - "{{ arch_map[ansible_facts['architecture']] }}"
+      - --source
+      - download
+      - --dry-run
+  register: toolchain_plan
+  changed_when: "'changed=0' not in toolchain_plan.stdout_lines"
+  check_mode: false
+  when: ansible_check_mode
+  become: "{{ ai_lab_become }}"
+
+- name: Install the download tools (checksum-verified before extraction)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - install
+      - --profile
+      - "{{ toolchain_profile }}"
+      - --prefix
+      - "{{ toolchain_prefix }}"
+      - --arch
+      - "{{ arch_map[ansible_facts['architecture']] }}"
+      - --source
+      - download
+  register: toolchain_result
+  changed_when: "'changed=0' not in toolchain_result.stdout_lines"
+  when: not ansible_check_mode
+  become: "{{ ai_lab_become }}"

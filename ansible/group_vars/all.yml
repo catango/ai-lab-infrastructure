@@ -1,0 +1,24 @@
+# Variables for every profile. Tool membership comes from toolchain/manifest.toml, not from here.
+repo_root: "{{ playbook_dir | dirname }}"
+toolchain_engine: "{{ repo_root }}/scripts/toolchain"
+toolchain_prefix: /opt/ai-lab
+toolchain_profile: builder
+
+# Host architecture (Ansible fact) to the manifest's architecture names.
+arch_map:
+  x86_64: amd64
+  aarch64: arm64
+
+# become only when not already root (the CI container runs as root).
+ai_lab_become: "{{ ansible_facts['user_id'] != 'root' }}"
+
+# Preflight expectations (overridable with -e for the negative tests).
+builder_expected_os: Debian
+builder_expected_major: "13"
+builder_expected_arch: x86_64
+lab_expected_os: Ubuntu
+lab_expected_major: "24"
+lab_expected_arch: aarch64
+
+# Opt-in (design 3.6, decision 5): not used in Stage 1.
+claude_managed_settings_enabled: false
