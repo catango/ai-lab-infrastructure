@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** (becomes Accepted when the design PR for CR-2 is merged by the approver). Open questions were resolved by the approver before review; see CR-2 design section 9 |
+| Status | **Accepted** (2026-11-17, by the merge of the CR-2 design PR #3 by the approver). Open questions were resolved by the approver before review; see CR-2 design section 9 |
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-2 (issue #2) |
