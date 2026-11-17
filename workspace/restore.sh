@@ -87,6 +87,10 @@ CURRENT_STEP=0
 if [[ $DRY_RUN -eq 1 ]]; then
   plan "system and toolchain" "would run sudo -v, install ansible-core from apt if it is absent, and apply ansible/builder.yml"
   if command -v ansible-playbook >/dev/null 2>&1; then
+    # Ansible would create ~/.ansible; a dry run must not touch the home directory, so it works in a temporary one.
+    dry_tmp=$(mktemp -d)
+    trap 'rm -rf "$dry_tmp"' EXIT
+    export ANSIBLE_HOME="$dry_tmp" ANSIBLE_LOCAL_TEMP="$dry_tmp/local" ANSIBLE_REMOTE_TEMP="$dry_tmp/remote"
     if ANSIBLE_CONFIG="$ROOT/ansible/ansible.cfg" ansible-playbook -i "$ROOT/ansible/inventory/localhost.yml" --check --diff \
       -e ai_lab_become=false -e "toolchain_prefix=$PREFIX" "$ROOT/ansible/builder.yml"; then
       plan "system and toolchain" "the playbook check finished (nothing was applied)"
