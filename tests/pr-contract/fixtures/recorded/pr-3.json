@@ -1,0 +1,18 @@
+{
+  "base": {
+    "ref": "main"
+  },
+  "body": "<!-- PR type: design. Branch: design/CR-<n>-<slug>. Rule PC-1 (ADR-003) requires every section below, non-empty. -->\n\n## Summary\nDesign for Stage 1 (workspace foundation): toolchain manifest and Ansible layout (`builder` full, `lab` placeholder), `workspace/restore.sh` per ADR-001 section 4a, `scripts/quality-gate.sh`, `scripts/pr-contract` (PC-1 to PC-7, with untrusted-input handling), and the CI skeleton including an `ubuntu-24.04-arm` job. Drafts ADR-005 (toolchain) as Proposed. Design only: no scripts, roles, or workflows.\n\n## Change request\nCR: #2\n\n## Class\n3. It fixes the toolchain manifest format, the restore path for the ephemeral workspace, and the CI and `pr-contract` enforcement that every later stage depends on.\n\n## Files\n- `docs/cr/CR-2/` (README, impact-analysis, design, acceptance-criteria, implementation-plan)\n- `docs/adr/ADR-005-toolchain.md` (Proposed)\n- `docs/README.md` (index entries)\n\n## Review focus\nAll thirteen open questions raised in the first version were resolved by the approver; decisions are recorded in `docs/cr/CR-2/design.md` section 9 and reflected in the design and ADR-005. Notable outcomes: apt uses a minimum version (documented exception to the pin rule), TOML manifest, Podman deferred, `scripts/pr-body` added because `gh pr create --template` needs a terminal, PC-5 stays strict for `docs/adr/`.\n\nThe decisions were pushed after the PR was marked ready, so any earlier approval no longer covers the latest push. Merging this PR accepts ADR-005 as written.\n\n## Checkpoint\n<!-- checkpoint:start -->\n- [x] CR skeleton committed (README, impact analysis, design, acceptance criteria, plan)\n- [x] Design content complete\n- [x] Open questions listed in design.md\n- [x] Marked ready for review\n<!-- checkpoint:end -->\n\n\ud83e\udd16 Generated with [Claude Code](https://claude.com/claude-code)\n",
+  "changed_files": 7,
+  "draft": false,
+  "head": {
+    "ref": "design/CR-2-workspace-foundation"
+  },
+  "merged": true,
+  "number": 3,
+  "state": "closed",
+  "title": "design: CR-2 Stage 1 workspace foundation",
+  "user": {
+    "login": "example-author"
+  }
+}

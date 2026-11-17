@@ -1,0 +1,310 @@
+[
+  {
+    "filename": ".github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/actionlint.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/bash-hygiene.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/gate-tests.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/links.awk",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/links.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/markdown.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/no-claude-in-workflows.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/public-repo-hygiene.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/shellcheck.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/workflow-policy.awk",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/workflow-policy.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/checks/yaml.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/lib/gate-lib.sh",
+    "status": "added"
+  },
+  {
+    "filename": "scripts/quality-gate.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/actionlint/fail-no-runs-on/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/actionlint/fail-no-runs-on/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/actionlint/pass-ok/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-no-set/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-no-set/bad.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-no-shebang/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-no-shebang/noshebang.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-not-executable/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-not-executable/noexec.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-set-late/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/fail-set-late/late.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/bash-hygiene/pass-ok/good.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/fail-escape/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/fail-escape/README.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/fail-missing/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/fail-missing/README.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/pass-ok/README.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/pass-ok/other.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/links/pass-ok/sub/page.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/markdown/fail-heading-space/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/markdown/fail-heading-space/bad.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/markdown/pass-ok/ok.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/no-claude-in-workflows/fail-anthropic-env/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/no-claude-in-workflows/fail-anthropic-env/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/no-claude-in-workflows/fail-claude-comment/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/no-claude-in-workflows/fail-claude-comment/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/no-claude-in-workflows/pass-ok/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/public-repo-hygiene/pass-ok/notes.md",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/shellcheck/fail-unquoted/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/shellcheck/fail-unquoted/bad.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/shellcheck/pass-ok/ok.sh",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-curl-pipe-shell/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-curl-pipe-shell/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-expression-in-run/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-expression-in-run/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-head-ref-in-run/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-head-ref-in-run/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-inline-expression/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-inline-expression/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-no-permissions/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-no-permissions/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-no-version-comment/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-no-version-comment/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-paths-filter/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-paths-filter/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-pull-request-target/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-pull-request-target/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-secrets/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-secrets/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-tag-pinned/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-tag-pinned/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-unpinned/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-unpinned/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-workflow-run/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-workflow-run/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-write-all/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/fail-write-all/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/workflow-policy/pass-good/.github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/yaml/fail-duplicate-key/EXPECT",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/yaml/fail-duplicate-key/bad.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/fixtures/yaml/pass-ok/ok.yml",
+    "status": "added"
+  },
+  {
+    "filename": "tests/quality-gate/run.sh",
+    "status": "added"
+  }
+]
