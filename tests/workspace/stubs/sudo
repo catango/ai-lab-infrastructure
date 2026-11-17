@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Test stub: records the call, never runs anything.
+set -euo pipefail
+printf 'sudo %s\n' "$*" >>"$STUB_LOG"
+if [[ ${1:-} == "-n" && -n ${STUB_SUDO_NEEDS_PASSWORD:-} ]]; then exit 1; fi
+exit 0

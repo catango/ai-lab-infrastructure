@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Test stub for the GitHub CLI. Records argv (never stdin). State lives in $STUB_STATE (outside HOME).
+set -euo pipefail
+printf 'gh %s\n' "$*" >>"$STUB_LOG"
+login=${STUB_LOGIN:-machine-account}
+case "${1:-} ${2:-}" in
+  "auth status")
+    [[ -f $STUB_STATE/loggedin ]] ;;
+  "auth login")
+    cat >"$STUB_STATE/token_stdin"
+    : >"$STUB_STATE/loggedin"
+    if [[ -n ${STUB_TOKEN_FILE:-} ]]; then
+      mkdir -p "$HOME/.config/gh"
+      printf 'github.com:\n  oauth_token: %s\n' "$(cat "$STUB_STATE/token_stdin")" >"$HOME/.config/gh/hosts.yml"
+      chmod "${STUB_TOKEN_FILE_MODE:-600}" "$HOME/.config/gh/hosts.yml"
+    fi
+    ;;
+  "auth logout") rm -f "$STUB_STATE/loggedin" ;;
+  "auth setup-git") ;;
+  "auth token") echo "stub: gh auth token must never be called" >&2; exit 99 ;;
+  "api -i")
+    printf 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: %s\r\n' "${STUB_SCOPES-repo, workflow, read:org}"
+    [[ -z ${STUB_EXPIRY:-} ]] || printf 'Github-Authentication-Token-Expiration: %s\r\n' "$STUB_EXPIRY"
+    printf '\r\n{"login": "%s"}\n' "$login"
+    ;;
+  "pr list") printf '%s' "${STUB_PRS:-}" ;;
+  *) echo "stub gh: unexpected call: $*" >&2; exit 98 ;;
+esac

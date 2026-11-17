@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Test stub: reachability checks and the public profile lookup.
+set -euo pipefail
+printf 'curl %s\n' "$*" >>"$STUB_LOG"
+url=${*: -1}
+case $url in
+  https://api.github.com/users/*)
+    [[ -z ${STUB_LOOKUP_FAIL:-} ]] || exit 22
+    printf '{"login": "%s", "id": 424242}\n' "${url##*/}"
+    ;;
+  *) [[ -z ${STUB_CURL_FAIL:-} ]] || exit 7 ;;
+esac
