@@ -47,6 +47,27 @@ class Usage(Base):
         self.assertNotIn("gitlike", out)
 
 
+    def test_list_json_and_source_filter(self):
+        import json
+        code, out, _ = self.run_cli("list", "--profile", "builder", "--format", "json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        names = {item["name"]: item for item in data}
+        self.assertEqual(names["gitlike"]["package"], "git")
+        self.assertEqual(names["gitlike"]["source"], "apt")
+        self.assertEqual(names["alpha"]["version"], "1.2.3")
+        code, out, _ = self.run_cli("list", "--profile", "builder", "--format", "json", "--source", "apt")
+        self.assertEqual([item["name"] for item in json.loads(out)], ["gitlike"])
+        code, out, _ = self.run_cli("list", "--profile", "builder", "--source", "download")
+        self.assertNotIn("gitlike", out)
+
+    def test_bad_format_or_source_is_a_usage_error(self):
+        for argv in (["list", "--profile", "builder", "--format", "xml"], ["list", "--profile", "builder", "--source", "snap"],
+                     ["install", "--profile", "builder", "--prefix", "/x", "--source", "snap"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(cli.main(argv, out=io.StringIO(), err=io.StringIO()), 2)
+
+
 class Arch(unittest.TestCase):
     def test_detect(self):
         self.assertEqual(cli.detect_arch("x86_64"), "amd64")
