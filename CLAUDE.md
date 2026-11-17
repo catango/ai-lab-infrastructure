@@ -17,7 +17,7 @@ This repository provisions, configures, and maintains the AI engineering platfor
 ## Workflow (ADR-003)
 
 - Every change reaches `main` through a PR. Use branch prefixes `design/CR-<n>-`, `impl/CR-<n>-`, `change/`, `infra/`, `toolchain/`.
-- Open a **draft PR early**: `gh pr create --draft --template <type>.md`. Keep the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` in the PR body, and tick items as they are done.
+- Open a **draft PR early**: write the body from `scripts/pr-body <type>` to a file and run `gh pr create --draft --body-file <file>` (`--template` needs a terminal, so Claude Code cannot use it). Keep the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` in the PR body, and tick items as they are done.
 - **Commit and push** after each completed checklist item and before any long-running step.
 - Class 3: implementation starts only after the design PR is **merged**. Never edit an approved `design.md`, `acceptance-criteria.md`, or ADR in an implementation PR; propose a new design PR instead.
 - When finished, mark the PR ready for review and stop. The user reviews, approves, and merges.
