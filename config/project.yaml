@@ -1,0 +1,12 @@
+# config/project.yaml — read by scripts (pr-contract, address-review-feedback, labctl verify)
+schema_version: 1
+project:
+  name: ai-lab-infrastructure
+  type: platform-infrastructure
+github:
+  owner: "catango"                 # personal GitHub account that owns the repository
+  approver_login: "catango"        # only this account's reviews count as instructions and approval (ADR-003)
+  machine_login: "catango-gh-bot"  # machine account used by Claude Code (ADR-001)
+workflow:
+  merge_method: squash
+  change_classes: [1, 2, 3]

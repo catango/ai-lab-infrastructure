@@ -1,0 +1,45 @@
+# Terraform / OpenTofu state, plans, and local data
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*
+crash.log
+crash.*.log
+.terraform/
+.terraform.lock.hcl.bak
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keys and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Claude Code local (per-user) settings
+.claude/settings.local.json
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.#*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
