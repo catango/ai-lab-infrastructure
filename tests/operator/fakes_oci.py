@@ -58,7 +58,7 @@ class Stub:
         self.dir = str(directory)
         path = os.path.join(self.dir, "oci")
         with open(path, "w") as handle:
-            handle.write(STUB.replace("PYTHON", sys.executable, 1))
+            handle.write(STUB.replace("PYTHON", sys.executable + " -S", 1))
         os.chmod(path, stat.S_IRWXU)
         self.set(default_responses())
 

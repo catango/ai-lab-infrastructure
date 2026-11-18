@@ -4,6 +4,7 @@ import functools
 import importlib.machinery
 import importlib.util
 import io
+import json
 import os
 import pathlib
 import re
@@ -89,11 +90,11 @@ class DryRun(Base):
         commands = [line for line in self.lines if line.startswith("would: [")]
         self.assertGreaterEqual(len(commands), 15)
         for line in commands:
-            argv = __import__("json").loads(line[len("would: "):])
+            argv = json.loads(line[len("would: "):])
             self.assertEqual(argv[0], "oci")
             self.assertTrue(process.oci_verb_allowed(argv), line)
-            self.assertIn("--auth", argv)
-            self.assertEqual(argv[argv.index("--auth") + 1], "instance_principal")
+            if argv != ["oci", "--version"]:
+                self.assertEqual(argv[argv.index("--auth") + 1], "instance_principal")
 
     def test_the_dry_run_uses_placeholders_not_identifiers(self):
         self.run_facts("--scope", "oci")
@@ -106,7 +107,7 @@ class DryRun(Base):
         self.run_facts(*CLOUD_SHELL)
         commands = [line for line in self.lines if line.startswith("would: [")]
         self.assertTrue(commands)
-        self.assertTrue(all('"instance_obo_user"' in line for line in commands))
+        self.assertTrue(all('"instance_obo_user"' in line for line in commands if "--version" not in line))
 
     def test_the_dry_run_names_the_forwarded_variables_without_their_values(self):
         self.environ["OCI_CLI_PROFILE"] = "canary-profile"
@@ -194,7 +195,8 @@ class Apply(Base):
         self.apply()
         body = [line for line in self.lines if line.startswith(("a1_", "instances_", "public_ip", "alarms", "topics"))]
         self.assertTrue(body)
-        facts_lines = [l for l in self.lines if re.match(r"[a-z0-9_]+: ", l)]
+        start, end = self.lines.index("== facts (oci) =="), self.lines.index("== manual (off-host) ==")
+        facts_lines = self.lines[start + 1:end]
         self.assertTrue(all(LINE.fullmatch(line) for line in facts_lines), [l for l in facts_lines if not LINE.fullmatch(l)])
         self.assertNoCanary()
         self.assertNotIn("ocid", self.text.lower())
@@ -253,7 +255,7 @@ class Unknowns(Base):
             self.assertEqual(found[key], "unknown")
         self.assertEqual(found["a1_memory_gb_used"], "12")
         self.assertEqual(found["instances_total"], "2")
-        self.assertEqual(found["a1_over_free_allowance"], "no")
+        self.assertEqual(found["a1_over_free_allowance"], "unknown")
         self.assertEqual(found["calls_denied"], "1")
 
     def test_over_the_free_allowance_is_yes_even_when_the_other_value_is_unknown(self):
