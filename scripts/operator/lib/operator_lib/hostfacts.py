@@ -25,9 +25,12 @@ _SUDO_GROUPS = ("sudo", "admin", "wheel")
 
 
 class RealSystem:
+    """Reads fixed system paths. Symlinks are followed on purpose: /etc/os-release is one on Ubuntu. The operator's own
+    state files are read elsewhere (State, write_allowlist) and are never followed through a symlink."""
+
     def read(self, path, limit=READ_LIMIT):
         try:
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            fd = os.open(path, os.O_RDONLY)
         except OSError:
             return None
         try:
