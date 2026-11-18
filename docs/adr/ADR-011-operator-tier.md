@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** (becomes Accepted when the design PR for CR-18 is merged by the approver) |
+| Status | **Accepted** (2026-11-18, by the merge of the CR-18 design PR #19 by the approver). Verification items VO-* stay open (CR-18 design section 10.3) |
 | Date | 2026-11-18 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-18 (issue #18) |

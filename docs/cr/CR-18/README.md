@@ -4,8 +4,8 @@
 |---|---|
 | Issue | #18 |
 | Class | 3 |
-| Status | Design decisions complete; verifications VO-1, VO-3, VO-4, VO-7 to VO-17 and the platform operator VM facts open, each tied to the PR that needs it (design section 10.3). Nothing is implemented |
-| ADR | [ADR-011](../../adr/ADR-011-operator-tier.md) (Proposed; becomes Accepted when this design PR is merged by the approver). It amends ADR-001 (zones Z6 and Z7, B3, the OCI credentials and personal-account rows, new credential rows; decision 5, B1, AC1-3, and RR-8 keep their wording) and ADR-005 (the `operator` profile) in this PR |
+| Status | Design approved (PR #19 merged, 2026-11-18). Design decisions complete; verifications VO-1, VO-3, VO-4, VO-7 to VO-17 and the platform operator VM facts open, each tied to the PR that needs it (design section 10.3). Nothing is implemented |
+| ADR | [ADR-011](../../adr/ADR-011-operator-tier.md) (Accepted, 2026-11-18, by the merge of design PR #19). It amends ADR-001 (zones Z6 and Z7, B3, the OCI credentials and personal-account rows, new credential rows; decision 5, B1, AC1-3, and RR-8 keep their wording) and ADR-005 (the `operator` profile) in this PR |
 | Stage | Runs beside Stage 2 (CR-16). The first scripts replace manual procedures from Stage 0 and the Stage 2 acceptance tests |
 
 ## Summary
