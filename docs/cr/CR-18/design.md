@@ -44,7 +44,7 @@ the OCI baseline (CR-16), and a separate host for the operator.
 `sudo` group. The restore runs asked the approver for the sudo password, so sudo is not passwordless for the AI user. This is an
 inference: Claude does not run sudo. The OCI CLI is not installed. `gh` is installed.
 
-**Separation rules**
+**Separation rules:**
 
 1. The operator's home is mode 700. The AI user cannot read it.
 2. The AI user cannot become the operator. Switching users needs a password the AI does not have, and no sudo rule lets the AI user run commands as the operator.
