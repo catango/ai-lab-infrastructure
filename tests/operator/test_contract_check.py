@@ -55,6 +55,10 @@ class PythonRules(unittest.TestCase):
         for path in (SETUP, FACTS):
             self.assertEqual(findings(path, "#!/usr/bin/env python3\n" + source), [], path)
 
+    def test_the_facts_library_may_name_the_sudo_group_but_not_run_it(self):
+        self.assertEqual(findings("scripts/operator/lib/operator_lib/hostfacts.py", "GROUPS = ('sudo', 'admin')"), [])
+        self.assertTrue(findings("scripts/operator/lib/operator_lib/hostfacts.py", "import subprocess"))
+
     def test_the_word_sudo_in_comments_and_docstrings_is_fine(self):
         source = '"""Never use sudo here."""\n# no sudo either\nx = 1\n'
         self.assertEqual(findings(PY, source), [])

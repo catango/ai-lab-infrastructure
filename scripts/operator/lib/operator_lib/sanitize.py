@@ -17,6 +17,7 @@ _IPV6 = re.compile(r"(?<![0-9A-Za-z:])[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*(?![0-9A-Za-z
 _KEY = re.compile(r"[a-z0-9_.-]{1,40}")
 _WORDS = frozenset({"yes", "no", "unknown"})
 _SIZE = re.compile(r"[0-9]{1,9} ?(?:[KMGT]i?B|B)")
+_VERSION = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}(?:\.[0-9]{1,4})?")
 
 
 def _drop_controls(text):
@@ -42,13 +43,14 @@ def scrub(text):
 
 
 def summary_value(value):
-    """yes/no for a bool, a non-negative count, a size such as '47 GB', or one of yes/no/unknown. Anything else is a placeholder."""
+    """yes/no for a bool, a non-negative count, a size such as '47 GB', a version such as '3.13' or '2.43.0', or one of
+    yes/no/unknown. Anything else is a placeholder."""
     if isinstance(value, bool):
         return "yes" if value else "no"
     if isinstance(value, int):
         return str(value) if 0 <= value <= MAX_COUNT else PLACEHOLDER
     if isinstance(value, str):
-        if value in _WORDS or _SIZE.fullmatch(value):
+        if value in _WORDS or _SIZE.fullmatch(value) or _VERSION.fullmatch(value):
             return value
         if value.isascii() and value.isdigit() and len(value) <= 9:
             return value

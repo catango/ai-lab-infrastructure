@@ -10,7 +10,9 @@ import re
 import sys
 
 PREFIX = "scripts/operator/"
-SUDO_ALLOWED = frozenset({"scripts/operator/setup", "scripts/operator/facts"})
+# hostfacts.py only reads the name of the group "sudo" from /etc/group; it starts no command (operator_lib.process refuses sudo
+# unless the facts script passes an exact allowed command).
+SUDO_ALLOWED = frozenset({"scripts/operator/setup", "scripts/operator/facts", "scripts/operator/lib/operator_lib/hostfacts.py"})
 SUBPROCESS_ALLOWED = frozenset({"scripts/operator/lib/operator_lib/process.py"})
 READ_VERBS = frozenset({"list", "get", "inspect"})
 _OS_BANNED = frozenset({"system", "popen", "posix_spawn", "posix_spawnp"})

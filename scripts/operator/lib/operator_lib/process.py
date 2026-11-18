@@ -86,15 +86,21 @@ def _read(handle, cap):
 
 
 def run(argv, *, allow=DEFAULT_ALLOW, allow_exact=frozenset(), secrets=(), extra_env=None, timeout=60, cwd=None,
-        max_output=MAX_OUTPUT, path=None, input_text=None):
-    """Run one allowlisted command and return its Result. A non-zero exit status is returned, not raised."""
+        max_output=MAX_OUTPUT, path=None, input_text=None, interactive=False):
+    """Run one allowlisted command and return its Result. A non-zero exit status is returned, not raised.
+
+    interactive=True keeps the caller's terminal session and stdin, so that a command such as sudo can ask for a password
+    on the terminal. Its output is still captured, and the policy checks are the same."""
+    if interactive and input_text is not None:
+        raise PolicyViolation("an interactive command takes no input text")
     extra = _check(argv, allow, allow_exact, secrets, extra_env)
     env = _child_env(path, extra)
     data = input_text.encode("utf-8") if input_text is not None else None
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
-            proc = subprocess.Popen(list(argv), shell=False, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
-                                    stdout=out, stderr=err, env=env, cwd=cwd, start_new_session=True)
+            stdin = None if interactive else (subprocess.PIPE if data is not None else subprocess.DEVNULL)
+            proc = subprocess.Popen(list(argv), shell=False, stdin=stdin, stdout=out, stderr=err, env=env, cwd=cwd,
+                                    start_new_session=not interactive)
         except (FileNotFoundError, PermissionError, NotADirectoryError):
             raise CommandMissing("command not found or not executable") from None
         try:
