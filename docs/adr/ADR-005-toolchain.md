@@ -6,7 +6,7 @@
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-2 (issue #2) |
-| Amended by | ADR-011 decision 10 and CR-18 design section 5 (Proposed, 2026-11-18): adds the `operator` profile (decision 10 below). Takes effect when ADR-011 is accepted |
+| Amended by | ADR-011 decision 10 and CR-18 design section 5 (Accepted, 2026-11-18): adds the `operator` profile (decision 10 below). In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
 | Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3); `operator` profile (CR-18) |
 | Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), ADR-011 (operator tier), baseline sections 6 and 7 |
 
