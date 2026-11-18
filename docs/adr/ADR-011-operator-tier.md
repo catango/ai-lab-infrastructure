@@ -20,7 +20,7 @@ Some tasks cannot or should not be run by the AI user: tasks that need dedicated
 
 Facts (approver's statement of 2026-11-18, and read-only checks on the platform workspace):
 
-- A dedicated Linux user already exists on the platform workspace (zone Z1). It has internet access and no admin privileges.
+- A dedicated Linux user already exists on the platform workspace (zone Z1). It has internet access. It had no admin privileges; on 2026-11-18 the approver decided that it may use sudo to install packages (decision 10).
 - A second such user may be provisioned on the lab VM (zone Z2).
 - On Z1 there are two login users with home directories of mode 700. The AI user is a member of the `sudo` group. The restore runs asked the approver for the sudo password, so sudo is not passwordless for the AI user. This was inferred, not tested, because Claude never runs sudo.
 - The OCI CLI is not installed on Z1.
@@ -28,7 +28,7 @@ Facts (approver's statement of 2026-11-18, and read-only checks on the platform 
 
 ## 2. Decision
 
-1. **An operator tier exists.** The operator is a dedicated, unprivileged Linux user, separate from the AI user, on Z1 and optionally on Z2. It has no sudo. The operator runs, by hand, scripts that the AI wrote and the approver reviewed and merged. The AI never runs them and never reads the operator's home.
+1. **An operator tier exists.** The operator is a dedicated Linux user without general admin rights, separate from the AI user, on Z1 and optionally on Z2. Its only elevated right is sudo for package installation (decision 10); it is in no other privileged group. The operator runs, by hand, scripts that the AI wrote and the approver reviewed and merged. The AI never runs them and never reads the operator's home.
 2. **Every operator script has a dry-run mode and an apply mode.** A dry run changes nothing and shows what apply would do. The rule applies to operator scripts only. The Bash convention in `CLAUDE.md` is unchanged.
 3. **Scripts run from merged code only.** The operator uses its own clone, updated with a fast-forward pull. A script prints its commit and refuses to run with local changes or a commit that is not in `origin/main`. It never runs from the AI user's working tree.
 4. **Credentials are prompted for or short-lived.** They are never stored in the repository, in a place the AI user can read, or in shell history. OCI access uses a short-lived session token if Oracle's documentation confirms it works for this tenancy (CR-18 VO-1); otherwise the approver decides again. GitHub repository configuration uses a separate token T2 with extended scope, entered at the prompt, with the shortest practical expiry, revoked after use. T1 is unchanged and stays free of admin rights.
@@ -37,6 +37,7 @@ Facts (approver's statement of 2026-11-18, and read-only checks on the platform 
 7. **Amendment of ADR-001.** Decision 5 and the OCI credentials row of the section 4 matrix are replaced, when this ADR is accepted, by: the AI user holds no OCI credentials on Z1 or Z2; no OCI credentials exist on Z2; the operator user on Z1 may hold short-lived OCI credentials and the token T2. B1 stands: the AI-operated zones cannot approve or merge, and cannot modify infrastructure, because the AI user holds no credential that allows it.
 8. **The lab VM login is optional.** The operator login on Z2 has no sudo, no OCI credential, and no GitHub token. The lab stack creates it only when its variables are set. The lab design carries that (CR-18 design section 7).
 9. **Separation is tested before first use.** The approver confirms that the AI user cannot read the operator's home or become the operator, before the operator holds any credential.
+10. **Package installation by one dedicated script.** The operator workspace is set up by a single script, `setup`, with dry-run and apply modes. It is the only operator script that may call sudo, and only to install packages from a fixed list kept in the repository. Tools that are not Debian packages are installed from pinned sources with checksums for both architectures (ADR-005), never with `curl | sh`. The AI never runs it.
 
 ## 3. Alternatives considered
 
@@ -46,6 +47,7 @@ Facts (approver's statement of 2026-11-18, and read-only checks on the platform 
 | Let the AI user run the scripts with credentials | Rejected | It breaks B1: a prompt injection could use the credentials directly |
 | A separate host or container for the operator | Not in v1 | Stronger isolation, but another machine to build and keep. Revisit if test 1 of the acceptance criteria fails or the risk rises (CR-18 RR-OP-2) |
 | An OCI API key for a dedicated read-only user | Deferred | Needs a bootstrap IAM change (ADR-004) and gives up "no API keys". A session token is preferred (VO-1) |
+| An operator without any sudo | Rejected by the approver (2026-11-18) | The operator must be able to install packages. Sudo is limited to one script (decision 10) |
 | Extend the dry-run rule to every script in the repository | Not needed | The requirement covers operator scripts. The existing Bash convention stays as it is |
 
 ## 4. Consequences
@@ -56,6 +58,7 @@ Facts (approver's statement of 2026-11-18, and read-only checks on the platform 
 
 **Negative:**
 - Credentials exist on the workspace for the first time, under a user the AI cannot read. The separation rests on file permissions and sudo, not on a host boundary (RR-OP-2).
+- The operator can become root through sudo, so AI-written code that the operator runs could reach root. The controls are the single `setup` script, a gate check that rejects `sudo` anywhere else, and the review of that script (RR-OP-8).
 - AI-written code runs with those credentials, so script review matters more than before (RR-OP-1).
 - ADR-001's text is changed by a pointer now and by the matrix wording when the first script lands.
 

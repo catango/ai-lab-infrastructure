@@ -26,7 +26,7 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | CR | Summary | Status |
 |---|---|---|
 | [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
-| [CR-18](cr/CR-18/README.md) | Operator tier: a dedicated unprivileged user runs reviewed scripts for credentialed and extended-permission tasks (Gate 0 audit, GitHub setup, acceptance tests) | Design in review (ADR-011 Proposed) |
+| [CR-18](cr/CR-18/README.md) | Operator tier: a dedicated user without general admin rights runs reviewed scripts for credentialed and extended-permission tasks (Gate 0 audit, GitHub setup, acceptance tests) | Design in review (ADR-011 Proposed) |
 
 ## Operations
 

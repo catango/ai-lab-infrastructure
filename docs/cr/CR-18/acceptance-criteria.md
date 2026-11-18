@@ -8,7 +8,7 @@ sizes, never identifiers, addresses, or names.
 
 | ID | Criterion | Evidence |
 |---|---|---|
-| U-1 | The AI user cannot read the operator's home, cannot become the operator, and has no sudo rule to run commands as the operator. The operator has no sudo and no privileged group. | Approver's tests as each user (a read of the other's home is refused; `sudo -n true` fails for both; group list shows no privileged group), results yes/no. Done before the operator holds any credential |
+| U-1 | The AI user cannot read the operator's home, cannot become the operator, and has no sudo rule to run commands as the operator. The operator's sudo asks for a password (no `NOPASSWD` rule), and the operator is in no other privileged group. | Approver's tests as each user (a read of the other's home is refused; `sudo -n true` fails for both; group list shows no other privileged group), results yes/no. Done before the operator holds any credential |
 | U-2 | `workspace/verify.sh` V-4 still passes when run as the AI user after the operator holds credentials. | Output of the verify script, run as the AI user |
 | U-3 | No credential, token, or raw response from an operator run exists in the repository, the AI user's home, or shell history. | Approver's inspection after a run; `public-repo-hygiene` on any PR |
 
@@ -21,13 +21,15 @@ sizes, never identifiers, addresses, or names.
 | S-3 | A script refuses to run with local changes in the clone, and with a commit that is not contained in `origin/main`. | Tests in a temporary repository |
 | S-4 | A second `--apply` run changes nothing. | Tests with stub state |
 | S-5 | The sanitiser removes OCIDs, IPv4 and IPv6 addresses, and email addresses from sample output, and a value it cannot classify becomes a placeholder. | Unit tests with sample outputs |
-| S-6 | No script contains `eval`, a download piped to a shell, a Terraform call, or an OCI write call. | Gate check over `scripts/operator/` |
+| S-6 | No script contains `eval`, a download piped to a shell, a Terraform call, or an OCI write call, and `sudo` appears only in `setup`. | Gate check over `scripts/operator/` |
 | S-7 | Every script is ShellCheck-clean and uses `set -euo pipefail`. | CI `quality-gate` (`shellcheck`, `bash-hygiene`) |
+| S-8 | In `setup`, every package name and every download comes from a fixed list in the repository, and every download has a pinned version and checksums for both architectures. A dry run makes no change. | Tests with stub `apt-get` and a stub downloader; the manifest check of ADR-005 |
 
 ## Use cases (G), approver unless stated
 
 | ID | Criterion | Evidence |
 |---|---|---|
+| G-0 | `setup` in dry-run lists packages and tools with versions and sources. In apply (the operator enters the sudo password) it installs what is missing and prints tool names and versions only. A second apply installs nothing. | Approver's run |
 | G-1 | `oci-audit` in dry-run lists its read-only calls. In apply it prints the results summary block of the Gate 0 audit with yes/no and counts only, and no identifier. | Approver's run, output compared against the runbook's block |
 | G-2 | `github-setup` in dry-run shows current against wanted settings for both repositories without any change. In apply it brings them to the wanted state, and a second apply reports no change. | Approver's run on a throwaway or the real repositories, results yes/no |
 | G-3 | `github-setup` uses T2 only from the prompt, and T2 is revoked after the run. | Approver's check of the token list |
