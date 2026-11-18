@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""facts: gather facts about the operator machine as yes/no, counts, sizes, and versions (CR-18 design section 5.1).
+
+Scope host (the only scope in this version) reads /proc and /etc, `git --version`, and a small local state file. Without
+--apply it lists the checks and changes nothing. With --apply it runs them and writes only its local state files (mode 600) in
+the operator's home. --privileged runs a fixed list of read-only root commands, each asking for the sudo password.
+"""
+import os
+import sys
+
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(HERE, "lib"))
+
+from operator_lib import download, exitcodes, hostfacts, modes, process, release, sanitize  # noqa: E402
+
+ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
+MANIFEST = os.path.join(ROOT, "toolchain", "manifest.toml")
+DESCRIPTION = "Gather facts about this operator machine (dry run by default; --apply runs the checks)."
+
+# The fixed list of read-only root commands of --privileged (design section 5.1, R4). Nothing else is ever run with sudo.
+PRIVILEGED = (
+    ("sshd", "-T"),
+    ("nft", "list", "ruleset"),
+    ("find", "/etc/sudoers.d", "-maxdepth", "1", "-type", "f"),
+)
+PROBE = ("sudo", "-n", "true")
+ALLOW_EXACT = frozenset({("sudo",) + command for command in PRIVILEGED} | {PROBE})
+
+MANUAL_LINES = (
+    "manual: provider firewall and access rules (read them in the provider's console)",
+    "manual: the SSH path from Z0 to this machine (test it from the Windows laptop)",
+    "manual: corporate approval for this machine and its network use",
+)
+BANDWIDTH_CAP = 16 * 1024 * 1024
+BANDWIDTH_TIMEOUT = 60
+
+
+def add_arguments(parser):
+    parser.add_argument("--scope", choices=["host"], default="host", help="the facts to gather (only host so far)")
+    parser.add_argument("--privileged", action="store_true", help="also run the fixed read-only root commands, each asking for the sudo password")
+    parser.add_argument("--measure-bandwidth", action="store_true", help="time one manifest download and discard it")
+    parser.add_argument("--write-allowlist", action="store_true", help="write the current egress address to the operator-local allowlist file")
+
+
+def plan_lines(args):
+    lines = ["would: collect host facts (versions, memory, CPU, disk, time sync, account and sudo-group counts, listening port count, "
+             "firewall service state, package count)",
+             "would: record home persistence and egress stability in the local state file (mode 600)"]
+    if args.measure_bandwidth:
+        lines.append("would: download one manifest artifact once to time it, and discard it")
+    if args.write_allowlist:
+        lines.append("would: write the current egress address to the operator-local allowlist file (the address is not printed)")
+    if args.privileged:
+        for command in PRIVILEGED:
+            lines.append("would: run with sudo, asking for the password: " + " ".join(command))
+        lines.append("would: run " + " ".join(PROBE) + " (no password prompt)")
+    return lines
+
+
+def collect_privileged(runner):
+    facts = {}
+    outputs = {}
+    for command in PRIVILEGED:
+        try:
+            result = runner(("sudo",) + command, allow_exact=ALLOW_EXACT, interactive=True, timeout=120)
+            outputs[command] = result.stdout if result.returncode == 0 else None
+        except (process.CommandMissing, process.CommandTimeout, process.PolicyViolation):
+            outputs[command] = None
+    facts.update(hostfacts.parse_sshd(outputs[PRIVILEGED[0]]))
+    if outputs[PRIVILEGED[1]] is None:
+        facts.update({"nft_tables": hostfacts.UNKNOWN, "nft_chains": hostfacts.UNKNOWN, "nft_input_policy_drop": hostfacts.UNKNOWN})
+    else:
+        facts.update(hostfacts.parse_nft(outputs[PRIVILEGED[1]]))
+    facts["sudoers_d_files"] = hostfacts.UNKNOWN if outputs[PRIVILEGED[2]] is None else hostfacts.count_sudoers_d(outputs[PRIVILEGED[2]])
+    try:
+        probe = runner(PROBE, allow_exact=ALLOW_EXACT, timeout=30)
+        facts["sudo_passwordless"] = hostfacts.yes_no(probe.returncode == 0)
+    except (process.CommandMissing, process.CommandTimeout, process.PolicyViolation):
+        facts["sudo_passwordless"] = hostfacts.UNKNOWN
+    return facts
+
+
+def measure_bandwidth(downloader, manifest):
+    try:
+        url = download.manifest_artifact_url(manifest)
+        timing = downloader(url, max_bytes=BANDWIDTH_CAP, timeout=BANDWIDTH_TIMEOUT)
+    except (download.DownloadError, ValueError):
+        return hostfacts.UNKNOWN
+    value = download.megabits_per_second(timing)
+    return hostfacts.UNKNOWN if value is None else value
+
+
+def main(argv=None, *, system=None, environ=None, out=print, require_release=release.require_release_commit,
+         runner=process.run, downloader=download.timed_download, manifest=MANIFEST):
+    mode, args = modes.parse_mode(sys.argv[1:] if argv is None else argv, "facts", DESCRIPTION, add_arguments)
+    environ = os.environ if environ is None else environ
+    require_release(ROOT, out=out)
+    if mode.dry_run:
+        for line in plan_lines(args):
+            out(line)
+        out("dry run: nothing was checked and nothing was written. Run again with --apply to gather the facts.")
+        return exitcodes.OK
+
+    system = system or hostfacts.RealSystem()
+    home = environ.get("HOME", "")
+    if not home or not os.path.isabs(home):
+        out("refused: HOME is not set to an absolute path")
+        return exitcodes.FAILED
+    address = hostfacts.egress_address(environ)
+    if args.write_allowlist and address is None:
+        out("refused: no client address is available (run this over SSH); nothing was written")
+        return exitcodes.FAILED
+
+    facts = hostfacts.collect_host(system, runner)
+    state = hostfacts.State(hostfacts.state_dir(home))
+    facts.update(state.record(system, address))
+    if args.measure_bandwidth:
+        facts["bandwidth_mbit"] = measure_bandwidth(downloader, manifest)
+    if args.privileged:
+        facts.update(collect_privileged(runner))
+    state.save()
+    if args.write_allowlist:
+        facts["allowlist_entries"] = hostfacts.write_allowlist(home, address)
+
+    out("== facts (host) ==")
+    for line in sanitize.summary_lines(facts):
+        out(line)
+    out("== machine profile entry ==")
+    for line in hostfacts.render_toml(hostfacts.profile_entry(system, facts)):
+        out(line)
+    out("== manual (off-host) ==")
+    for line in MANUAL_LINES:
+        out(line)
+    return exitcodes.OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -16,7 +16,7 @@ class ProfileError(Exception):
     pass
 
 
-def _entry(name, entry):
+def check_entry(name, entry):
     if not _NAME.fullmatch(name) or not isinstance(entry, dict):
         raise ProfileError("invalid machine entry")
     for key, value in entry.items():
@@ -43,7 +43,7 @@ def load_profiles(path):
     machines = data.get("machines")
     if set(data) != {"machines"} or not isinstance(machines, dict) or not machines:
         raise ProfileError("the file must hold a [machines.<name>] table for each machine and nothing else")
-    return {name: _entry(name, entry) for name, entry in machines.items()}
+    return {name: check_entry(name, entry) for name, entry in machines.items()}
 
 
 def strictest(profiles):

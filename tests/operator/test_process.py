@@ -129,6 +129,27 @@ class Environment(Stubs):
             self.assertEqual(os.listdir(cwd), [])
 
 
+class Interactive(Stubs):
+    def test_an_interactive_command_keeps_the_session_for_a_password_prompt(self):
+        self.stub("sudo", 'cut -d" " -f6 /proc/self/stat')
+        allowed = frozenset({("sudo", "-n", "true")})
+        quiet = self.run_cmd(["sudo", "-n", "true"], allow_exact=allowed)
+        loud = self.run_cmd(["sudo", "-n", "true"], allow_exact=allowed, interactive=True)
+        self.assertNotEqual(int(quiet.stdout), os.getsid(0))
+        self.assertEqual(int(loud.stdout), os.getsid(0))
+
+    def test_interactive_cannot_be_combined_with_input_text(self):
+        self.stub("git", "true")
+        with self.assertRaises(process.PolicyViolation):
+            self.run_cmd(["git", "x"], interactive=True, input_text="x")
+
+    def test_the_policy_still_applies(self):
+        self.stub("sudo", f"touch {self.marker}")
+        with self.assertRaises(process.PolicyViolation):
+            self.run_cmd(["sudo", "sh"], interactive=True)
+        self.assertFalse(self.marker.exists())
+
+
 class Output(Stubs):
     def test_output_is_capped_and_flagged(self):
         self.stub("git", "head -c 5000000 /dev/zero | tr '\\0' 'a'")

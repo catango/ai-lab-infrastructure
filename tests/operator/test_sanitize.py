@@ -40,13 +40,14 @@ class Scrub(unittest.TestCase):
 class SummaryValues(unittest.TestCase):
     def test_classified_values_pass(self):
         cases = [(True, "yes"), (False, "no"), (0, "0"), (12, "12"), ("yes", "yes"), ("no", "no"), ("unknown", "unknown"),
-                 ("47 GB", "47 GB"), ("1024 MB", "1024 MB"), ("3", "3")]
+                 ("47 GB", "47 GB"), ("1024 MB", "1024 MB"), ("3", "3"),
+                 ("3.13", "3.13"), ("2.43.0", "2.43.0"), ("6.8", "6.8")]
         for value, expected in cases:
             with self.subTest(value=value):
                 self.assertEqual(sanitize.summary_value(value), expected)
 
     def test_unclassified_values_become_a_placeholder(self):
-        for value in ("host-01.internal", "alice", SAMPLES["ipv4"], SAMPLES["ocid"], "free text here", None, [1], -1, 10**12, 1.5):
+        for value in ("host-01.internal", "alice", SAMPLES["ipv4"], SAMPLES["ocid"], "free text here", "1.2.3" + ".4", "1.2.3" + ".4.5", "v1.2", "1.2.x", None, [1], -1, 10**12, 1.5):
             with self.subTest(value=value):
                 self.assertEqual(sanitize.summary_value(value), sanitize.PLACEHOLDER)
 
