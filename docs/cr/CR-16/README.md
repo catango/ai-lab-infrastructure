@@ -4,7 +4,7 @@
 |---|---|
 | Issue | #16 |
 | Class | 3 |
-| Status | Design in review. The approver's review handoff of 2026-11-17 is applied, and the operator-tier requirement of 2026-11-18 is added (design section 6.3, ADR-004 decision 10). Nothing is decided yet, so Q1 to Q14 stay open (design section 9). Nothing is implemented |
+| Status | Design in review. The approver's review handoff of 2026-11-17 is applied; it decided nothing yet, so the questions stay open (design section 9). Nothing is implemented |
 | ADR | [ADR-004](../../adr/ADR-004-oci-baseline.md) (Proposed; becomes Accepted when this design PR is merged by the approver) |
 | Stage | 2 of the build sequence (baseline section 6) |
 
@@ -20,7 +20,7 @@ Infrastructure as Code inside the Always Free allowance. Both stacks are applied
 | File | Purpose |
 |---|---|
 | [impact-analysis.md](impact-analysis.md) | What changes, security and cost impact, rollback |
-| [design.md](design.md) | The design, decisions S2-1 to S2-14, risks, and the open questions for the approver |
+| [design.md](design.md) | The design, decisions S2-1 to S2-12, risks, and the open questions for the approver |
 | [acceptance-criteria.md](acceptance-criteria.md) | Testable criteria with evidence |
 | [implementation-plan.md](implementation-plan.md) | Implementation PRs, order, user-only actions |
 

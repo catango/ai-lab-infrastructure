@@ -19,7 +19,6 @@ Nothing in the repository changes in the design PR other than files under `docs/
 | Item | Effect |
 |---|---|
 | ADR-001 section 4 | The instance principal and the SSH key handling are implemented as written. The public key and the allowed source range are stack variables, not repository content |
-| ADR-001 decision 5 and section 4 credential matrix | Amended by ADR-004 decision 10 (operator tier, Proposed): the AI user holds no OCI credentials on Z1, none exist on Z2, and the operator user on Z1 may hold short-lived ones. A pointer is added to ADR-001. The matrix text itself is updated when the operator-scripts change request lands |
 | ADR-002 sections 2 and 4 | The bootstrap separation is implemented. The federation trust and Resource Manager execution policies are deferred to Stage 4 (after Spike S2) and arrive through a new design PR |
 | ADR-005 | Unchanged. The gate's new `iac` check uses the OpenTofu already in the toolchain |
 | Baseline section 6, stage 2 | The entry criterion "D3 to D6 approved" is met. "O-9 known" is needed before the first lab apply, not before this design merges |
@@ -28,11 +27,10 @@ Nothing in the repository changes in the design PR other than files under `docs/
 ## 3. Security and privacy
 
 - The repository is public. All identifiers (OCIDs, namespace, addresses, network ranges, SSH public key, alert recipient, availability-domain names) are stack variables or looked up at apply time. The gate keeps them out of committed text.
-- The lab VM keeps no OCI credentials, including for the optional operator login. Its instance principal can read, and write only to one bucket (ADR-001 section 4).
-- The operator tier puts credentials on the platform workspace for the first time, under a user the AI cannot read. The separation rests on file permissions and sudo (RR-S2-10), and AI-written code runs with those credentials (RR-S2-9). Both are mitigated in design section 6.3.
+- The lab VM keeps no OCI credentials. Its instance principal can read, and write only to one bucket (ADR-001 section 4).
 - The SSH exposure is the main new attack surface: one TCP port, key-only, restricted to a variable range that cannot be `0.0.0.0/0`.
 - The compartment quotas are a hard guard that holds even if the Terraform code is wrong (ADR-002 section 4).
-- Claude Code never runs Terraform or the OCI CLI against the tenancy and never sees an OCI credential. Only the operator user, by hand, runs credentialed scripts.
+- Claude Code never runs Terraform or the OCI CLI against the tenancy and never sees an OCI credential.
 
 ## 4. Operational impact on the approver
 

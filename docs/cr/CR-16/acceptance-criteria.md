@@ -11,7 +11,7 @@ yes/no, counts, and sizes, never identifiers or addresses.
 | C-1 | `tofu fmt -check` and `tofu validate` pass for both roots, and the provider is pinned exactly with committed checksums. | CI `quality-gate` (`iac` check) |
 | C-2 | A resource type outside a root's allowlist fails the gate. | Fixture with a disallowed resource type |
 | C-3 | A fixture with a different shape, a larger OCPU or memory value, or a larger volume fails the gate. | Fixtures, one per case |
-| C-4 | `ssh_source_cidrs` rejects the all-addresses range and an empty list; `availability_domain_index` rejects 2; `ssh_public_key` rejects a non-Ed25519 key; `bastion_client_cidrs` rejects the all-addresses range and an empty list; `security_compartment_name` rejects a value equal to `compartment_name`; `operator_user_name` rejects `root` and the default login user's name; `operator_ssh_public_key` is required when `operator_user_name` is set and rejects a non-Ed25519 key. | `tofu validate` with test variable files in the test suite |
+| C-4 | `ssh_source_cidrs` rejects the all-addresses range and an empty list; `availability_domain_index` rejects 2; `ssh_public_key` rejects a non-Ed25519 key; `bastion_client_cidrs` rejects the all-addresses range and an empty list; `security_compartment_name` rejects a value equal to `compartment_name`. | `tofu validate` with test variable files in the test suite |
 | C-5 | No identifier, `*.tfstate*`, or `*.tfvars` is committed. | `public-repo-hygiene`; fixtures for state and variable files |
 | C-6 | `scripts/stack-zip` produces byte-identical zips on two runs and includes only the chosen root. | Unit test comparing checksums and listing |
 | C-7 | The `iac` check reports skip (77) without network and never passes silently. | Gate test in a network-less sandbox |
@@ -43,7 +43,6 @@ yes/no, counts, and sizes, never identifiers or addresses.
 | L-9 | Re-applying the unchanged stack reports no changes. | Plan summary in the Console |
 | L-10 | Destroying the block volume through a stack change is refused by `prevent_destroy`. | Plan or apply error in a throwaway change in the approver's session |
 | L-11 | After a stop and start of the instance, `/srv/work` mounts with its data intact. | Approver's test: write a marker file, stop and start from the Console, check the mount and the file |
-| L-12 | With `operator_user_name` unset, no second login exists. With it set, the operator logs in with its key, is in no privileged group, cannot use `sudo`, cannot read the login user's home or write to `/srv/work`, and holds no OCI or GitHub credential. | Approver's login and tests (`id`, `sudo -n true`, a read attempt), results yes/no |
 
 ## Cost and privacy (K)
 
@@ -51,16 +50,7 @@ yes/no, counts, and sizes, never identifiers or addresses.
 |---|---|---|
 | K-1 | The tenancy shows zero cost for the first full billing cycle after the apply. | Cost Analysis in the Console |
 | K-2 | Outputs of both stacks are marked sensitive and contain no value visible in the repository, a PR, or an Actions log. | Code review and the gate; `grep` of the PR text |
-| K-3 | The AI user holds no OCI credential on the workspace, no OCI credential exists on the lab VM (the operator login there included), and no API key exists for the administrator user. | `workspace/verify.sh` V-4 (run as the AI user) and Console inspection |
-
-## Operator tier (O), approver
-
-The scripts and their own criteria belong to the follow-up change request (design section 6.3). These two cover what this CR decides.
-
-| ID | Criterion | Evidence |
-|---|---|---|
-| O-1 | On the platform workspace the AI user cannot read the operator user's home and cannot become the operator, and the operator has no sudo. | Approver's tests as the AI user and as the operator (`sudo -n true` fails for both; the home listing is refused), results yes/no. Done before the operator's first credentialed run |
-| O-2 | ADR-004 decision 10 and the amendment pointer in ADR-001 agree, and the credential matrix wording in ADR-001 is updated when the follow-up change request lands. | Review |
+| K-3 | No OCI credential exists on the workspace or the lab VM, and no API key exists for the administrator user. | `workspace/verify.sh` V-4 and Console inspection |
 
 ## Documents and process (D)
 

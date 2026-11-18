@@ -7,7 +7,7 @@
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-16 (issue #16) |
 | Scope | Bootstrap stack, lab stack, cloud-init, and the static checks for both. Not the deployment pipeline (ADR-002, Stage 4), not the `lab` toolchain profile (Stage 3), not backup design (ADR-007) |
-| Related | ADR-001 (D4 to D6, section 4 credential placement; amended by decision 10 below), ADR-002 (bootstrap separation, Resource Manager), ADR-005 (toolchain), baseline sections 3, 6 and 7 |
+| Related | ADR-001 (D4 to D6, section 4 credential placement), ADR-002 (bootstrap separation, Resource Manager), ADR-005 (toolchain), baseline sections 3, 6 and 7 |
 
 > This ADR records a decision. It does not create any OCI resource, and it does not authorize any Terraform run, IAM change, or workflow.
 > Detail and rationale are in `docs/cr/CR-16/design.md`; this record keeps the decision itself.
@@ -34,8 +34,6 @@ Verified facts (approver's Console and Cloud Shell inspection, and Oracle's Alwa
 7. **Instance principal**: a dynamic group matching only the lab compartment, with a policy limited to read-only inspection of the compartment, object access to the backup bucket, and reading one Vault secret in the security compartment. No write access to compute, network, IAM, or quotas.
 8. **No identifiers in the repository.** OCIDs, namespaces, addresses, network ranges, the SSH public key, and the alert recipient are stack variables entered in the Console. Outputs are marked sensitive and are read in the Console only.
 9. **Verification before use.** The OCI-specific syntax and service behavior listed in design section 8 is verified from Oracle's documentation in the first implementation PR that depends on it, and any difference is recorded in that PR.
-10. **Operator tier.** A dedicated Linux user with internet access and no admin privileges (the operator) exists on the platform workspace, separate from the AI user, and may also be provisioned on the lab VM. The operator runs, by hand, AI-written scripts that were reviewed and merged, for tasks the AI must not or cannot run itself: tasks that need dedicated credentials (OCI) or extended permissions (GitHub repository configuration). Every operator script has a dry-run mode, which is the default, and an apply mode. Operator scripts never apply infrastructure changes; those stay with ADR-002. The lab stack can provision the operator login on the lab VM (optional, no sudo, no credentials).
-    **This amends ADR-001 decision 5 and the row "OCI credentials: None on Z1 or Z2" of its section 4 matrix.** Amended wording: the AI user holds no OCI credentials on Z1; no OCI credentials exist on Z2; the operator user on Z1 may hold short-lived OCI credentials and a GitHub token with extended permissions, entered at a prompt and never stored in the repository. The amendment takes effect when this ADR is accepted. Rules, risks, and the split into a separate change request are in design section 6.3.
 
 ## 3. Alternatives considered
 
@@ -59,7 +57,6 @@ Verified facts (approver's Console and Cloud Shell inspection, and Oracle's Alwa
 - Two manual applies in Stage 2, and plan review in the Console.
 - If the allowed source address changes (corporate egress), the approver updates a variable and re-applies, or uses Bastion.
 - The A1 instance can be reclaimed if it stays idle for seven days. This is accepted (RR-S2-3).
-- The operator tier puts credentials on the workspace for the first time. The separation from the AI user rests on file permissions and sudo, not on a host boundary, and AI-written code runs with those credentials (RR-S2-9, RR-S2-10). The approver tests the separation before the first use.
 
 **Residual risks** are in design section 7.
 
