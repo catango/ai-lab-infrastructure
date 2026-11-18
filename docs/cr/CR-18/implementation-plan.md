@@ -1,25 +1,28 @@
 # CR-18 Implementation plan
 
-Starts only after the design PR is merged (ADR-003 section 4). Each implementation PR uses branch `impl/CR-18-<slug>`, declares `Implements: #18` and `Design: #<design PR>`, and keeps its own checkpoint list. Each PR is small and reviewable in one sitting.
+Starts only after the design PR is merged (ADR-003 section 4). Each implementation PR uses branch `impl/CR-18-<slug>`, declares `Implements: #18` and `Design: #<design PR>`, and keeps its own checkpoint list. Each PR is small and reviewable in one sitting. The order follows the approver's decision Q7.
 
 ## 1. Order and dependencies
 
 | # | PR (branch slug) | Content | Needs | Acceptance criteria |
 |---|---|---|---|---|
-| 1 | `operator-lib` | `scripts/operator/lib/` (modes, commit check, sanitiser, exit codes), a gate check for S-6, tests, `docs/operations/operator.md` | Design merged; U-1 done | S-1 to S-7, D-1 |
-| 2 | `operator-setup` | `scripts/operator/setup` (the package list, pinned tool sources with checksums for both architectures, the only use of sudo), tests | PR 1; VO-2 and VO-6 answered; Q9 decided | S-8, G-0 |
-| 3 | `github-setup` | `scripts/operator/github-setup`, the desired-state file, tests | PR 1; VO-3, VO-4 answered; T2 handling decided (Q4) | G-2, G-3 |
-| 4 | `oci-audit` | `scripts/operator/oci-audit`, tests with sample output | PR 2 (installs the OCI CLI); VO-1 answered; Q3 decided | G-1, G-5 |
-| 5 | `acceptance` | `scripts/operator/acceptance`, the criterion registry from CR-16's acceptance tables | PR 1; CR-16 merged and its stacks applied for the lab checks | G-4, L-1 |
-| 6 | `operator-finish` | Shorten `gate-0-audit.md` and `github-setup.md`, update the ADR-001 matrix wording, `docs/README.md`, the evidence table; `Closes #18` | PRs 1 to 5 and the approver's run | D-2 to D-4, U-2, U-3, G |
+| 1 | `operator-lib` | `scripts/operator/lib/` (modes, release-tag commit check, sanitiser, exit codes, and the HTTP client with its GET-only mode), the gate checks (S-6, S-11), `scripts/operator/machine-profiles.toml`, the CI job with resource limits, tests | Design merged | S-1 to S-7, S-10, S-11 |
+| 2 | `operator-facts` | `scripts/operator/facts`, host scope with `--privileged`, `--measure-bandwidth`, and `--write-allowlist`, and its tests | PR 1; VO-15 answered | F-1 |
+| 3 | `operator-profile` | `scripts/operator/setup`, `ansible/operator.yml` and its roles, `toolchain/python/operator.lock`, the `operator` profile in the manifest, and a CI job running `setup --apply` twice in a pinned minimal Ubuntu 24.04 container | PR 1 and PR 2; the platform operator VM facts pasted into the PR; the first release tag | P-1 to P-8, ADR-005 AC5-6 |
+| 4 | `github-setup` | `scripts/operator/github-setup`, the desired-state file, and `facts --scope github`, with tests | PR 1 and PR 3 applied on the platform operator VM with U-1 done; VO-3, VO-4, VO-17 answered; the tag ruleset (R3) applied | F-3, G-2, G-3, U-4 |
+| 5 | `facts-oci` | `facts --scope oci`, merging `oci-audit` into it, usable in Cloud Shell before CR-16, with tests using sample output | PR 2; VO-1 and VO-16 answered | F-2, G-5 |
+| 6 | `acceptance` | `scripts/operator/acceptance`, the criterion registry from CR-16's acceptance tables | PR 1; CR-16 merged and its stacks applied; the lab operator VM working | G-4, L-1, L-2, W-1, W-2 |
+| 7 | `operator-finish` | `docs/operations/operator.md` (platform operator VM runbook, lab operator VM bootstrap, `ssh` config templates, break-glass runbook, token handling, rollback), the shortened `gate-0-audit.md` and `github-setup.md` with their appendices, `docs/README.md`, the evidence table; `Closes #18` | PRs 1 to 6 and the approver's run | D-1 to D-4, U-2, U-3 |
 
-PRs 3 and 4 are independent of each other and may be reviewed in parallel. PR 5 may be drafted earlier, but it needs CR-16's criteria.
+PRs 4 and 5 are independent of each other and may be reviewed in parallel. PR 6 may be drafted earlier, but it needs CR-16's criteria. Implementation PRs that do not need OCI (1 to 4) start after this design merges. PR 6 waits for CR-16 to be merged and applied (Q8). PR 5 does not need the lab operator VM, because the OCI scope runs in Cloud Shell until it exists.
+
+The host-separation test U-1 runs on each operator machine after its first profile apply and before the first credential there. For the platform operator VM that is between PR 3 and PR 4.
 
 ## 2. Checklist per PR
 
 - [ ] Draft PR opened with the implementation template, `Implements:` and `Design:` filled in
 - [ ] Tests or fixtures written first for the criteria in the table above
-- [ ] Implementation complete
+- [ ] Implementation complete, with the "Operator script review" section of PC-8 once that rule is merged
 - [ ] `./scripts/quality-gate.sh` passes; any skipped check is reported
 - [ ] CI green
 - [ ] Acceptance evidence recorded in the PR body
@@ -27,36 +30,38 @@ PRs 3 and 4 are independent of each other and may be reviewed in parallel. PR 5 
 
 ## 3. Work detail by PR
 
-**PR 1: operator-lib.** A shell library sourced by every operator script. It parses `--dry-run` and `--apply` (dry run is the default), prints the commit and refuses a dirty tree or a commit outside `origin/main`, provides the confirmation prompt, the sanitiser, and the exit-code convention. A gate check rejects `eval`, Terraform calls, and OCI write calls under `scripts/operator/`. The runbook covers the one-time clone setup, the run flow, and T2 handling.
+**PR 1: operator-lib.** A Python shared module used by every operator script (modes, the release-tag commit check, the sanitiser, exit codes, and an HTTP client that reuses the `pr-contract` API client and has a read-only mode that refuses any method other than GET). Gate checks reject `shell=True`, `os.system`, `eval`, `exec`, Terraform calls, OCI write verbs, and `sudo` outside `setup` and `facts --privileged`. The machine-profile data file starts with the architecture and OS of both machines. The CI job runs the tests under the memory and CPU limits of the strictest profile.
 
-**PR 2: operator-setup.** The one script that may call sudo. It installs a fixed list of Debian packages and, from pinned sources with checksums for both architectures, the tools that are not packages (the OCI CLI among them). A dry run lists everything and installs nothing. The PR shows the approver the exact package list and sources.
+**PR 2: operator-facts.** The host scope of `facts`, the privileged mode with its fixed command list, bandwidth measurement, and the allowlist writer. It runs on minimal Ubuntu 24.04 with only `python3` and `git`.
 
-**PR 3: github-setup.** The desired state of repository settings, security features, rulesets, environments, and the collaborator as a data file, applied through `gh api`. The scopes of T2 are shown in the PR for the approver.
+**PR 3: operator-profile.** `setup` (the single Bash script), the Ansible playbook and its roles (hardening, sudoers, firewall with timer-based revert, packages, tools, the OCI CLI in a hash-locked venv, the lock play, the separation checks), and the CI job. The PR shows the approver the exact package list and sources, and the platform operator VM facts.
 
-**PR 4: oci-audit.** The read-only calls of the Gate 0 audit, printing the results block. The authentication method follows Q3.
+**PR 4: github-setup.** The desired state of repository settings, security features, rulesets, environments, and the collaborator as a data file, applied through GitHub REST calls with `urllib`. The dry run uses T3 and the apply uses T2. The permissions of both tokens are shown in the PR for the approver. The GitHub scope of `facts` is added here.
 
-**PR 5: acceptance.** A registry of criteria by ID, each with how to run it (or `manual`). The runner reports yes or no per ID.
+**PR 5: facts-oci.** The OCI scope of `facts`: `list`, `get`, and `inspect` verbs only, a dry run that prints the exact commands, and counts and yes/no as output. It replaces the separate `oci-audit` script.
 
-**PR 6: operator-finish.** Runbook updates, the ADR-001 matrix wording, and the evidence table.
+**PR 6: acceptance.** A registry of criteria by ID, each with how to run it (or `manual`). The runner reports yes or no per ID and reaches the lab VM with a dedicated SSH key over private IPs.
+
+**PR 7: operator-finish.** Runbook updates, the shortened manual runbooks, and the evidence table.
 
 ## 4. User-only actions (Claude does not run these)
 
 | When | Action |
 |---|---|
-| Before PR 1 | Run the separation test U-1 on the platform workspace |
-| Before PR 2 | Decide the scope of the operator's sudo (Q9) |
-| After PR 2 merges | Run `setup` as the operator, in dry-run and then apply (it asks for the sudo password) |
-| Before PR 3 | Decide how T2 is handled (Q4) and check the scopes in VO-3 |
-| Before PR 4 | Decide the OCI authentication (Q3) |
-| Each GitHub configuration run | Create T2 at the prompt's request, then revoke it |
-| Each OCI audit run | Complete the browser sign-in for the session token |
-| After PR 5 | Run the acceptance script in apply mode as the operator |
-| After PR 6 | Review and merge; the CR closes with the merge |
+| Before PR 3 | Apply the tag ruleset (R3) in the repository settings. After PR 2 merges, create the first release tag, install `git` and clone the tag on the platform operator VM, run `facts` (with `--privileged`), and paste the safe output into the PR 3 description |
+| Before the CR-16 design PR | Run `facts --scope oci` in Cloud Shell (or read the Console) and give the values to the design PR |
+| Before each first use of a changed operator script or profile | Create a release tag |
+| After PR 3 merges | Run `setup` on the platform operator VM (dry run, review, then `--apply` with the sudo password), confirm an operator login from a second session, run the lock play, and run U-1. Retire the Z1 operator user (Q25) once the platform operator VM works |
+| Each GitHub facts run or `github-setup` dry run | Create T3 at the prompt's request, then revoke it |
+| Each `github-setup` apply run | Create T2 at the prompt's request, then revoke it |
+| After CR-16 is applied | Check the lab operator VM (L-1, L-2), run U-1 on it, and test a break-glass rebuild once per OCI VM (W-2) |
+| After PR 6 | Run the acceptance script with `--apply` on the lab operator VM |
+| After PR 7 | Review and merge; the CR closes with the merge |
 
 ## 5. What this plan does not do
 
 - No Terraform, no OCI resource changes from operator scripts (ADR-011 decision 5).
-- No change to the `CLAUDE.md` dry-run convention.
-- No change to CR-16: the lab login is added to CR-16's design by a new design PR after both changes are merged.
-- No credential in the repository, in the AI user's home, or on the lab VM.
-- No sudo anywhere except in `setup`.
+- No change to the `CLAUDE.md` dry-run convention. The `CLAUDE.md` and deny-rule changes are a separate change PR.
+- No change to CR-16 in this plan: the lab operator VM, alarms, and rebuild requirements are added to CR-16's design by a new design PR after both changes are merged.
+- No credential in the repository, in an AI user's home, or on the lab VM, and no T1 on an operator machine.
+- No sudo anywhere except in `setup` and in `facts --privileged`.
