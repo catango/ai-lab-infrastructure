@@ -6,8 +6,9 @@
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-2 (issue #2) |
-| Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3) |
-| Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), baseline sections 6 and 7 |
+| Amended by | ADR-011 decision 10 and CR-18 design section 5 (Proposed, 2026-11-18): adds the `operator` profile (decision 10 below). Takes effect when ADR-011 is accepted |
+| Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3); `operator` profile (CR-18) |
+| Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), ADR-011 (operator tier), baseline sections 6 and 7 |
 
 > This ADR records a decision. It does not install anything and does not authorize workflows or settings changes.
 > Detail and rationale are in `docs/cr/CR-2/design.md`; this record keeps the decision itself.
@@ -31,10 +32,11 @@
    - `pip`: hash-locked requirements installed with `--require-hashes` into a venv under the install prefix.
 4. **One install engine.** `scripts/toolchain` (Python 3, standard library) performs `check`, `list`, `install`, and `verify`. It verifies the checksum before extraction, hardens extraction, installs atomically and idempotently, and supports `--dry-run`. Ansible, CI, and verification all call it; none re-implements download or verification.
 5. **Install layout.** `/opt/ai-lab/tools/<name>/<version>/`, symlinks in `/opt/ai-lab/bin`, venv in `/opt/ai-lab/venv`, `PATH` set by a profile snippet. CI uses a temporary prefix.
-6. **Ansible provides structure, not logic.** `ansible/builder.yml` and `ansible/lab.yml` select roles; tool membership comes from the manifest `profiles` field. Ansible is bootstrapped from the Debian archive by `workspace/restore.sh`.
+6. **Ansible provides structure, not logic.** `ansible/builder.yml`, `ansible/lab.yml`, and `ansible/operator.yml` select roles; tool membership comes from the manifest `profiles` field. The allowed profile names are `builder`, `lab`, and `operator`. Ansible is bootstrapped from the Debian archive by `workspace/restore.sh` on the workspace, and from the Ubuntu archive by `scripts/operator/setup` on the operator machines.
 7. **Verification levels.** L1 static (manifest check, Ansible syntax check, quality gate); L2 executed on GitHub runners (install and smoke on amd64 and arm64, `builder` apply in a pinned `debian:13` container); L3 on the real host (workspace restore test; lab VM in Stage 3).
 8. **Changes to the manifest** are toolchain PRs (ADR-003, branch `toolchain/`), each recording the checksum and signature verification evidence.
 9. **Builder content.** `gh`, `yq`, `rg`, `fd`, `jq`, `shellcheck`, `actionlint`, OpenTofu, `yamllint`, `pymarkdownlnt`, Python 3, `ansible-core`, `git`, `curl`, and `tmux`. A container runtime is deferred until a project needs it (O-10). Claude Code is not installed by this profile.
+10. **Operator profile** (ADR-011, CR-18). The `operator` profile targets Ubuntu 24.04 (minimal), x86-64, on both operator machines, and is sized for 1 GB of memory. It is the Ansible playbook `ansible/operator.yml` in the layout of decision 6, with tool membership from the manifest `profiles` field. The OCI CLI is installed through the `pip` source into a hash-locked venv from `toolchain/python/operator.lock`. The CR-2 manifest check rule is extended from `builder` and `lab` to `operator`. Every `download` entry still carries both architectures and checksums (decision 3), even though both operator machines are x86-64. Its content (apt package list, roles, hardening) is specified in CR-18 design section 5 and built by the `operator-profile` implementation PR.
 
 ## 3. Alternatives considered
 
@@ -71,6 +73,7 @@
 | O5-3 | Markdown linter; OpenTofu or Terraform | Resolved: `pymarkdownlnt`; OpenTofu. |
 | O5-4 | Container runtime in `builder` | Resolved: deferred until needed. |
 | O5-5 | `lab` profile content, including ARM64 and Ubuntu specifics | Remaining: Stage 3, by an amendment or successor design. |
+| O5-6 | `operator` profile content and its fit in 1 GB of memory | Decided in structure by ADR-011. Remaining: verification VO-7 (CR-18) before the CR-16 design PR, and the content in the `operator-profile` PR. |
 
 ## 6. Acceptance criteria (verified in the implementation PRs)
 
@@ -79,3 +82,4 @@
 - AC5-3: A second install run makes no change and downloads nothing.
 - AC5-4: The `builder` profile applies in a Debian 13 container and passes verification; the same engine passes smoke tests on an ARM64 runner.
 - AC5-5: No tool is installed by `curl | sh` or from an unpinned source.
+- AC5-6: The `operator` profile applies twice in a pinned minimal Ubuntu 24.04 container, the second run reports no change, and `scripts/operator/setup --apply` also passes as root without sudo (CR-18 acceptance P-8).

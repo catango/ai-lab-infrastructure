@@ -6,7 +6,7 @@
 | Class | 3 |
 | Status | Design in review. The approver accepted Q1 to Q3 on 2026-11-18 (design section 5). Nothing is implemented |
 | ADR | [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Accepted). This PR adds rule PC-8 to its section 6 and acceptance criterion AC3-7 |
-| Origin | The approver's decision handoff of 2026-11-18 on PR #19 (CR-18, ADR-011 (proposed in PR #19)), which asked for PC-8 in a separate design PR |
+| Origin | The approver's decision handoff of 2026-11-18 on PR #19 (CR-18, [ADR-011](../../adr/ADR-011-operator-tier.md)), which asked for PC-8 in a separate design PR |
 
 ## Summary
 
