@@ -13,6 +13,8 @@ from pr_contract.api import MAX_RESPONSE_BYTES, TIMEOUT_SECONDS, _NoRedirect
 from pr_contract.errors import ApiError, NotFound
 
 METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+_HEADER_NAME = re.compile(r"[A-Za-z][A-Za-z0-9-]{0,40}")
+_HEADER_VALUE = re.compile(r"[A-Za-z0-9 ./+;=_-]{1,100}")
 _PATH = re.compile(r"/(?!/)[A-Za-z0-9._~%:@!$&'()*+,;=/?-]*")
 
 
@@ -21,7 +23,7 @@ class ReadOnlyViolation(Exception):
 
 
 class HttpClient:
-    def __init__(self, base, token=None, *, read_only=True, opener=None, timeout=TIMEOUT_SECONDS):
+    def __init__(self, base, token=None, *, read_only=True, opener=None, timeout=TIMEOUT_SECONDS, headers=None):
         parsed = urllib.parse.urlsplit(base)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("the base URL must be a plain https URL")
@@ -30,6 +32,12 @@ class HttpClient:
         self.read_only = bool(read_only)
         self._opener = opener or urllib.request.build_opener(_NoRedirect)
         self._timeout = timeout
+        self._headers = {}
+        for name, value in (headers or {}).items():
+            if not (isinstance(name, str) and _HEADER_NAME.fullmatch(name) and isinstance(value, str) and _HEADER_VALUE.fullmatch(value)) \
+                    or name.lower() in ("authorization", "host", "content-length"):
+                raise ValueError("invalid header")
+            self._headers[name] = value
 
     def __repr__(self):
         return f"HttpClient(base={self._base!r}, read_only={self.read_only})"
@@ -43,6 +51,7 @@ class HttpClient:
         if not isinstance(path, str) or not _PATH.fullmatch(path):
             raise ValueError("invalid request path")
         headers = {"Accept": "application/json", "User-Agent": "operator-script"}
+        headers.update(self._headers)
         data = None
         if body is not None:
             data = json.dumps(body).encode("utf-8")
