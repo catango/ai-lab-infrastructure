@@ -43,6 +43,96 @@ jobs:
         shell: bash
         run: ./scripts/quality-gate.sh --strict
 
+  # Applies the operator profile with scripts/operator/setup in a pinned Ubuntu 24.04 container, as root (so without sudo), twice,
+  # to prove that it converges and is idempotent (CR-18 acceptance P-1, P-2, P-3, P-5, P-8). The container has no systemd and no
+  # network namespace rights, so the firewall and service tasks are skipped there; they are checked by the approver (P-6).
+  # setup refuses to run outside a release tag, so the job makes a throw-away copy of the checkout that is tagged and marked as
+  # origin/main. Nothing is pushed and no tag leaves the job.
+  operator-profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    container:
+      image: ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8
+    steps:
+      # What a minimal Ubuntu image lacks before the checkout and the release check can run (design VO-15).
+      - name: Bootstrap git, python3, and certificates
+        shell: bash
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends git python3 ca-certificates
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Make a tagged throw-away copy for the release check
+        shell: bash
+        run: |
+          git config --global --add safe.directory '*'
+          cp -a "$GITHUB_WORKSPACE" "$RUNNER_TEMP/release"
+          git -C "$RUNNER_TEMP/release" tag v0.0.0
+          git -C "$RUNNER_TEMP/release" update-ref refs/remotes/origin/main HEAD
+
+      - name: setup refuses to run outside a release tag (P-2)
+        shell: bash
+        run: |
+          rc=0
+          "$GITHUB_WORKSPACE/scripts/operator/setup" --apply || rc=$?
+          test "$rc" -eq 1
+          ! command -v ansible-playbook
+
+      - name: A dry run installs nothing (P-1)
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/release/scripts/operator/setup" | tee "$RUNNER_TEMP/dry-run.txt"
+          grep -q 'apt-get install -y ansible-core' "$RUNNER_TEMP/dry-run.txt"
+          ! command -v ansible-playbook
+
+      - name: Apply the operator profile
+        shell: bash
+        run: '"$RUNNER_TEMP/release/scripts/operator/setup" --apply | tee "$RUNNER_TEMP/first-apply.txt"'
+
+      - name: Apply it again (must change nothing, P-5)
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/release/scripts/operator/setup" --apply | tee "$RUNNER_TEMP/second-apply.txt"
+          grep -Eq 'changed=0 +unreachable=0 +failed=0' "$RUNNER_TEMP/second-apply.txt"
+
+      - name: A real playbook run without the apply variable is refused (P-3)
+        shell: bash
+        run: |
+          rc=0
+          (cd "$RUNNER_TEMP/release" && ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml) > "$RUNNER_TEMP/refused.txt" 2>&1 || rc=$?
+          test "$rc" -ne 0
+          grep -q operator_apply "$RUNNER_TEMP/refused.txt"
+
+      - name: A dry run after the apply changes nothing and passes
+        shell: bash
+        run: '"$RUNNER_TEMP/release/scripts/operator/setup" | tee "$RUNNER_TEMP/check.txt"'
+
+      - name: Verify the operator toolchain
+        shell: bash
+        run: python3 -I "$RUNNER_TEMP/release/scripts/toolchain" verify --profile operator --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### operator-profile"
+            echo
+            echo '~~~~text'
+            echo "first apply:"
+            grep -E 'localhost +:|workspace +:' "$RUNNER_TEMP/first-apply.txt" 2>/dev/null || echo "  (no recap)"
+            echo "second apply (must show changed=0):"
+            grep -E 'localhost +:|workspace +:' "$RUNNER_TEMP/second-apply.txt" 2>/dev/null || echo "  (no recap)"
+            echo
+            cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
+            echo '~~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # The operator tests again, under the memory and CPU limits of the smallest operator machine (CR-18 acceptance S-10).
   # The limits are read from scripts/operator/machine-profiles.toml. Needs only the runner's Python and git.
   operator-limits:

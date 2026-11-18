@@ -1,0 +1,58 @@
+# The operator account: a private home, an SSH directory, and the approver's public keys. No password is set here and the
+# account is in no privileged group. Sudo is granted by operator_sudo (with a password).
+- name: The operator group
+  ansible.builtin.group:
+    name: "{{ operator_user_name }}"
+    state: present
+  become: "{{ ai_lab_become }}"
+
+- name: The operator user (set its sudo password yourself at the first login)
+  ansible.builtin.user:
+    name: "{{ operator_user_name }}"
+    group: "{{ operator_user_name }}"
+    shell: /bin/bash
+    create_home: true
+    home: "/home/{{ operator_user_name }}"
+  become: "{{ ai_lab_become }}"
+
+- name: A private home directory
+  ansible.builtin.file:
+    path: "/home/{{ operator_user_name }}"
+    state: directory
+    owner: "{{ operator_user_name }}"
+    group: "{{ operator_user_name }}"
+    mode: "0700"
+  when: not ansible_check_mode
+  become: "{{ ai_lab_become }}"
+
+- name: A private SSH directory
+  ansible.builtin.file:
+    path: "/home/{{ operator_user_name }}/.ssh"
+    state: directory
+    owner: "{{ operator_user_name }}"
+    group: "{{ operator_user_name }}"
+    mode: "0700"
+  when: not ansible_check_mode
+  become: "{{ ai_lab_become }}"
+
+- name: Is there a root-owned key file from the approver?
+  ansible.builtin.stat:
+    path: "{{ operator_authorized_keys_file }}"
+  register: operator_keys_file
+  become: "{{ ai_lab_become }}"
+
+- name: Install the operator's authorized keys from that file
+  ansible.builtin.copy:
+    src: "{{ operator_authorized_keys_file }}"
+    remote_src: true
+    dest: "/home/{{ operator_user_name }}/.ssh/authorized_keys"
+    owner: "{{ operator_user_name }}"
+    group: "{{ operator_user_name }}"
+    mode: "0600"
+  when: operator_keys_file.stat.exists and not ansible_check_mode
+  become: "{{ ai_lab_become }}"
+
+- name: Say so when no key file was provided
+  ansible.builtin.debug:
+    msg: "{{ operator_authorized_keys_file }} does not exist: no key was installed for the operator login. Create it (public keys only) and apply again."
+  when: not operator_keys_file.stat.exists

@@ -30,7 +30,13 @@ class Sandbox(unittest.TestCase):
         self.stub("sudo", 'echo "sudo $*" >> "$STUB_LOG"; exec "$@"')
         self.stub("apt-get", f'echo "apt-get $*" >> "$STUB_LOG"; if [ "$1" = install ]; then cp "{self.bin}/ansible-playbook.real" "{self.bin}/ansible-playbook"; fi')
         self.write("ansible-playbook.real", 'echo "ansible-playbook $*" >> "$STUB_LOG"; env | grep -E "^ANSIBLE_" | sort >> "$STUB_LOG" || true')
-        self.env = {"PATH": f"{self.bin}:/usr/bin:/bin", "HOME": str(base), "STUB_LOG": str(self.log)}
+        # Only the basic tools the script and the stubs need are linked in, so that a real ansible-playbook, apt-get, or sudo on the
+        # machine running the tests can never be reached.
+        for name in ("dirname", "grep", "cat", "env", "sort", "cp", "touch", "sh", "bash"):
+            real = shutil.which(name)
+            self.assertIsNotNone(real, name)
+            os.symlink(real, self.bin / name)
+        self.env = {"PATH": str(self.bin), "HOME": str(base), "STUB_LOG": str(self.log)}
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -111,12 +117,12 @@ class Apply(Sandbox):
         result = self.setup("--apply")
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = [c for c in self.calls() if not c.startswith("python3")]
-        expected = [f"{SUDO}apt-get update -q".strip(), f"{SUDO}apt-get install -y ansible-core".strip()]
-        names = [c.replace("sudo ", "", 1) if not ROOT_USER else c for c in calls]
-        self.assertEqual([n for n in names if n.startswith("apt-get")], [e.replace("sudo ", "", 1) for e in expected])
+        self.assertEqual([c for c in calls if c.startswith("apt-get")], ["apt-get update -q", "apt-get install -y ansible-core"])
         self.assertTrue(calls[-1].startswith("ansible-playbook"), calls)
-        if not ROOT_USER:
-            self.assertEqual(sum(1 for c in calls if c.startswith("sudo ")), 2)
+        self.assertEqual(sum(1 for c in calls if c.startswith("sudo ")), 0 if ROOT_USER else 2)
+        order = [c.split()[0] if not c.startswith("sudo ") else "sudo" for c in calls]
+        self.assertLess(max(i for i, c in enumerate(calls) if c.startswith("apt-get")), len(calls) - 1)
+        self.assertEqual(order[-1], "ansible-playbook")
 
     def test_the_environment_cannot_change_the_playbook_or_its_roles(self):
         self.have_ansible()

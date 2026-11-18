@@ -22,3 +22,16 @@ lab_expected_arch: aarch64
 
 # Opt-in (design 3.6, decision 5): not used in Stage 1.
 claude_managed_settings_enabled: false
+
+# The operator profile (CR-18, ADR-011): Ubuntu 24.04, x86-64, the platform operator VM and the lab operator VM.
+# A real run needs the explicit apply variable, which `scripts/operator/setup --apply` sets (a dry run is the default).
+operator_apply: false
+operator_expected_os: Ubuntu
+operator_expected_major: "24"
+operator_expected_arch: x86_64
+# A role name, not a person: the account the approver logs in with and that holds sudo (with a password).
+operator_user_name: operator
+# Root-owned public keys for the operator login, provided by the approver or by cloud-init. Never in the repository.
+operator_authorized_keys_file: /etc/operator/authorized_keys
+operator_firewall_enabled: true
+operator_firewall_revert_seconds: 300

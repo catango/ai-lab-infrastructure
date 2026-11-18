@@ -1,0 +1,37 @@
+# Separation checks (design section 3.2), the last tasks before verify. Read-only: they change nothing, and a failure stops the run.
+- name: Separation checks
+  when: not ansible_check_mode
+  block:
+    - name: No Claude Desktop remote engine under any home
+      ansible.builtin.command:
+        argv: [find, /home, /root, -maxdepth, "3", -type, d, -path, "*/.claude/remote"]
+      register: operator_check_remote
+      changed_when: false
+      failed_when: operator_check_remote.stdout | length > 0
+      check_mode: false
+      become: "{{ ai_lab_become }}"
+
+    - name: No shared network or host-shared mounts
+      ansible.builtin.command:
+        argv: [findmnt, -rn, -o, FSTYPE, -t, "nfs,nfs4,cifs,smb3,fuse.sshfs,9p,virtiofs"]
+      register: operator_check_mounts
+      changed_when: false
+      failed_when: operator_check_mounts.stdout | length > 0
+      check_mode: false
+
+    - name: No sudoers rule skips the password
+      ansible.builtin.command:
+        argv: [grep, -rEl, '^[^#]*NOPASSWD', /etc/sudoers, /etc/sudoers.d]
+      register: operator_check_nopasswd
+      changed_when: false
+      failed_when: operator_check_nopasswd.rc == 0
+      check_mode: false
+      become: "{{ ai_lab_become }}"
+
+    - name: The operator is in no group but its own
+      ansible.builtin.command:
+        argv: [id, -nG, "{{ operator_user_name }}"]
+      register: operator_check_groups
+      changed_when: false
+      failed_when: operator_check_groups.stdout | trim != operator_user_name
+      check_mode: false

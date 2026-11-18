@@ -52,11 +52,13 @@ class RealManifest(unittest.TestCase):
         self.assertFalse(names & {"nftables", "openssh-server", "sudo", "unattended-upgrades", "systemd-timesyncd"})
 
     def test_every_operator_tool_has_a_version_minimum_and_a_smoke_command(self):
+        import tomllib
+        raw = tomllib.loads((ROOT / "toolchain" / "manifest.toml").read_text())["tools"]
         done = engine("list", "--profile", "operator", "--source", "apt", "--format", "json")
         for item in json.loads(done.stdout):
             with self.subTest(package=item["package"]):
                 self.assertTrue(item.get("version_min"))
-                self.assertTrue(item.get("smoke"))
+                self.assertTrue(raw[item["name"]].get("smoke"))
 
     def test_the_manifest_check_passes(self):
         self.assertEqual(engine("check").returncode, 0)

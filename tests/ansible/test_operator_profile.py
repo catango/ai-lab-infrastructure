@@ -37,12 +37,13 @@ class Structure(unittest.TestCase):
 
     def test_the_first_play_applies_the_roles_in_a_fixed_order(self):
         text = (ANSIBLE / "operator.yml").read_text()
-        first = text.split("\n- name:")[0] if "\n- name:" in text else text
+        first = text[:text.index("- name: Lock the initial")]
         order = ["apt_base", "toolchain", "python_tools", "shell_env", "operator_system", "operator_user", "operator_sudo",
                  "operator_ssh", "operator_firewall", "operator_checks", "verify"]
         positions = [first.index(f"- {role}") for role in order]
         self.assertEqual(positions, sorted(positions))
-        self.assertNotIn("operator_lock", first)
+        code = "\n".join(line for line in first.splitlines() if not line.lstrip().startswith("#"))
+        self.assertNotIn("operator_lock", code)
 
     def test_the_toolchain_profile_is_operator(self):
         self.assertIn("toolchain_profile: operator", (ANSIBLE / "operator.yml").read_text())
