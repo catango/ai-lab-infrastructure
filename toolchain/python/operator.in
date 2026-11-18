@@ -1,0 +1,5 @@
+# Top-level Python tools for the operator profile (CR-18, ADR-005 decision 10). Exact pins; the closure is in operator.lock.
+# The lock (toolchain/python/operator.lock) and the manifest entry [tools.oci-cli] that names it are added together in a follow-up commit
+# (the manifest check needs the lock file to exist). The version below is the one Oracle's CLI reference shows; the lock step confirms
+# that PyPI has wheels for it (CPython 3.12, Linux x86-64, the operator machines' target) and stops if it does not.
+oci-cli==3.96.3

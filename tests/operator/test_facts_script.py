@@ -89,7 +89,7 @@ class DryRun(Base):
         self.assertIn("--apply", self.text)
 
     def test_both_flags_and_other_scopes_are_usage_errors(self):
-        for argv in (["--dry-run", "--apply"], ["--scope", "oci"], ["--scope", "github"], ["--bogus"], ["--privileged", "x"]):
+        for argv in (["--dry-run", "--apply"], ["--scope", "nonsense"], ["--scope", "github"], ["--bogus"], ["--privileged", "x"]):
             with self.subTest(argv=argv), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 self.run_facts(*argv)
             self.assertEqual(caught.exception.code, exitcodes.USAGE)
