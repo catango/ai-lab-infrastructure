@@ -6,7 +6,7 @@ Starts only after the design PR is merged (ADR-003 section 4). The PR uses branc
 
 | # | PR (branch slug) | Content | Needs | Acceptance criteria |
 |---|---|---|---|---|
-| 1 | `pc8` | The PC-8 rule in `scripts/pr_contract/rules.py` with the path list, fixtures and tests, the hint comment in four templates, and the docs index line | Design merged; Q1 to Q3 decided | A-1 to A-9 |
+| 1 | `pc8` | The PC-8 rule in `scripts/pr_contract/rules.py` with the path list, fixtures and tests, the hint comment in four templates, and the docs index line | Design merged. Q1 to Q3 are decided; the CR-18 `operator-profile` PR names its roles `operator_*` | A-1 to A-9 |
 
 ## 2. Checklist
 
@@ -21,7 +21,6 @@ Starts only after the design PR is merged (ADR-003 section 4). The PR uses branc
 
 | When | Action |
 |---|---|
-| Before the PR | Decide Q1 to Q3 on the design PR |
 | After the PR merges | Check that `pr-contract` is still a required status check (no change to settings is needed) |
 
 ## 4. What this plan does not do

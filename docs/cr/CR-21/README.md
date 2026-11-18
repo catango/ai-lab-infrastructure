@@ -4,9 +4,9 @@
 |---|---|
 | Issue | #21 |
 | Class | 3 |
-| Status | Design in review. Three small questions for the approver, each with a recommendation (design section 5). Nothing is implemented |
+| Status | Design in review. The approver accepted Q1 to Q3 on 2026-11-18 (design section 5). Nothing is implemented |
 | ADR | [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Accepted). This PR adds rule PC-8 to its section 6 and acceptance criterion AC3-7 |
-| Origin | The approver's decision handoff of 2026-11-18 on PR #19 (CR-18, [ADR-011](../../adr/ADR-011-operator-tier.md)), which asked for PC-8 in a separate design PR |
+| Origin | The approver's decision handoff of 2026-11-18 on PR #19 (CR-18, ADR-011 (proposed in PR #19)), which asked for PC-8 in a separate design PR |
 
 ## Summary
 
@@ -28,4 +28,4 @@ every such PR. Design only: no change to `pr-contract`, the PR templates, or any
 
 Issue #21 has a title only ("ADR-003 PC-8") and no body. The scope comes from the handoff of 2026-11-18 on PR #19: "add PC-8, an
 'Operator script review' section required for changes under `scripts/operator/`, `ansible/operator.yml`, its roles and their
-data files". The content of the section and the path matching are my proposals (design sections 3 and 5).
+data files". The content of the section (design section 3) is my proposal. The path matching was decided by the approver (design section 5).

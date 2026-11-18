@@ -15,7 +15,7 @@ Nothing in this design PR changes `pr-contract`, a template, a workflow, or a se
 | ADR-011 / CR-18 | Relies on PC-8. Its implementation PRs carry the section once PC-8 is enforced; until then the section is added by hand |
 | `scripts/pr_contract/` | New rule, in the implementation PR |
 | `.github/PULL_REQUEST_TEMPLATE/` | A hint comment in the implementation, change, toolchain, and infra templates. No new required section, so PC-1 is unchanged |
-| Dependabot PRs | See question Q3 |
+| Dependabot PRs | Exempt from PC-8 (Q3) |
 
 ## 3. Security and privacy
 

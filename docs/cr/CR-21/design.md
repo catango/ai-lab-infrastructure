@@ -10,7 +10,7 @@
 
 | Rule | Requirement |
 |---|---|
-| PC-8 | A PR that changes a path in the operator set must contain a PR-body section "Operator script review", non-empty. The operator set is `scripts/operator/**`, `ansible/operator.yml`, the roles of the operator profile, and their data files (see Q1 and Q2) |
+| PC-8 | A PR that changes a path in the operator set must contain a PR-body section "Operator script review", non-empty. The operator set is `scripts/operator/**`, `ansible/operator.yml`, `ansible/roles/operator_*/**`, and `toolchain/python/operator.lock` (Q1 and Q2) |
 
 PC-8 applies to every PR type. A design PR changes only `docs/` (PC-4), so it never triggers PC-8 in practice. "Non-empty" has the PC-1 meaning: the section has text other than template comments.
 
@@ -40,12 +40,14 @@ The template hint asks the author to answer, in a few lines each, with no identi
 
 - PC-5 (no edit of approved design files in an implementation or change PR) is unchanged.
 - PC-6 is the model: a path-triggered, body-section requirement.
-- PC-7 (Dependabot) is addressed by Q3.
+- PC-7 (Dependabot): Dependabot PRs are also exempt from PC-8 (Q3).
 
-## 5. Questions for the approver
+## 5. Decided by the approver (2026-11-18)
 
-| # | Question | Recommendation | Status |
-|---|---|---|---|
-| Q1 | How are the roles of the operator profile identified by path? | Name them `ansible/roles/operator_*`, so the prefix matches deterministically. CR-18's `operator-profile` PR follows that naming | Not decided |
-| Q2 | Does `toolchain/python/operator.lock` belong to the operator set? | Yes: it decides what code runs on the operator machines. The machine-profile file is already under `scripts/operator/` | Not decided |
-| Q3 | Are Dependabot PRs exempt from PC-8? | Yes, like PC-1 to PC-3 in PC-7, since a lock-file bump has no author to write the section. The release tag (ADR-011 decision 3) still gates first use | Not decided |
+The approver accepted all three recommendations.
+
+| # | Question | Decision |
+|---|---|---|
+| Q1 | How are the roles of the operator profile identified by path? | They are named `ansible/roles/operator_*`, so the prefix matches deterministically. CR-18's `operator-profile` PR follows that naming |
+| Q2 | Does `toolchain/python/operator.lock` belong to the operator set? | Yes: it decides what code runs on the operator machines. The machine-profile file is already under `scripts/operator/` |
+| Q3 | Are Dependabot PRs exempt from PC-8? | Yes, like PC-1 to PC-3 in PC-7, since a lock-file bump has no author to write the section. The release tag (ADR-011 decision 3) still gates first use |

@@ -107,8 +107,8 @@ This is a required status check on public repositories and advisory on private r
 | PC-4 | A design PR changes only paths under `docs/`. |
 | PC-5 | An implementation or change PR does not modify `docs/cr/*/design.md`, `acceptance-criteria.md`, or `docs/adr/` files belonging to an approved CR. |
 | PC-6 | Changes under `.github/workflows/` or `.github/actions/` require the PR-body section "Workflow change justification". |
-| PC-7 | Dependabot PRs are exempt from PC-1 to PC-3, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
-| PC-8 | A PR that changes `scripts/operator/`, `ansible/operator.yml`, the roles of the operator profile, or their data files (ADR-011) requires the PR-body section "Operator script review", non-empty (CR-21). |
+| PC-7 | Dependabot PRs are exempt from PC-1 to PC-3 and PC-8, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
+| PC-8 | A PR that changes `scripts/operator/`, `ansible/operator.yml`, `ansible/roles/operator_*/`, or `toolchain/python/operator.lock` (ADR-011) requires the PR-body section "Operator script review", non-empty (CR-21). |
 
 **Security requirement.** The PR title and body are untrusted input. They are passed to the script only through environment variables or the API, never interpolated into `run:` shell steps. All Actions used are pinned to reviewed SHAs.
 
