@@ -17,6 +17,7 @@ Open only the document and section relevant to the task. Decision status is trac
 | [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2 |
 | [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted |
 | [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted |
+| [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: dedicated user for credentialed and extended-permission scripts; amends ADR-001 credential placement | Proposed (design PR for CR-18) |
 
 ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written as design PRs.
 
@@ -25,6 +26,7 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | CR | Summary | Status |
 |---|---|---|
 | [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
+| [CR-18](cr/CR-18/README.md) | Operator tier: a dedicated unprivileged user runs reviewed scripts for credentialed and extended-permission tasks (Gate 0 audit, GitHub setup, acceptance tests) | Design in review (ADR-011 Proposed) |
 
 ## Operations
 

@@ -4,6 +4,7 @@
 |---|---|
 | Status | **Accepted** (2026-11-17), including D14, D15, D16 |
 | Revision | 3 (2026-11-17): D17 added (GitHub access per surface; no MCP in v1), accepted on merge of the seed PR. Revision 2: GitHub organization (D14) dropped; one shared machine-account token |
+| Amended by | ADR-011 decision 7 (Proposed, 2026-11-18): operator user; changes decision 5 and the OCI credentials row of section 4. Takes effect when ADR-011 is accepted |
 | Target location | `ai-lab-infrastructure/docs/adr/ADR-001-trust-model-and-execution.md` |
 | Related | CHG-001, CHG-003, ADR-002, ADR-003, D8/D13 (machine account), D11 (MCP policy), D14 (repository ownership), D17 (GitHub access per surface) |
 
