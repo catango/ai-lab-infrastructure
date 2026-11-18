@@ -294,29 +294,65 @@ These are requirements for CR-16 and ADR-004. They are added to CR-16 by a new d
 
 ## 8. Risks
 
+Numbers RR-OP-9, RR-OP-13, RR-OP-20, RR-OP-21, and RR-OP-24 are not used.
+
 | ID | Risk | Mitigation |
 |---|---|---|
-| RR-OP-1 | AI-written code runs with credentials the AI never sees, so a mistake or a prompt injection could become a destructive call or a leak | Merged-commit check, review by the approver, fixed operation list, dry-run before apply, short-lived credentials, sanitised output, no Terraform and no OCI writes |
-| RR-OP-2 | The AI user and the operator share one host, kernel, and filesystem, and the AI user is in the `sudo` group | Mode 700 homes, no rule that lets the AI user run commands as the operator, and the approver's test U-1 before the first credential. If it fails, a separate host or container is considered and this design is revisited |
-| RR-OP-3 | The sanitiser misses an identifier and the approver pastes it into chat or a PR | Filters by pattern for OCIDs, addresses, and email addresses, a placeholder when unsure, tests with sample output, and the existing `public-repo-hygiene` check on anything committed |
-| RR-OP-4 | T2 outlives its use | Shortest practical expiry, revoked after each run, and the script reminds the approver at the end |
-| RR-OP-5 | The operator's clone falls behind `main`, or a stale script runs | The commit check prints the commit, and `git pull --ff-only` is the first step of the runbook |
-| RR-OP-6 | The operator login on the lab VM widens the internet-facing host's attack surface | Optional and off by default, key-only, no sudo, same allowlist, no credentials |
-| RR-OP-7 | The OCI CLI is not installed, and `CLAUDE.md` forbids Claude from installing software | The `setup` script installs it from a pinned source with checksums for both architectures, run by the operator (OP-11, section 5.4, VO-2) |
-| RR-OP-8 | The operator has sudo, so AI-written code that the operator runs could reach root | Sudo is for package installation only. Only `setup` may call it, a gate check rejects `sudo` in any other operator script, sudo asks for the operator's password, the package list is fixed in the repository, and the approver reviews `setup` with extra care. If the operator also holds credentials, root on the operator means root on the host, so these controls matter for RR-OP-2 too |
+| RR-OP-1 | AI-written code runs with credentials the AI never sees, so a mistake or a prompt injection could become a destructive call or a leak | Release-tag check, review by the approver (PC-8), fixed operation list, dry run before apply, short-lived in-process credentials, sanitised output, no Terraform, no OCI writes |
+| RR-OP-2 | An operator machine shares storage or identity with an AI host, or an AI host has a key or a route to it | Separate machines. The separation rules of section 3.2, the per-machine test U-1 after the first profile apply and before the first credential, the `~/.claude/remote/` check, and no T1 on an operator machine. If a test fails, this design is revisited |
+| RR-OP-3 | The sanitiser misses an identifier and the approver pastes it into chat or a PR | Filters by pattern for OCIDs, addresses, and email addresses, a placeholder when unsure, safe-value-only fields, tests with sample output, and the existing `public-repo-hygiene` check on anything committed |
+| RR-OP-4 | A token outlives its use | 1-day expiry, revoked after each run, and the script reminds the approver at the end |
+| RR-OP-5 | The operator runs an older release tag | The script prints the commit and the tag, and the runbook starts by fetching tags and checking out the tag the approver names |
+| RR-OP-6 | Exposure of both operator machines, including the public IP of the lab operator VM, to the internet or the corporate network | Key-only SSH, NSG ingress from the corporate egress only (Z7), the host firewall with the optional source allowlist, hardening and automatic security updates, no stored credential, no route from AI hosts, no ingress from the lab VM |
+| RR-OP-7 | The OCI CLI is not installed, and `CLAUDE.md` forbids Claude from installing software | The operator profile installs it from a hash-locked venv, run by the operator (section 5.5, VO-7) |
+| RR-OP-8 | Sudo on an operator machine, so AI-written code that the operator runs could reach root | Sudo only in `setup` and in `facts --privileged` for a fixed list of read-only commands with fixed arguments. Every other privileged step is a reviewed Ansible task with `become`. Sudo asks for the password every time (`timestamp_timeout=0`, no `NOPASSWD`). A gate check rejects `sudo` elsewhere, and the approver reviews `setup`, the profile, and `facts` with extra care |
+| RR-OP-10 | T2 can remove rulesets during its 1-day lifetime | Limited to apply runs (R6), two repositories only, entered at a prompt, revoked in the browser after each run |
+| RR-OP-11 | Other holders of root on the platform operator VM (a human-provided machine) can read the operator's files and process memory during a run | Nothing is stored on the machine, tokens live one day and in-process only and are revoked after each run, and `facts` reports the account and sudo-member counts. The approver treats root holders as part of the trust base |
+| RR-OP-12 | An OCI VM is stopped or reclaimed as idle by Oracle | The absence alarms (section 7.3), recovery per section 7.4 and Q34, and Oracle's idle email as a backstop |
+| RR-OP-14 | Lockout during the first profile apply (a firewall or SSH change) | The firewall role reverts on a timer unless confirmed from a second session, and the initial admin account is locked only by a separate play after an operator login is confirmed |
+| RR-OP-15 | A new host key is accepted without verification after a start or a rebuild | `StrictHostKeyChecking yes`, a runbook step comparing the key with the instance console output, and then `ssh-keygen -R` |
+| RR-OP-16 | An alarm stops firing after the 72-hour absence detection period | Oracle's idle email remains the backstop, and the repeat notification every 12 hours covers the period |
+| RR-OP-17 | A false alarm when the monitoring agent stops, including an agent stopped by the AI on the lab VM | It leads to a check, never to an automatic action |
+| RR-OP-18 | A VM created outside the lab stack has no alarm | Every VM is created through the stack, and the compartment quotas limit what else can exist |
+| RR-OP-19 | The SSH key from the lab operator VM reaches the AI-operated lab VM | Accepted: the operator is the more trusted side. The key is dedicated, used by `acceptance` only, and its public part is a stack variable |
+| RR-OP-22 | The lab VM's ephemeral IP changes if it is ever recreated, and the public IPv4 limit leaves no address for a third VM | Access uses a host key alias and the runbook of section 5.8. VO-12 checks the limits |
+| RR-OP-23 | Break-glass needs a stack apply, so recovery takes longer than an interactive path, and uncommitted work on the lab VM's boot volume is lost | Everything durable lives on `/srv/work` or in GitHub (section 7.2). The elapsed time of a rebuild is recorded (W-2) |
+| RR-OP-25 | A recreated A1 instance may fail on host capacity | In-place boot-volume replacement keeps the instance, and a recreation is only for an instance that is already gone |
+| RR-OP-26 | Storage headroom for an in-place replacement limits D5 to about 50 GB | Recorded as a requirement for CR-16 (section 7.2), and VO-14 checks the real boot-volume sizes |
+| RR-OP-27 | The read-only instance principal gives every process on the lab operator VM standing read access to the lab compartment and to tenancy limits | Read-only rights only, no write rights, nothing durable on the VM, and the VM is reachable only by the approver |
+| RR-OP-28 | A release tag moved by anyone but the approver would let an unreviewed commit pass the commit check and be applied by cloud-init | The tag ruleset restricts `v*` tags to the approver (R3), with a negative test from the machine account (U-4) |
+| RR-OP-29 | The facts output pasted into chat or a PR could leak an identifier if the sanitiser misses one | Safe-value-only fields, canary tests (F-1), and the `public-repo-hygiene` check |
+| RR-OP-30 | `facts --privileged` runs AI-written code that invokes root commands | A fixed command list with fixed arguments, the gate check, the password prompt each time, and review |
+| RR-OP-31 | `facts --scope oci` in Cloud Shell runs AI-written code with the approver's admin session | `list`, `get`, and `inspect` verbs only, the gate check, a dry run that shows the exact commands, and review |
+| RR-OP-32 | A read-only token such as T3 still discloses repository configuration if stolen during its 1-day lifetime | Read-only permissions, two-repository scope, in-process handling, and revocation after each run. A token created with write permission by mistake still cannot write through `facts`, because the client is GET-only |
 
 ## 9. Verification items
 
-Documentation checks or read-only inspection. Anything that creates credentials or changes systems is an explicit action by the approver.
+Documentation checks or read-only inspection. Anything that creates credentials or changes systems is an explicit action by the approver. Where documentation does not settle a question, the approver runs a trial.
 
 | ID | Question | Method | Needed before |
 |---|---|---|---|
-| VO-1 | Whether OCI CLI session-token authentication works for this tenancy's identity domain type, its maximum lifetime, and whether a read-only identity can run the audit | Oracle CLI documentation | PR 4 (`oci-audit`) |
-| VO-2 | The install source, version, and checksums of the OCI CLI for x86-64 (and ARM64 if the manifest carries it) | Oracle's release page, and ADR-005's manifest rules | PR 2 (`operator-setup`) |
-| VO-3 | The token T2 scopes and expiry that repository configuration needs, and whether a fine-grained token can do it for these repositories | GitHub documentation | PR 3 (`github-setup`) |
-| VO-4 | The exact `gh api` calls and desired-state fields for the settings, rulesets, and environments of `docs/operations/github-setup.md` | GitHub REST documentation | PR 3 |
-| VO-5 | How `sudo` is configured for the AI user (password required, no rule to run commands as the operator), and for the operator (password required, scope) | The approver's test U-1 | Before any credential on Z1 |
-| VO-6 | The list of Debian packages `setup` installs, and how it fits ADR-005's manifest rules (profile or equivalent) | The implementation PR for `setup`, with ADR-005 | PR 2 (`operator-setup`) |
+| VO-1 | The read-only instance principal (with tenancy limits read) covers every call of the OCI scope | Oracle IAM and CLI documentation, then a Cloud Shell or lab check | PR 5 (facts OCI scope) |
+| VO-3 | The T2 and T3 permissions per API call for repository settings, security features, rulesets, and environments, and the fine-grained token type for personal-account repositories | GitHub documentation | PR 4 (`github-setup`) |
+| VO-4 | The exact GitHub REST calls and desired-state fields for the settings, rulesets, and environments of `docs/operations/github-setup.md` | GitHub REST documentation | PR 4 |
+| VO-7 | The OCI CLI, the Oracle Cloud Agent monitoring plugin, `ansible-core`, and the operator profile run together in 1 GB | Documentation, then a trial on a micro instance | The CR-16 design PR |
+| VO-8 | The micro shape's availability domain, and the Ubuntu 24.04 (minimal) image for the micro shape | Oracle documentation and the Console | The CR-16 design PR |
+| VO-9 | The platform operator VM matches the OCI image (same OS release and packages) | `facts` on both machines | The CR-16 design PR |
+| VO-10 | A dynamic group matched by compartment and tag covers a recreated instance | Oracle IAM documentation | The CR-16 design PR |
+| VO-11 | Idle reclamation behavior: stop or terminate, and the notice given | Oracle Always Free documentation | The CR-16 design PR |
+| VO-12 | Public IPv4 limits (2 ephemeral, 1 reserved reported) and IP retention on stop, start, and in-place replacement | Oracle documentation, `facts --scope oci` | The CR-16 design PR |
+| VO-13 | Alarm behavior (absence detection, trigger delay, repeat notification, suppression, `groupBy`) and the Always Free limits for alarms and Notifications | Oracle Monitoring documentation | The CR-16 design PR |
+| VO-14 | In-place boot-volume replacement keeps the instance, its IP, the alarm identifier, and the block volume, and its storage need (47 GB boot volumes, deletion of the old volume) | Oracle documentation, then a trial by the approver | The CR-16 design PR |
+| VO-15 | On minimal Ubuntu 24.04, `python3` is present and `git` and `curl` may be absent. The bootstrap installs `git` from apt before the first clone | `facts` on the platform operator VM and a minimal image check | PR 2 (`operator-facts`) |
+| VO-16 | An IAM policy can give the lab operator VM's dynamic group read-only access to limits and resource availability at tenancy level without any other tenancy-level right, and Cloud Shell can run the OCI scope from an anonymous clone with the approver's session | Oracle IAM documentation, then a Cloud Shell check | PR 5 (facts OCI scope) |
+| VO-17 | Which GitHub facts (rulesets, the R3 tag ruleset, collaborators, security features, environments, repository settings) are readable without a token on public repositories, and which need T3 with Administration read or Environments read | GitHub REST documentation | PR 4 |
+
+Other open inputs:
+
+- **Platform operator VM facts** beyond architecture and release (now known): collected by `facts` (host scope, with `--privileged` where required) and its manual lines. Needed before PR 3 (`operator-profile`).
+- **CR-16 inputs (verify first):** an A1 allowance of 2 OCPU and 12 GB in total (fully used by the lab VM); five volume backups shared; A1 capacity risk when an instance must be recreated; Monitoring and Notifications in the plan allowlist and the compartment quotas; console output available for host-key verification; cloud-init able to run `setup --apply` from a release tag; OCI limits gathered by `facts --scope oci` in Cloud Shell or read in the Console. Needed before the CR-16 design PR.
+
+Closed by this revision: VO-2 (the OCI CLI source and checksums) and VO-6 (the package list) are content of the `operator-profile` PR, bounded by ADR-005 decision 10. VO-5 (sudo configuration) is acceptance U-1.
 
 ## 10. Decisions and questions
 
