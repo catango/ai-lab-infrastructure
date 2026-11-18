@@ -179,10 +179,11 @@ def _whole(value):
 
 
 def _items(reply):
-    """The list of objects of a complete answer, or None (not ok, another page, or an unexpected shape)."""
+    """The list of objects of a complete answer, or None (not ok, another page, or an unexpected shape). A full page counts as
+    another page too, because the documentation does not state the name of the paging key."""
     if reply.status != "ok" or reply.more or not isinstance(reply.data, list) or not all(isinstance(i, dict) for i in reply.data):
         return None
-    return reply.data
+    return None if len(reply.data) >= int(PAGE) else reply.data
 
 
 def _live(item):

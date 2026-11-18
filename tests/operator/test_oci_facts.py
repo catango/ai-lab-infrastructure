@@ -297,6 +297,13 @@ class Unknowns(Base):
         self.assertEqual(self.values()["topics"], "unknown")
         self.assertEqual(self.values()["subscriptions"], "2")
 
+    def test_a_full_page_is_unknown_even_without_a_paging_key(self):
+        responses = oci.default_responses()
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * int(ocifacts.PAGE))
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual(self.values()["topics"], "unknown")
+
     def test_output_that_is_not_json_is_a_failed_call(self):
         responses = oci.default_responses()
         responses["volumes"] = {"match": ["bv", "volume", "list", oci.LAB], "raw": "not json"}
