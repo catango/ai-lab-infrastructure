@@ -7,6 +7,7 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` |
 | Target location | `docs/adr/ADR-003-pr-centric-workflow.md` |
 | Requirement | CHG-003: GitHub-centric workflow based on PRs; no automatic responses from Claude |
+| Amended by | CR-21 (Proposed, 2026-11-18): rule PC-8 and AC3-7. Takes effect when the CR-21 design PR is merged; the check is enforced once its implementation PR is merged |
 | Related | ADR-002 (infrastructure pipeline), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
 
 > Numbering note: this requirement was briefly labeled "CHG-002" in discussion. CHG-002 is already
@@ -107,6 +108,7 @@ This is a required status check on public repositories and advisory on private r
 | PC-5 | An implementation or change PR does not modify `docs/cr/*/design.md`, `acceptance-criteria.md`, or `docs/adr/` files belonging to an approved CR. |
 | PC-6 | Changes under `.github/workflows/` or `.github/actions/` require the PR-body section "Workflow change justification". |
 | PC-7 | Dependabot PRs are exempt from PC-1 to PC-3, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
+| PC-8 | A PR that changes `scripts/operator/`, `ansible/operator.yml`, the roles of the operator profile, or their data files (ADR-011) requires the PR-body section "Operator script review", non-empty (CR-21). |
 
 **Security requirement.** The PR title and body are untrusted input. They are passed to the script only through environment variables or the API, never interpolated into `run:` shell steps. All Actions used are pinned to reviewed SHAs.
 
@@ -176,3 +178,4 @@ This is a required status check on public repositories and advisory on private r
 - AC3-4: `address-review-feedback` ignores a comment by a non-approver account containing instructions (test fixture).
 - AC3-5: `resume-work` restores task state from the PR checkpoint after a fresh VM workspace clone.
 - AC3-6: No workflow in either template or platform repository invokes Claude or holds a Claude credential (automated scan in CI).
+- AC3-7: A PR that changes an operator path without a non-empty "Operator script review" section fails `pr-contract` (PC-8).
