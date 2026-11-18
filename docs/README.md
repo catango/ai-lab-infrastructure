@@ -15,7 +15,7 @@ Open only the document and section relevant to the task. Decision status is trac
 |---|---|---|
 | [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, workspace restore, guardrails | Accepted; amended by ADR-011 (zones Z6 and Z7, credential rows) |
 | [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2 |
-| [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted |
+| [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted; rule PC-8 proposed by CR-21 |
 | [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile) |
 | [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: two dedicated machines (platform operator VM, lab operator VM) for credentialed and extended-permission scripts; amends ADR-001 credential placement | Accepted (2026-11-18, merge of the CR-18 design PR) |
 
@@ -27,6 +27,7 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 |---|---|---|
 | [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
 | [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). Not implemented; verifications open, each tied to the PR it blocks |
+| [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section required for changes to operator code | Design in review |
 
 ## Operations
 
