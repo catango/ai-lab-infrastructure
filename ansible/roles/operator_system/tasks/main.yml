@@ -1,0 +1,33 @@
+# Automatic security updates with a fixed reboot window, and time synchronisation (the platform operator VM had none).
+- name: Enable the daily package list update and unattended upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by ai-lab-infrastructure (operator_system). Do not edit.
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  become: "{{ ai_lab_become }}"
+
+- name: Fix the reboot window for security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52operator-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by ai-lab-infrastructure (operator_system). Do not edit.
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+  become: "{{ ai_lab_become }}"
+
+- name: Keep the clock synchronised (systemd hosts only)
+  ansible.builtin.service:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  when: ansible_facts['service_mgr'] == 'systemd'
+  ignore_errors: "{{ ansible_check_mode }}"
+  become: "{{ ai_lab_become }}"

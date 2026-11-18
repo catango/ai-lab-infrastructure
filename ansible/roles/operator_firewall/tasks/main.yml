@@ -1,0 +1,186 @@
+# Inbound firewall for an operator machine: its own nftables table (other tables are left alone), a default drop, SSH only,
+# optionally from the addresses in the operator-local allowlist (written by facts --write-allowlist, outside the clone).
+#
+# Over an interactive SSH session the change is armed with a revert timer: unless you confirm from a second session before
+# the timer ends, the table is deleted again. Without a terminal (cloud-init) it is applied directly and made persistent,
+# because the provider's network rules already limit who can reach SSH. Skipped where it cannot work (no systemd, containers).
+- name: Decide whether this machine can take the firewall
+  ansible.builtin.set_fact:
+    operator_firewall_active: >-
+      {{ (operator_firewall_enabled | bool)
+         and ansible_facts['service_mgr'] == 'systemd'
+         and ansible_facts['virtualization_type'] not in ['docker', 'container', 'lxc', 'podman'] }}
+    operator_firewall_interactive: "{{ (lookup('ansible.builtin.env', 'SSH_TTY') | length) > 0 }}"
+
+- name: The firewall
+  when: operator_firewall_active | bool
+  block:
+    - name: Look for the operator-local SSH allowlist (optional)
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['user_dir'] }}/.config/operator/ssh-allowlist"
+      register: operator_allowlist
+      become: false
+
+    - name: Read the allowlist
+      ansible.builtin.slurp:
+        src: "{{ ansible_facts['user_dir'] }}/.config/operator/ssh-allowlist"
+      register: operator_allowlist_content
+      become: false
+      when: operator_allowlist.stat.exists
+
+    - name: Sort the allowlist into IPv4 and IPv6 addresses (anything else is ignored)
+      ansible.builtin.set_fact:
+        operator_allow_v4: "{{ ((operator_allowlist_content.content | b64decode).split() | select('match', '^[0-9]{1,3}(\\.[0-9]{1,3}){3}$') | list) if operator_allowlist.stat.exists else [] }}"
+        operator_allow_v6: "{{ ((operator_allowlist_content.content | b64decode).split() | select('match', '^[0-9a-fA-F:]+:[0-9a-fA-F:]*$') | list) if operator_allowlist.stat.exists else [] }}"
+
+    - name: Refuse an allowlist file without a usable address (that would silently open SSH to everyone)
+      ansible.builtin.assert:
+        that: (operator_allow_v4 | length) + (operator_allow_v6 | length) > 0
+        quiet: true
+        fail_msg: the SSH allowlist file exists but holds no IPv4 or IPv6 address; fix or remove it
+      when: operator_allowlist.stat.exists
+
+    - name: The directory for the ruleset
+      ansible.builtin.file:
+        path: /etc/operator
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: "{{ ai_lab_become }}"
+
+    - name: The ruleset, checked with nft before it is kept
+      ansible.builtin.copy:
+        dest: /etc/operator/operator.nft
+        owner: root
+        group: root
+        mode: "0644"
+        validate: nft -c -f %s
+        content: |
+          # Managed by ai-lab-infrastructure (operator_firewall). Do not edit.
+          table inet operator
+          delete table inet operator
+          table inet operator {
+            chain input {
+              type filter hook input priority -10; policy drop;
+              iif "lo" accept
+              ct state invalid drop
+              ct state established,related accept
+              icmp type { destination-unreachable, time-exceeded, echo-request } accept
+              icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, echo-request, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+              udp sport 67 udp dport 68 accept
+              udp sport 547 udp dport 546 accept
+          {% if operator_allowlist.stat.exists %}
+          {% if operator_allow_v4 | length > 0 %}
+              ip saddr { {{ operator_allow_v4 | join(', ') }} } tcp dport 22 accept
+          {% endif %}
+          {% if operator_allow_v6 | length > 0 %}
+              ip6 saddr { {{ operator_allow_v6 | join(', ') }} } tcp dport 22 accept
+          {% endif %}
+          {% else %}
+              tcp dport 22 accept
+          {% endif %}
+            }
+          }
+      register: operator_ruleset
+      become: "{{ ai_lab_become }}"
+
+    - name: Is the table loaded?
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, operator]
+      register: operator_table
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      become: "{{ ai_lab_become }}"
+
+    - name: Does the ruleset have to be loaded?
+      ansible.builtin.set_fact:
+        operator_firewall_load: "{{ operator_ruleset.changed or operator_table.rc != 0 }}"
+
+    - name: Arm the revert timer (over SSH, so a mistake cannot lock you out for good)
+      when: operator_firewall_load | bool and operator_firewall_interactive | bool and not ansible_check_mode
+      become: "{{ ai_lab_become }}"
+      block:
+        - name: Stop an earlier revert timer
+          ansible.builtin.command:
+            argv: [systemctl, stop, operator-firewall-revert.timer, operator-firewall-revert.service]
+          changed_when: false
+          failed_when: false
+
+        - name: Arm the timer
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --unit=operator-firewall-revert
+              - "--on-active={{ operator_firewall_revert_seconds }}"
+              - --description=Revert the operator firewall unless it was confirmed
+              - /usr/sbin/nft
+              - delete
+              - table
+              - inet
+              - operator
+          changed_when: true
+
+    - name: Load the ruleset
+      ansible.builtin.command:
+        argv: [nft, -f, /etc/operator/operator.nft]
+      when: operator_firewall_load | bool and not ansible_check_mode
+      changed_when: true
+      become: "{{ ai_lab_become }}"
+
+    - name: Confirm from a second session
+      ansible.builtin.pause:
+        prompt: >-
+          The firewall is loaded and will be removed again in {{ operator_firewall_revert_seconds }} seconds. Open a second SSH
+          session to this machine now. If it works, press Enter here to keep the firewall. If it does not, press Ctrl-C and then A
+          to abort, and the timer will revert the change by itself
+      when: operator_firewall_load | bool and operator_firewall_interactive | bool and not ansible_check_mode
+
+    - name: Keep the firewall (stop the revert timer)
+      ansible.builtin.command:
+        argv: [systemctl, stop, operator-firewall-revert.timer]
+      when: operator_firewall_load | bool and operator_firewall_interactive | bool and not ansible_check_mode
+      changed_when: false
+      failed_when: false
+      become: "{{ ai_lab_become }}"
+
+    - name: The directory for the saved original configuration
+      ansible.builtin.file:
+        path: /var/lib/operator
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: "{{ ai_lab_become }}"
+
+    - name: Keep the original nftables configuration once
+      ansible.builtin.copy:
+        src: /etc/nftables.conf
+        dest: /var/lib/operator/nftables.conf.orig
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: "0644"
+      when: not ansible_check_mode
+      become: "{{ ai_lab_become }}"
+
+    - name: Load the ruleset at boot
+      ansible.builtin.copy:
+        dest: /etc/nftables.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          #!/usr/sbin/nft -f
+          # Managed by ai-lab-infrastructure (operator_firewall). The previous file is kept in /var/lib/operator/nftables.conf.orig.
+          include "/etc/operator/operator.nft"
+      become: "{{ ai_lab_become }}"
+
+    - name: Enable the nftables service (the ruleset is already loaded)
+      ansible.builtin.service:
+        name: nftables
+        enabled: true
+      ignore_errors: "{{ ansible_check_mode }}"
+      become: "{{ ai_lab_become }}"

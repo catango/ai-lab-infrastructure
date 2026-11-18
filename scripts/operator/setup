@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# setup: set up an operator machine (CR-18 design section 5.4, ADR-011 decision 10).
+#
+# Dry run (the default): installs nothing. It runs the Ansible operator profile in check mode when ansible-core is present, and
+# otherwise prints the apt commands that --apply would run. --apply installs ansible-core from the Ubuntu archive when it is
+# missing and applies the profile. This is the one script (with facts --privileged) that may use sudo. It takes no other
+# arguments and never takes command text from its input or from the environment (ANSIBLE_* variables are discarded).
+# Run it from a release tag only; it checks that first. Claude Code never runs it.
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/operator/setup [--dry-run | --apply]
+
+  --dry-run  show what would happen and change nothing (the default)
+  --apply    install ansible-core if it is missing and apply the operator profile
+
+Exit codes: 0 success, 1 a check or step failed, 2 usage error, 77 python3 is missing.
+USAGE
+}
+
+dry=0
+apply=0
+for arg in "$@"; do
+  case $arg in
+    --dry-run) dry=1 ;;
+    --apply) apply=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'setup: unknown argument\n' >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+if ((dry && apply)); then
+  printf 'setup: --dry-run and --apply cannot be used together\n' >&2
+  usage >&2
+  exit 2
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  printf 'setup: python3 is required for the release check\n' >&2
+  exit 77
+fi
+
+# The release check comes first: HEAD must be a release tag contained in origin/main, with no local changes.
+python3 -I -B -c 'import sys; sys.path.insert(0, sys.argv[1] + "/scripts/operator/lib"); from operator_lib import release; release.require_release_commit(sys.argv[1])' "$ROOT"
+
+# Nothing from the environment may change the playbook, its roles, or its modules.
+while IFS= read -r name; do
+  unset "$name"
+done < <(compgen -e | grep '^ANSIBLE_' || true)
+export ANSIBLE_CONFIG="$ROOT/ansible/ansible.cfg"
+
+if [[ $EUID -eq 0 ]]; then
+  SUDO=()
+  BECOME=()
+else
+  SUDO=(sudo)
+  BECOME=(--ask-become-pass)
+fi
+
+playbook=(ansible-playbook -i "$ROOT/ansible/inventory/localhost.yml" "$ROOT/ansible/operator.yml")
+
+if ((apply)); then
+  if ! command -v ansible-playbook >/dev/null 2>&1; then
+    "${SUDO[@]}" apt-get update -q
+    "${SUDO[@]}" apt-get install -y ansible-core
+  fi
+  "${playbook[@]}" "${BECOME[@]}" -e operator_apply=true
+elif command -v ansible-playbook >/dev/null 2>&1; then
+  "${playbook[@]}" --check --diff "${BECOME[@]}"
+else
+  printf 'ansible-core is not installed, so nothing was checked. --apply would run:\n'
+  printf '  %s apt-get update -q\n' "${SUDO[*]:-}"
+  printf '  %s apt-get install -y ansible-core\n' "${SUDO[*]:-}"
+  printf 'and then apply the operator profile.\n'
+fi

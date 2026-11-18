@@ -9,7 +9,7 @@ from .errors import ManifestError
 
 SCHEMA_VERSION = 1
 ARCHES = ("amd64", "arm64")
-PROFILES = ("builder", "lab")
+PROFILES = ("builder", "lab", "operator")
 SOURCES = ("download", "apt", "pip")
 FORMATS = ("binary", "tar.gz", "tar.xz", "zip")
 MAX_BYTES_DEFAULT = 512 * 1024 * 1024
@@ -146,7 +146,7 @@ def _validate_tool(label, entry, root):
     profiles = entry.get("profiles")
     if (not isinstance(profiles, list) or not profiles or any(p not in PROFILES for p in profiles)
             or len(set(profiles)) != len(profiles)):
-        errors.append(f"{label}.profiles: must be a non-empty subset of builder, lab")
+        errors.append(f"{label}.profiles: must be a non-empty subset of builder, lab, operator")
     smoke = entry.get("smoke")
     if (not isinstance(smoke, list) or not smoke or any(not isinstance(a, str) or not a or _META.search(a) for a in smoke)):
         errors.append(f"{label}.smoke: must be a non-empty array of plain arguments (no shell strings)")

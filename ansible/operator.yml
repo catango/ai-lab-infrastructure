@@ -1,0 +1,54 @@
+# The operator profile (CR-18, ADR-011, ADR-005 decision 10): the platform operator VM and the lab operator VM,
+# Ubuntu 24.04 (minimal), x86-64. Run only through scripts/operator/setup, which checks the release tag first.
+# A real run is refused unless operator_apply is set; --check always works. Nothing here connects to another host.
+- name: Apply the operator profile
+  hosts: all
+  connection: local
+  gather_facts: true
+  vars:
+    toolchain_profile: operator
+  pre_tasks:
+    - name: Refuse a real run without the explicit apply variable (setup --apply sets it)
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode or (operator_apply | bool)
+        quiet: true
+        fail_msg: >-
+          the operator profile changes this machine, so it needs -e operator_apply=true (scripts/operator/setup --apply sets it);
+          use --check for a dry run
+    - name: Preflight, the operator profile supports one platform only
+      tags: [preflight]
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == operator_expected_os
+          - ansible_facts['distribution_major_version'] == operator_expected_major
+          - ansible_facts['architecture'] == operator_expected_arch
+        quiet: true
+        fail_msg: >-
+          operator profile requires {{ operator_expected_os }} {{ operator_expected_major }} on {{ operator_expected_arch }}
+          (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
+          on {{ ansible_facts['architecture'] }})
+  roles:
+    - apt_base
+    - toolchain
+    - python_tools
+    - shell_env
+    - operator_system
+    - operator_user
+    - operator_sudo
+    - operator_ssh
+    - operator_firewall
+    - operator_checks
+    - verify
+
+# Separate play, never run by default. Run it by hand after an operator login is confirmed from a second session:
+#   ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml --tags operator_lock --ask-become-pass \
+#     -e operator_apply=true -e operator_login_confirmed=true -e operator_initial_account=<the provider's initial account>
+- name: Lock the initial admin account's SSH access (run only after an operator login is confirmed)
+  hosts: all
+  connection: local
+  gather_facts: true
+  tags: [operator_lock, never]
+  roles:
+    - operator_lock

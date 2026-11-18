@@ -167,7 +167,7 @@ smoke_match = "0.9.42"
 # Python 3 (3.12 on Ubuntu 24.04, 3.13 on Debian 13; pymarkdownlnt needs 3.11 or newer).
 [tools.python3]
 version_min = "3.11"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "python3"
 smoke       = ["python3", "--version"]
@@ -176,14 +176,14 @@ smoke       = ["python3", "--version"]
 # Needed by Ansible's apt module on Debian and Ubuntu.
 [tools.python3-apt]
 version_min = "2.6"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "python3-apt"
 smoke       = ["python3", "-c", "import apt"]
 
 [tools.python3-venv]
 version_min = "3.11"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "python3-venv"
 smoke       = ["python3", "-c", "import venv"]
@@ -191,14 +191,14 @@ smoke       = ["python3", "-c", "import venv"]
 # Bootstrapped from the archive by restore.sh before any profile can be applied.
 [tools.ansible-core]
 version_min = "2.14"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "ansible-core"
 smoke       = ["ansible", "--version"]
 
 [tools.git]
 version_min = "1:2.39"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "git"
 smoke       = ["git", "--version"]
@@ -212,7 +212,7 @@ smoke       = ["curl", "--version"]
 
 [tools.ca-certificates]
 version_min = "20230311"
-profiles    = ["builder"]
+profiles    = ["builder", "operator"]
 source      = "apt"
 package     = "ca-certificates"
 smoke       = ["test", "-s", "/etc/ssl/certs/ca-certificates.crt"]
@@ -231,3 +231,40 @@ profiles    = ["builder"]
 source      = "apt"
 package     = "jq"
 smoke       = ["jq", "--version"]
+
+# ---- apt, operator profile only (CR-18, ADR-005 decision 10): Ubuntu 24.04 (minimal), x86-64.
+
+[tools.nftables]
+version_min = "1.0"
+profiles    = ["operator"]
+source      = "apt"
+package     = "nftables"
+smoke       = ["nft", "--version"]
+
+[tools.openssh-server]
+version_min = "1:9.0"
+profiles    = ["operator"]
+source      = "apt"
+package     = "openssh-server"
+smoke       = ["test", "-x", "/usr/sbin/sshd"]
+
+[tools.sudo]
+version_min = "1.9"
+profiles    = ["operator"]
+source      = "apt"
+package     = "sudo"
+smoke       = ["sudo", "--version"]
+
+[tools.unattended-upgrades]
+version_min = "2.9"
+profiles    = ["operator"]
+source      = "apt"
+package     = "unattended-upgrades"
+smoke       = ["test", "-x", "/usr/bin/unattended-upgrade"]
+
+[tools.systemd-timesyncd]
+version_min = "250"
+profiles    = ["operator"]
+source      = "apt"
+package     = "systemd-timesyncd"
+smoke       = ["test", "-x", "/usr/lib/systemd/systemd-timesyncd"]
