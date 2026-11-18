@@ -162,6 +162,14 @@ binaries    = ["pymarkdown"]
 smoke       = ["pymarkdown", "version"]
 smoke_match = "0.9.42"
 
+[tools.oci-cli]
+profiles    = ["operator"]
+source      = "pip"
+lockfile    = "toolchain/python/operator.lock"
+binaries    = ["oci"]
+smoke       = ["oci", "--version"]
+smoke_match = "3.96.3"
+
 # ---- apt (signed distribution archive; installed by Ansible, checked by verify)
 
 # Python 3 (3.12 on Ubuntu 24.04, 3.13 on Debian 13; pymarkdownlnt needs 3.11 or newer).
