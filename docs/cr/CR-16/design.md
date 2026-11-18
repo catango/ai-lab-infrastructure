@@ -4,7 +4,7 @@
 |---|---|
 | CR | issue #16 (Class 3) |
 | Governing records | ADR-001 (D4 to D6, sections 2 to 4), ADR-002 (sections 2, 4, 5), ADR-005, baseline v0.1 (sections 3, 6, 7) |
-| New record | [ADR-004](../../adr/ADR-004-oci-baseline.md) (Proposed) |
+| New record | [ADR-004](../../adr/ADR-004-oci-baseline.md) (Proposed). Decision 10 also amends ADR-001 decision 5 and the OCI credentials row of its section 4 (operator tier, section 6.3) |
 | Scope | Design only. No Terraform, scripts, cloud-init, or workflows are added by this PR. |
 
 ## 1. Goal and scope
@@ -18,12 +18,14 @@ This design covers:
 | b | Lab stack: network, instance, block volume, backup bucket, Bastion | 5 |
 | c | Cloud-init for the instance | 6.1 |
 | d | Static checks for the Terraform code (format, validate, allowlist, no identifiers) | 6.2 |
+| e | Operator tier: the rules for scripts run by the operator user, and what the lab build provides for it | 6.3 |
 
 Out of scope: the deployment pipeline and the federation trust (Stage 4, after Spike S2), the `lab` toolchain profile and
 `labctl` (Stage 3), the backup design and retention (ADR-007), the rebuild path (ADR-006), the software template.
 
 Both stacks are applied by the approver in the OCI Console in this stage. Claude Code writes the code and never runs
-Terraform or the OCI CLI against the tenancy (CLAUDE.md, ADR-001 section 2).
+Terraform or the OCI CLI against the tenancy (CLAUDE.md, ADR-001 section 2). Tasks that need credentials or permissions the AI
+must not hold are run by hand by the operator user, with AI-written scripts (section 6.3).
 
 ## 2. Decisions in this design
 
@@ -41,6 +43,8 @@ Terraform or the OCI CLI against the tenancy (CLAUDE.md, ADR-001 section 2).
 | S2-10 | A budget that targets the root compartment (the whole tenancy), with two alert rules: actual spend (absolute threshold) and forecast spend (100% of the budget). The amount and the recipient are variables. | Always Free should cost nothing, so any non-zero spend anywhere in the tenancy is an incident worth an email (D6). A budget scoped to the lab compartment cannot see spend elsewhere. |
 | S2-11 | Nothing identifying is committed: OCIDs, namespace, addresses, network ranges, SSH public key, alert recipient, and AD names are variables or looked up at apply time. Outputs are sensitive. | The repository is public (CLAUDE.md conventions, `public-repo-hygiene`). |
 | S2-12 | The first implementation PR adds an `iac` quality-gate check (`tofu fmt`, `tofu validate`, resource-type allowlist) and a CI job. | The toolchain already pins OpenTofu (ADR-005). Mechanical checks belong in a script, not in prompts. |
+| S2-13 | Operator tier (requirement of 2026-11-18): the operator user on the platform workspace runs reviewed, merged, AI-written scripts for credentialed or extended-permission tasks. Every script has dry-run (default) and apply modes. Operator scripts never apply infrastructure changes. The rules are in section 6.3; the scripts themselves are a separate change request. | Keeps credentials away from the AI user while removing long copy-and-paste runbooks. The scripts are reviewed code, so the approver, not the AI, decides what runs with credentials. |
+| S2-14 | The lab stack can provision a second, optional login on the lab VM for the operator: no sudo, key-only, no credentials, off unless its variables are set. | The requirement says an additional user may exist in the lab. Off by default keeps the internet-facing host's exposure unchanged. |
 
 ## 3. Repository layout and variables
 
@@ -72,6 +76,8 @@ Variables are entered in the Console when the stack is created or edited. None h
 | lab | `vcn_cidr`, `subnet_cidr` | Network ranges | valid CIDR; the subnet lies inside the VCN |
 | lab | `bastion_client_cidrs` | Source ranges allowed to reach the Bastion endpoint (break-glass) | non-empty list of valid CIDRs; the all-addresses range is rejected, as for SSH |
 | lab | `bucket_name` | Backup bucket | non-empty |
+| lab | `operator_user_name` | Login name of the optional operator user on the lab VM. Empty (default) means no second user | empty, or a valid Linux login name that is not `root` and differs from the default login user |
+| lab | `operator_ssh_public_key` | Public key of the operator login | required when `operator_user_name` is set, and starts with `ssh-ed25519 ` |
 
 Fixed in code and validated, not variables: shape `VM.Standard.A1.Flex`, OCPUs fixed at 2, memory fixed at 12 GB,
 boot volume 50 GB, block volume 100 GB, public SSH port 22.
@@ -144,11 +150,12 @@ Total 150 GB of the 200 GB Always Free allowance. The cloud-init step formats th
 
 Minimal and deterministic. It makes the host reachable and ready for the Stage 3 Ansible `lab` profile, and nothing more.
 
-1. Disable password and root SSH login with a drop-in file, restrict logins to the one default user, and reload `sshd`.
+1. Disable password and root SSH login with a drop-in file, restrict logins to the default user and, when set, the operator user, and reload `sshd`.
 2. Install `git` and `ansible-core` from the Ubuntu archive. No downloads from other sources (supply-chain rule: no `curl | sh`).
 3. Format (if blank) and mount the block volume at `/srv/work`, owned by the login user.
 4. Leave the Ubuntu default of unattended security upgrades on.
 5. Write a marker file with the cloud-init completion time, so Stage 3 can tell that provisioning finished.
+6. Only when `operator_user_name` is set: create that user with the supplied public key, no password, no `sudo`, `adm`, or other privileged group, and a home directory readable by that user only. The user cannot write to `/srv/work` (S2-14).
 
 Cloud-init holds no secrets and no identifiers. The host's own firewall rules from the Oracle image are kept as they are; this design adds no `ufw` layer (verification V2-6).
 
@@ -166,6 +173,38 @@ A new gate check `scripts/checks/iac.sh`, ordered with the other Stage 1 checks:
 
 CI runs the check in the existing `quality-gate` job. Nothing in CI contacts OCI (ADR-002 section 3.1).
 
+### 6.3 Operator tier (requirement of 2026-11-18, part e)
+
+**Requirement (approver, 2026-11-18).** A dedicated Linux user exists on the platform workspace (zone Z1), has internet access and no admin privileges, and is separate from the AI user. A second such user may be provisioned on the lab VM (Z2). The operator runs, by hand, scripts the AI provides, for tasks the AI should not or cannot call directly: tasks that need dedicated credentials (for example OCI) or extended permissions (for example configuring GitHub repositories). Every provided script offers a dry-run mode and an apply mode. Three existing manual procedures are to be simplified on this principle: the Gate 0 audit, the GitHub setup, and acceptance tests that need many individual calls.
+
+**Facts checked on Z1 (read-only; counts and modes only, no names).** Two login users have home directories, both with mode 700. The AI user is a member of the `sudo` group. The restore runs prompted the approver for the sudo password, so sudo is not passwordless for the AI user. I did not test sudo (Claude never runs it), so that point is an inference, and acceptance O-1 checks it. The OCI CLI is not installed on Z1; `gh` is.
+
+**What it conflicts with.** ADR-001 decision 5 and the OCI credentials row of its section 4 say no OCI credentials exist on Z1 or Z2, and B1 calls that an enforced property. Acceptance K-3 and `workspace/verify.sh` check for it. ADR-004 decision 10 (Proposed) amends the wording: the AI user holds none on Z1, none exist on Z2, and the operator user on Z1 may hold short-lived credentials. ADR-001 carries a pointer to the amendment. Nothing changes until the approver accepts ADR-004.
+
+**Rules for operator scripts (the part this design fixes).**
+
+| # | Rule | Reason |
+|---|---|---|
+| 1 | Separation: the operator's home is mode 700, the AI user cannot read it or become the operator, and the operator has no sudo | Credentials the AI cannot read are the point of the tier. The approver tests it (acceptance O-1) |
+| 2 | Source: scripts live in `scripts/operator/` and reach `main` through a PR like all code. The operator runs them from its own clone, updated with `git pull --ff-only`, never from the AI user's working tree. A script prints the commit, and refuses to run with local changes or a commit that is not in `origin/main` | The AI can edit its own working tree. A merged commit is what the approver reviewed |
+| 3 | Modes: `--dry-run` is the default. Changes need `--apply`, plus a confirmation prompt for anything that deletes or overwrites. A dry run makes no write call and prints every call it would make (read-only scripts list the calls they would send) | CLAUDE.md already requires dry-run for destructive scripts. This makes both modes universal for operator scripts |
+| 4 | Credentials are prompted for or short-lived, and never stored in the repository, a file under the AI user's reach, or shell history. OCI: a session token is preferred to an API key (V2-11, Q12). GitHub configuration: a separate token T2 with extended scope, entered at the prompt, shortest practical expiry, revoked after use. T2 is not T1 | Matches the T1 handling of ADR-001 section 4. T1 has no admin rights and stays unchanged |
+| 5 | Output: standard output is a sanitised summary (yes/no, counts, sizes, the format of the existing results blocks) that is safe to paste into chat. Raw responses go to a private directory in the operator's home. Identifiers, addresses, and names are filtered, and a filter that cannot decide prints a placeholder | CLAUDE.md conventions for the public repository, and the audit rules of `docs/operations/gate-0-audit.md` |
+| 6 | Bounded: apply mode runs a fixed list of operations. Scripts take no command text as an argument, use no `eval`, and never run Terraform or change OCI resources (ADR-002) | An operator script must not become a second deployment path |
+| 7 | Quality: ShellCheck-clean, `set -euo pipefail`, tests for both modes with stub CLIs, and the existing hygiene checks | Same gate as every other script |
+
+**The three use cases.** The scripts are not built by this design.
+
+| Use case | Today | With operator scripts | Stays manual |
+|---|---|---|---|
+| Gate 0 audit | `docs/operations/gate-0-audit.md`: about 200 lines of Cloud Shell commands | One audit script runs the read-only OCI calls and prints the results summary block | Parts that ask people questions or need the corporate network (for example Parts 1, 5 and 6) |
+| GitHub setup | `docs/operations/github-setup.md`: Console steps | Idempotent `gh api` calls for repositories, settings, security, rulesets, environments, and the collaborator (Parts 3 to 9 by their headings). Dry run shows current against wanted settings | Account hardening, the machine account, token creation, chat integration (Parts 1, 2, 10, 11) |
+| Acceptance tests | The B, L, K tests of this CR and the V2 checks, run one by one | One runner reports yes/no per criterion ID | Tests that need the Console, a second network (L-4), a reboot, or a stop and start |
+
+**What the lab build provides (this CR).** The optional operator login on the lab VM (S2-14, cloud-init item 6, acceptance L-12). It has no OCI or GitHub credential and no sudo, so it can run only scripts that need neither, for example the on-VM acceptance checks (L-5, L-6). It uses the same SSH allowlist and adds no firewall rule. The acceptance runner reaches the VM from Z1 over the existing SSH path.
+
+**What is separate.** The operator scripts, their shared library, the OCI CLI installation route on Z1 (through the toolchain manifest of ADR-005 or by the approver; V2-11), and the T2 procedure become a new change request that the approver opens. The manual runbooks stay in force until then. Because ADR-004 decision 10 amends ADR-001, this design PR must be merged before that change request starts.
+
 ## 7. Risks
 
 | ID | Risk | Mitigation |
@@ -178,6 +217,9 @@ CI runs the check in the existing `quality-gate` job. Nothing in CI contacts OCI
 | RR-S2-6 | The block volume is destroyed by a stack change | `prevent_destroy`, plus the Console confirms a destroy job. Data is also in restic from Stage 3 |
 | RR-S2-7 | A variable leaks an identifier into a public log | Outputs are sensitive, the stack runs only in the Console, and the gate blocks identifiers in committed text |
 | RR-S2-8 | The dynamic group is wider than intended and gives the VM more than read access | The matching rule is a single compartment; AC tests read-only behavior from the VM in Stage 3 |
+| RR-S2-9 | AI-written code runs with credentials the AI never sees, so a mistake or a prompt injection could turn a script into a destructive call or a leak | Rules 2 to 7 of section 6.3: merged commit only, dry-run default, fixed operation list, sanitised output, short-lived credentials. Operator scripts are a code-review focus for the approver |
+| RR-S2-10 | The AI user and the operator share one host, kernel, and filesystem. The AI user is in the `sudo` group, and its protection is the sudo password | Mode 700 homes, no sudo for the operator, and the approver's test O-1 before the first use. If O-1 fails, the tier needs a separate host or container, and this design is revisited |
+| RR-S2-11 | A second SSH identity on the internet-facing lab VM widens its attack surface | Optional and off by default, key-only, no sudo, same allowlist, no credentials (S2-14) |
 
 ## 8. Verification items
 
@@ -195,12 +237,16 @@ All of these are documentation checks or read-only Console or Cloud Shell inspec
 | V2-8 | The current reclamation behavior for idle A1 instances (stop or terminate), and where the notice is sent | Oracle documentation, or Oracle support | Lab PR (capacity runbook) |
 | V2-9 | Whether reclamation-driven termination deletes separately attached block volumes | Oracle documentation, or Oracle support | Lab PR (capacity runbook) |
 | V2-10 | Whether the Vault type and the key protection mode can change after creation | Oracle Vault documentation | Bootstrap PR |
+| V2-11 | Whether OCI CLI session-token authentication (`oci session authenticate`) works for this tenancy's identity domain type, its maximum lifetime, whether a read-only identity can run the audit, and how the CLI is installed with pinned versions and checksums | Oracle CLI documentation | The operator-scripts change request (not a CR-16 implementation PR) |
 
 ## 9. Review handoff of 2026-11-17 and decisions
 
 Source: the approver's review comment on PR #17 ("Decision handoff: CR-16: 2026-11-17"). It decides nothing yet:
 Q1 to Q9 below are recommendations, and the approver's decisions are recorded here when given. D3 to D6 of the baseline
 were accepted earlier and are not repeated.
+
+The approver's requirement of 2026-11-18 (operator tier) is designed in section 6.3 and raises Q10 to Q14. It is recorded
+as a requirement, not as a decision on those questions.
 
 ### 9.1 Decided
 
@@ -225,8 +271,9 @@ None.
 | Minimum budget amount, whether budgets are free, and whether a budget can target the root compartment (V2-4) | A documentation check |
 | Whether Pay As You Go should be reconsidered (this would reopen D6) | The approver |
 | Bastion maximum session lifetime and endpoint port (V2-5); reclamation behavior and notice address (V2-8); whether reclamation deletes attached block volumes (V2-9); whether Vault type and key mode can change (V2-10) | Oracle documentation, or Oracle support |
+| Operator tier: Q10 to Q14; the sudo and home-directory test O-1 on Z1; opening the change request for the operator scripts; V2-11 | The approver; a documentation check |
 
-### 9.4 Questions Q1 to Q9 (recommendations, not decided)
+### 9.4 Questions Q1 to Q14 (recommendations, not decided)
 
 | # | Question | Recommendation | Status |
 |---|---|---|---|
@@ -239,3 +286,8 @@ None.
 | Q7 | Create the Bastion by default, with port-forwarding sessions as the break-glass method | Yes; it costs nothing and has no standing access | Not decided |
 | Q8 | `preserve_boot_volume = false` in v1, with ADR-006 deciding the rebuild path | Yes | Not decided |
 | Q9 | Implementation PR order and the user-only actions in the plan | As in implementation-plan.md (updated for this handoff) | Not decided |
+| Q10 | Where the operator scripts are built | In a separate change request that you open after this PR merges. CR-16 carries only the principle (ADR-004 decision 10), the lab-side login, and the acceptance criteria | Not decided |
+| Q11 | May operator scripts ever change OCI resources? | No. Read-only OCI scripts only. Infrastructure changes stay with the Console in Stage 2 and the pipeline in Stage 4 (ADR-002) | Not decided |
+| Q12 | OCI authentication for the operator | A short-lived session token (V2-11). The alternative, an API key for a dedicated read-only user, needs a bootstrap IAM change and gives up "no API keys" | Not decided |
+| Q13 | Operator login on the lab VM | Optional, off by default, no sudo, no credentials (S2-14) | Not decided |
+| Q14 | Handling of the GitHub token T2 for repository configuration | Entered at the prompt, shortest practical expiry, revoked after use, never stored, separate from T1 (section 6.3 rule 4) | Not decided |

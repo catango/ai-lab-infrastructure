@@ -29,7 +29,7 @@ PR 2 can be reviewed in parallel with PR 1, but it needs the gate to run its tes
 
 **PR 2: bootstrap.** Compartment, quota policy generated from the approved family list, budget with alerts, dynamic group and policy, Vault and key. Variable validations as in design section 3. The PR body lists the exact Console steps for the approver (create the stack from the zip, set variables, plan, review, apply) and what to report back (counts only).
 
-**PR 3: lab.** Network, NSG, instance, volumes, bucket, Bastion, cloud-init. `lifecycle` rules: `prevent_destroy` on the block volume, `ignore_changes` on the image. Cloud-init content is tested as text (SSH drop-in, mount unit, marker) and checked against `cloud-init schema` when that tool is available (otherwise reported as skipped).
+**PR 3: lab.** Network, NSG, instance, volumes, bucket, Bastion, cloud-init (including the optional operator login, S2-14, acceptance L-12). `lifecycle` rules: `prevent_destroy` on the block volume, `ignore_changes` on the image. Cloud-init content is tested as text (SSH drop-in, mount unit, marker) and checked against `cloud-init schema` when that tool is available (otherwise reported as skipped).
 
 **PR 4: oci-seed-finish.** The runbook, the index updates, and the evidence table.
 
@@ -46,11 +46,14 @@ Each is listed with its exact commands or Console steps in the runbook and in th
 | After PR 2 merges | Build the bootstrap zip, create the stack in Resource Manager, enter the variables, review the plan, apply |
 | Before PR 3 | Create the lab VM login key pair on Windows with the OS-bundled OpenSSH (ADR-001 section 4); report the egress result (O-9) |
 | After PR 3 merges | Build the lab zip, create the stack, enter the variables (including the public key and the allowed range), review the plan, apply |
+| Before PR 3 | Decide Q10 to Q14 (operator tier), and run the host-separation test O-1 on the platform workspace (the AI user cannot read the operator's home or use sudo) |
+| After this design PR merges | Open the change request for the operator scripts (Gate 0 audit, GitHub setup, acceptance runner). Claude does not open it |
 | After the lab apply | Run the acceptance tests of acceptance sections B and L that need the Console or a second network |
 | After PR 4 | Review and merge; the CR closes with the merge |
 
 ## 5. What this plan does not do
 
+- No operator scripts: they are a separate change request (design section 6.3, Q10). The manual runbooks stay in force until then.
 - No pipeline: workflows that touch OCI arrive in Stage 4, after Spike S2.
 - No `lab` profile content, no `labctl`, no backups: Stage 3 and ADR-006 and ADR-007.
 - No OCI credential of any kind in the repository, on the workspace, or on the lab VM.
