@@ -4,6 +4,7 @@
 |---|---|
 | Status | **Accepted** (2026-11-17), including D14, D15, D16 |
 | Revision | 3 (2026-11-17): D17 added (GitHub access per surface; no MCP in v1), accepted on merge of the seed PR. Revision 2: GitHub organization (D14) dropped; one shared machine-account token |
+| Amended by | ADR-011 decision 7 (Accepted, 2026-11-18): the operator tier. Adds zones Z6 and Z7, amends B3, the OCI credentials row, and the personal-account row of section 4, and adds credential rows. Decision 5, B1, AC1-3, and RR-8 keep their wording and are read with the amendment: **no OCI credentials and no T2 or T3 on Z1 or Z2; operator machines may hold the credentials defined in ADR-011.** In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
 | Target location | `ai-lab-infrastructure/docs/adr/ADR-001-trust-model-and-execution.md` |
 | Related | CHG-001, CHG-003, ADR-002, ADR-003, D8/D13 (machine account), D11 (MCP policy), D14 (repository ownership), D17 (GitHub access per surface) |
 
@@ -68,11 +69,13 @@
 | Z3 | GitHub (personal account repositories) | External SaaS | Code, PRs, CI, ADR-002 environment configuration |
 | Z4 | OCI control plane: Console, Cloud Shell, Resource Manager | External SaaS, human-operated | Terraform state, plans, IAM, quotas |
 | Z5 | Anthropic: Claude Enterprise | Corporate SaaS | Chat sessions; GitHub Integration authorization (machine account, read-only file sync) |
+| Z6 | Platform operator VM (ADR-011) | Human-provided remote machine reached over SSH, separate from every AI host, operated by the approver | Operator clone at a release tag; operator profile; during runs only: T2 or T3 in the script process |
+| Z7 | Lab operator VM (ADR-011) | Lab OCI VM (Always Free micro), separate from the lab VM, disposable, operated by the approver | Operator clone at a release tag; operator profile; read-only instance principal; during runs only: T3 in the script process; SSH key to the lab VM |
 
 **Trust boundaries that must hold:**
 - **B1.** The AI-operated zones Z1 and Z2 cannot approve or merge in Z3, and cannot modify Z4. Both properties are enforced, not procedural: Write role plus rulesets on public repos, and no OCI credentials.
 - **B2.** *Dropped in revision 2.* Host-to-host repository isolation is not provided (accepted risk RR-9).
-- **B3.** Only you, in Z0 via the browser, can approve, merge, apply infrastructure, change repository settings, or change IAM.
+- **B3.** Only you, in Z0 via the browser, can approve, merge, apply infrastructure, change repository settings, or change IAM. Amended by ADR-011: the operator machines Z6 and Z7 act only when you run a reviewed script from a release tag. Repository settings change from a host only through a `github-setup` apply run on Z6 with a token T2 that you create and revoke, and infrastructure never changes from an operator machine.
 
 ## 4. Credential placement matrix
 
@@ -84,10 +87,20 @@
 | Claude inference credential | Z1 and Z2 while sessions run (placed by Claude Desktop) | Claude Enterprise | Ends with the session or host restart; corporate-managed |
 | GitHub token **T1** (shared) | Z1 and Z2, in each host's `gh` credential store; never in repositories, logs, or prompts | Machine account, classic, `repo` + `workflow` + `read:org`; effective reach = the collaborator allowlist | 90-day expiry. Revoke in the machine account's settings; this cuts off **both** hosts. |
 | GitHub Integration authorization (chat) | Z5 | Machine account; read-only sync of public repository files | Revoke in the machine account's Settings → Applications |
-| Personal GitHub account | Z0 browser only | Owner; approver | Passkey or 2FA; never placed on a host |
+| Personal GitHub account | Z0 browser only | Owner; approver | Passkey or 2FA; never placed on a host. The fine-grained tokens T2 and T3 of this account (rows below) are the only derived credentials, and they exist on operator machines only |
 | OCI instance principal | Z2 (implicit) | Read-only inspection of the lab compartment; create/read objects in the backup bucket; read one Vault secret | Managed in bootstrap stack (Tier 0) |
 | restic backup password | OCI Vault secret, plus an offline copy in your password manager | Backup repository | On suspicion; re-key the restic repository |
-| OCI credentials | **None on Z1 or Z2** | — | — |
+| OCI credentials | **None on Z1 or Z2.** None stored or typed on Z6 or Z7 (amended by ADR-011); the one standing OCI identity is the instance principal of Z7 (row below) | — | — |
+| GitHub token **T2** (repository configuration) | Prompt only on Z6, kept inside the `github-setup` process; never stored, never in a child process, argv, or on disk | Personal account, fine-grained, the two repositories only: Administration and Environments read and write, Metadata read; no Contents, Pull requests, Workflows, or Secrets write. Used for `github-setup` apply runs only | 1-day expiry; revoked in the browser after each run |
+| GitHub token **T3** (read-only fact collection and `github-setup` dry runs) | Prompt only on Z6 or Z7, kept inside the script process | Personal account, fine-grained, the two repositories only: Administration read, Environments read, Metadata read | 1-day expiry; revoked after each run |
+| OCI instance principal of the lab operator VM | Z7 (implicit) | Read-only: the lab compartment, and tenancy limits and resource availability (the one standing exception to "prompted or short-lived"). Dynamic group matched by compartment and tag. No write rights | Managed in the bootstrap stack (Tier 0) |
+| SSH keys: operator machines | Z0. One dedicated key per operator machine, never shared with the lab VM key. The public part for Z7 is a stack variable, so a rebuild can rotate it | Operator login on that one machine | On suspicion; replaced on Z6 by you, on Z7 by a stack apply |
+| SSH key: lab operator VM to lab VM | Z7. Dedicated, used by the `acceptance` runner over private IPs inside the VCN. The public part is a lab stack variable | Login to the lab VM from Z7 only | On suspicion; replaced through the ADR-002 pipeline |
+| Operator sudo password | Set by you, interactively, at the first operator-profile run on each operator machine; never in the repository | `sudo` on that machine, with `timestamp_timeout=0` and no `NOPASSWD` rule | Changed on suspicion |
+| `ssh` config entries | Z0 `~/.ssh/config`: addresses and host key aliases for the OCI VMs; never in the repository | Access to the lab VM and the lab operator VM | Edited by you after a rebuild or a changed host key |
+| Notification recipient address | Lab stack variable; never in the repository | Absence-alarm emails (ADR-011 decision 15) | Changed through a stack apply |
+
+T1 is never placed on an operator machine. After a lab VM rebuild, T1 is re-entered on Z2 by you (ADR-011 decision 14), as it is after any reset (D16).
 
 **Rotation procedure for T1:**
 1. Create the replacement token in the machine account.
