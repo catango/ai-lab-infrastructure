@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""github-setup: bring the two platform repositories to the state in github-desired-state.toml (CR-18 design section 5.2).
+
+Dry run (the default): reads the current state with the read-only token T3, shows what differs and which write calls would be
+sent, and writes nothing (the client refuses any method but GET). With --apply it reads and writes with T2 (Administration and
+Environments read and write), asks first before it overwrites a ruleset, and changes only what differs. Both tokens are typed
+at a prompt, kept in this process, and never stored. Revoke the token you used when the run ends. Claude Code never runs this.
+"""
+import argparse
+import os
+import sys
+
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(HERE, "lib"))
+
+from operator_lib import credentials, exitcodes, github, githubstate, modes, release, steps  # noqa: E402
+from pr_contract.errors import ApiError, NotFound  # noqa: E402
+
+ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
+DESIRED = os.path.join(HERE, "github-desired-state.toml")
+DESCRIPTION = "Bring the platform repositories to the desired GitHub configuration (dry run by default)."
+MANUAL = ("manual: Dependabot grouped security updates, discussions, sponsorships, and Git LFS in archives have no setting here; "
+          "check them in the browser (docs/operations/github-setup.md, Parts 4 and 6)")
+
+
+def _login(value):
+    if not github.valid_login(value):
+        raise argparse.ArgumentTypeError("not a valid GitHub login")
+    return value
+
+
+def add_arguments(parser):
+    parser.add_argument("--owner", required=True, type=_login, help="the account that owns the repositories")
+    parser.add_argument("--collaborator", required=True, type=_login, help="the machine account that is invited as a collaborator")
+    parser.add_argument("--repo", action="append", help="limit the run to this repository (repeatable); default: all in the desired-state file")
+
+
+def main(argv=None, *, opener=None, getpass_fn=credentials.getpass.getpass, out=print, require_release=release.require_release_commit,
+         confirm_fn=modes.confirm, desired_path=DESIRED):
+    mode, args = modes.parse_mode(sys.argv[1:] if argv is None else argv, "github-setup", DESCRIPTION, add_arguments)
+    try:
+        desired = githubstate.load_desired(desired_path)
+    except githubstate.StateError as error:
+        out(f"refused: {error}")
+        return exitcodes.FAILED
+    repos = args.repo or list(desired["repositories"])
+    if any(name not in desired["repositories"] for name in repos):
+        print("github-setup: --repo must name a repository of the desired-state file", file=sys.stderr)
+        raise SystemExit(exitcodes.USAGE)
+    require_release(ROOT, out=out)
+
+    label = "T3" if mode.dry_run else "T2"
+    try:
+        token = credentials.prompt_token(label, getpass_fn=getpass_fn)
+    except credentials.TokenError as error:
+        out(f"refused: {error}")
+        return exitcodes.FAILED
+    client = github.make_client(token, read_only=mode.dry_run, opener=opener)
+
+    out(f"== github-setup ({'dry run' if mode.dry_run else 'apply'}) ==")
+    total = steps.StepResult()
+    unknown = 0
+    failed = False
+    for name in repos:
+        out(f"== {name} ==")
+        state = githubstate.read_state(client, args.owner, name, desired, args.collaborator)
+        if not state.reachable:
+            out("unreachable: the repository could not be read (name, owner, or token permission)")
+            failed = True
+            continue
+        diffs, missing = githubstate.compute_diffs(desired, name, state)
+        unknown += missing
+        if not diffs:
+            out("in sync")
+        for diff in diffs:
+            out(f"  diff {diff.key}: {githubstate.show(diff.current)} -> {githubstate.show(diff.wanted)}")
+        if state.collaborator == "pending":
+            out("  collaborator: invitation pending (the account has to accept it)")
+        plan = githubstate.build_steps(client, args.owner, name, desired, diffs, state, args.collaborator)
+        try:
+            result = steps.run_steps(plan, mode, out=out, confirm_fn=confirm_fn)
+        except (ApiError, NotFound) as error:
+            out(f"failed: a write call was refused ({error}); nothing further was changed in this repository")
+            failed = True
+            continue
+        total.would += result.would
+        total.changed += result.changed
+        total.declined += result.declined
+
+    out(f"environments: {', '.join(desired['environments']) or 'none'} deferred to Stage 4; not touched")
+    out(MANUAL)
+    out(f"changes: {total.would if mode.dry_run else total.changed}")
+    if total.declined:
+        out(f"declined: {total.declined}")
+    if unknown:
+        out(f"unknown: {unknown} values could not be read with this token")
+    out(f"Revoke the token you used ({label}): GitHub, Settings, Developer settings, Fine-grained tokens, Delete.")
+    if mode.apply and (unknown or failed):
+        return exitcodes.FAILED
+    return exitcodes.FAILED if failed else exitcodes.OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

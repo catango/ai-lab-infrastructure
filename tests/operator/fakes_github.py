@@ -99,7 +99,7 @@ class FakeGitHub:
         body = json.loads(request.data) if request.data else None
         token = request.get_header("Authorization")
         self.requests.append({"method": method, "path": path, "token": token, "body": body})
-        status, payload = self.route(method, path, body, token is not None)
+        status, payload = self.route(method, path.split("?")[0], body, token is not None)
         if status >= 400:
             raise urllib.error.HTTPError(request.full_url, status, "error text that must not be shown", {}, io.BytesIO(b"{}"))
         return Response(status, payload)

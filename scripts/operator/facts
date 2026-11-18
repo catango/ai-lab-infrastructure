@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """facts: gather facts about the operator machine as yes/no, counts, sizes, and versions (CR-18 design section 5.1).
 
-Scope host (the only scope in this version) reads /proc and /etc, `git --version`, and a small local state file. Without
---apply it lists the checks and changes nothing. With --apply it runs them and writes only its local state files (mode 600) in
-the operator's home. --privileged runs a fixed list of read-only root commands, each asking for the sudo password.
+Scope host reads /proc and /etc, `git --version`, and a small local state file. Scope github reads repository settings,
+rulesets, and security features with GET calls only, without a token unless --use-token asks for T3. Without --apply a scope
+lists its checks and changes nothing. With --apply the host scope writes only its local state files (mode 600) in the
+operator's home, and the github scope writes nothing. --privileged runs a fixed list of read-only root commands, each asking for
+the sudo password.
 """
 import os
 import sys
@@ -12,7 +14,7 @@ sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(HERE, "lib"))
 
-from operator_lib import download, exitcodes, hostfacts, modes, process, release, sanitize  # noqa: E402
+from operator_lib import credentials, download, exitcodes, github, githubfacts, hostfacts, modes, process, release, sanitize  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 MANIFEST = os.path.join(ROOT, "toolchain", "manifest.toml")
@@ -37,13 +39,21 @@ BANDWIDTH_TIMEOUT = 60
 
 
 def add_arguments(parser):
-    parser.add_argument("--scope", choices=["host"], default="host", help="the facts to gather (only host so far)")
+    parser.add_argument("--scope", choices=["host", "github"], default="host", help="the facts to gather (the oci scope is not built yet)")
+    parser.add_argument("--owner", help="github scope: the account that owns the repositories")
+    parser.add_argument("--repo", action="append", help="github scope: a repository to read (repeatable)")
+    parser.add_argument("--use-token", action="store_true", help="github scope: ask for T3 (read-only) to read what needs a token")
     parser.add_argument("--privileged", action="store_true", help="also run the fixed read-only root commands, each asking for the sudo password")
     parser.add_argument("--measure-bandwidth", action="store_true", help="time one manifest download and discard it")
     parser.add_argument("--write-allowlist", action="store_true", help="write the current egress address to the operator-local allowlist file")
 
 
 def plan_lines(args):
+    if args.scope == "github":
+        lines = ["would: read, with GET calls only and " + ("with T3 from a prompt" if args.use_token else "without a token") + ":"]
+        for repo in args.repo:
+            lines.extend(f"would: GET {path}" for path in githubfacts.get_paths(args.owner, repo))
+        return lines
     lines = ["would: collect host facts (versions, memory, CPU, disk, time sync, account and sudo-group counts, listening port count, "
              "firewall service state, package count)",
              "would: record home persistence and egress stability in the local state file (mode 600)"]
@@ -91,9 +101,45 @@ def measure_bandwidth(downloader, manifest):
     return hostfacts.UNKNOWN if value is None else value
 
 
+def check_arguments(args):
+    """Cross-checks that argparse cannot do: the github scope needs an owner and repositories, and the host scope takes none."""
+    problem = None
+    if args.scope == "github":
+        if not args.owner or not args.repo:
+            problem = "--scope github needs --owner and at least one --repo"
+        elif not github.valid_login(args.owner) or not all(github.valid_repo(r) for r in args.repo):
+            problem = "--owner or --repo is not a valid GitHub name"
+        elif args.privileged or args.measure_bandwidth or args.write_allowlist:
+            problem = "--privileged, --measure-bandwidth, and --write-allowlist belong to the host scope"
+    elif args.owner or args.repo or args.use_token:
+        problem = "--owner, --repo, and --use-token belong to --scope github"
+    if problem:
+        print(f"facts: {problem}", file=sys.stderr)
+        raise SystemExit(exitcodes.USAGE)
+
+
+def run_github(args, mode, out, opener, getpass_fn):
+    token = None
+    if args.use_token:
+        try:
+            token = credentials.prompt_token("T3", getpass_fn=getpass_fn)
+        except credentials.TokenError as error:
+            out(f"refused: {error}")
+            return exitcodes.FAILED
+    client = githubfacts.client_for(token, opener=opener)
+    for repo in args.repo:
+        out(f"== facts (github): {repo} ==")
+        for line in sanitize.summary_lines(githubfacts.collect(client, args.owner, repo)):
+            out(line)
+    out("== manual (off-host) ==")
+    out("manual: facts that need a token stay unknown without --use-token; revoke T3 in the browser after the run")
+    return exitcodes.OK
+
+
 def main(argv=None, *, system=None, environ=None, out=print, require_release=release.require_release_commit,
-         runner=process.run, downloader=download.timed_download, manifest=MANIFEST):
+         runner=process.run, downloader=download.timed_download, manifest=MANIFEST, opener=None, getpass_fn=credentials.getpass.getpass):
     mode, args = modes.parse_mode(sys.argv[1:] if argv is None else argv, "facts", DESCRIPTION, add_arguments)
+    check_arguments(args)
     environ = os.environ if environ is None else environ
     require_release(ROOT, out=out)
     if mode.dry_run:
@@ -101,6 +147,8 @@ def main(argv=None, *, system=None, environ=None, out=print, require_release=rel
             out(line)
         out("dry run: nothing was checked and nothing was written. Run again with --apply to gather the facts.")
         return exitcodes.OK
+    if args.scope == "github":
+        return run_github(args, mode, out, opener, getpass_fn)
 
     system = system or hostfacts.RealSystem()
     home = environ.get("HOME", "")

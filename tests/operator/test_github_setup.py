@@ -228,7 +228,7 @@ class Script(unittest.TestCase):
     def test_it_is_executable_and_uses_the_shared_library(self):
         self.assertTrue(os.access(SCRIPT, os.X_OK))
         text = SCRIPT.read_text()
-        for word in ("parse_mode", "require_release_commit", "prompt_token", "HttpClient"):
+        for word in ("parse_mode", "require_release_commit", "prompt_token", "make_client"):
             self.assertIn(word, text)
 
     def test_it_starts_no_subprocess_and_does_not_read_the_environment_for_tokens(self):
