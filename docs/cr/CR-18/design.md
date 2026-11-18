@@ -341,7 +341,7 @@ Documentation checks or read-only inspection. Anything that creates credentials 
 | VO-10 | A dynamic group matched by compartment and tag covers a recreated instance | Oracle IAM documentation | The CR-16 design PR |
 | VO-11 | Idle reclamation behavior: stop or terminate, and the notice given | Oracle Always Free documentation | The CR-16 design PR |
 | VO-12 | Public IPv4 limits (2 ephemeral, 1 reserved reported) and IP retention on stop, start, and in-place replacement | Oracle documentation, `facts --scope oci` | The CR-16 design PR |
-| VO-13 | Alarm behavior (absence detection, trigger delay, repeat notification, suppression, `groupBy`) and the Always Free limits for alarms and Notifications | Oracle Monitoring documentation | The CR-16 design PR |
+| VO-13 | Alarm behavior (absence detection including whether a 72-hour period is supported, trigger delay, repeat notification, suppression, `groupBy`) and the Always Free limits for alarms and Notifications | Oracle Monitoring documentation | The CR-16 design PR |
 | VO-14 | In-place boot-volume replacement keeps the instance, its IP, the alarm identifier, and the block volume, and its storage need (47 GB boot volumes, deletion of the old volume) | Oracle documentation, then a trial by the approver | The CR-16 design PR |
 | VO-15 | On minimal Ubuntu 24.04, `python3` is present and `git` and `curl` may be absent. The bootstrap installs `git` from apt before the first clone | `facts` on the platform operator VM and a minimal image check | PR 2 (`operator-facts`) |
 | VO-16 | An IAM policy can give the lab operator VM's dynamic group read-only access to limits and resource availability at tenancy level without any other tenancy-level right, and Cloud Shell can run the OCI scope from an anonymous clone with the approver's session | Oracle IAM documentation, then a Cloud Shell check | PR 5 (facts OCI scope) |
@@ -354,37 +354,96 @@ Other open inputs:
 
 Closed by this revision: VO-2 (the OCI CLI source and checksums) and VO-6 (the package list) are content of the `operator-profile` PR, bounded by ADR-005 decision 10. VO-5 (sudo configuration) is acceptance U-1.
 
-## 10. Decisions and questions
+## 10. Decisions, rejections, and open items
+
+Source: the approver's review "Decision handoff: CR-18: 2026-11-18" on PR #19. "ADR-011 d7" means ADR-011 decision 7.
 
 ### 10.1 Decided (approver, 2026-11-18)
 
 | # | Decision | Recorded in |
 |---|---|---|
-| Q1 | The amendment of ADR-001 decision 5 and the OCI credentials row is accepted. ADR-011 becomes Accepted when this PR is merged | ADR-011 decision 7 |
-| Q2 | Dry run by default, and `--apply` to actually execute changes (section 4 rule 1) | OP-3, ADR-011 decision 2 |
-| New | The operator may use sudo to install packages (this replaces "no admin privileges" for that one purpose) | OP-1, OP-11, ADR-011 decisions 1 and 10 |
-| Q6 | Package installation, including the OCI CLI, is triggered by one dedicated script that sets up the operator workspace | OP-11, section 5.4 |
+| Q1 | The accepted ADR-001 amendment applies to the revised wording: no OCI credentials and no T2 or T3 on Z1 or Z2; operator machines may hold the credentials defined in ADR-011 | ADR-011 d7, ADR-001 header and section 4 |
+| Q2 | Dry run by default and `--apply` to execute (answered earlier, unchanged) | OP-3, ADR-011 d2, section 4 rule 1 |
+| Q3 | OCI reads run on the lab operator VM with a read-only instance principal (dynamic group by compartment and tag, created by the bootstrap stack, read-only access to tenancy limits and resource availability per R5). No OCI credential is stored or typed on any operator machine. Gate 0 and pre-CR-16 OCI facts run in Cloud Shell under the approver's session. Conditional on VO-1, VO-10, VO-16 | ADR-011 d4, OP-5, section 6 |
+| Q4 | T2: fine-grained token of the personal account, two repositories, Administration and Environments read/write, Metadata read (no Contents, Pull requests, Workflows, or Secrets write), 1-day expiry, read with `getpass`, in the `github-setup` process, apply runs only, revoked in the browser after each run, platform operator VM only. Conditional on VO-3, VO-4 | ADR-011 d4, section 6 |
+| Q5 | Superseded by the lab operator VM: no operator login on the lab VM | ADR-011 d8, OP-8 removed |
+| Q7 | Order: `operator-lib`, `operator-facts` (host scope), `operator-profile`, `github-setup` with the facts GitHub scope, facts OCI scope (replaces `oci-audit`, usable in Cloud Shell before CR-16), `acceptance`, `operator-finish`. The host-separation test runs after the first profile apply and before the first credential on each machine | ADR-011 d9 and d17, OP-9, implementation plan |
+| Q8 | Implementation PRs that do not need OCI start after this design merges. Scripts that need the lab operator VM wait for CR-16 to be merged and applied | ADR-011 d17, implementation plan |
+| Q9 | Sudo asks for the password, with `timestamp_timeout=0`, on both operator machines. No `NOPASSWD` rule | ADR-011 d10, OP-11, sections 3.2 and 5.5 |
+| Q10 | Operators run on dedicated machines separated from the AI hosts. Platform: a human-provided remote machine reached over SSH with internet access. Lab: an operator VM on OCI, part of the lab, separate from the lab VM, reached over SSH by the operator of future AI projects built in the lab | ADR-011 d1, OP-1, section 3 |
+| Q11 | The lab operator VM is a lightweight x86 machine within the OCI Always Free tier | ADR-011 d1, sections 3.1 and 7.1 |
+| Q13 | The resource constraints of the operator machines are a design input for every operator script written by the AI | ADR-011 d11, section 4 rule 11, OP-10 |
+| Q14 | The operator machines are always available. Claude Code assumes this and never probes them (revised) | ADR-011 d11, section 4 rule 12 |
+| Q16 | The platform operator VM runs the same OS as the OCI operator VM (Ubuntu). Fact: it is x86-64 and runs minimal Ubuntu 24.04 | ADR-011 d1, section 3.1, ADR-005 d10 |
+| Q17 | The lab operator VM is rebuilt when it is removed (for example by idle reclamation) | ADR-011 d14, section 7.1 |
+| Q18 | Removal of the lab operator VM is detected by an OCI Monitoring absence alarm. A scheduled GitHub workflow is not pursued | ADR-011 d15, section 7.3 |
+| Q19 | The absence alarm is used for all VMs running on OCI | ADR-011 d15, section 7.3 |
+| Q20 | One absence alarm per instance, generated by the lab stack for every instance it defines and enforced by a plan allowlist rule that rejects an instance without an alarm. No compartment-wide alarm | ADR-011 d15, section 7.3, L-2 |
+| Q21 | Access from the Windows laptop to the lab VM and the lab operator VM is direct SSH with the OS-bundled OpenSSH, through `~/.ssh/config` entries from a runbook template (one entry and one dedicated key per VM). No PowerShell script. CHG-001 stays in force (revised) | ADR-011 d16, section 5.8, W-1 |
+| Q22 | Normal access to the lab operator VM is direct SSH to its public IP with NSG ingress from the corporate egress only. No Bastion (revised) | ADR-011 d16, section 7.1 |
+| Q23 | Break-glass for the lab VM and the lab operator VM is a rebuild through the lab stack | ADR-011 d14, sections 5.9 and 7.2, W-2 |
+| Q24 | Break-glass rebuilds replace the boot volume in place on both OCI VMs. An instance is terminated and recreated only when it is already gone. D5 stays at about 50 GB or less to keep room for the temporary second boot volume within the 200 GB Always Free block storage (more only if VO-14 shows 47 GB boot volumes or deletion of the old boot volume during replacement) | ADR-011 d14, section 7.2 |
+| Q25 | The existing operator user on Z1 is retired once the platform operator VM works | ADR-011 d1, section 3.2 |
+| Q26 | CR-18 sets the requirements for the lab operator VM, the OCI alarms, and the rebuilds. CR-16 and ADR-004 build them in a new design PR. ADR-008 carries the project-side operator contract | ADR-011 d17, sections 1 and 7 |
+| Q28 | Placement: `setup`, the operator profile, and `facts` (host scope) on both machines. `github-setup` and `facts` (GitHub scope) on the platform operator VM, with the GitHub scope also allowed on the lab operator VM. `facts` (OCI scope) and `acceptance` on the lab operator VM, and `facts` (OCI scope) in Cloud Shell before it exists. `acceptance` reaches the lab VM with a dedicated SSH key over private IPs inside the VCN | ADR-011 d13, section 5.6 |
+| Q29 | Operator scripts and the profile run from release tags only. The commit check requires `HEAD` to equal a release tag's commit contained in `origin/main`. Tags are created by the approver only (enforced by R3) | ADR-011 d3, section 4 rule 4, S-3 |
+| Q30 | Everything durable on the lab VM lives on `/srv/work` or in GitHub, so a rebuild loses only the boot volume. The approver re-enters T1 after a lab VM rebuild | ADR-011 d14, section 7.2, ADR-001 |
+| Q31 | D4 is aligned with Q22 to Q24 for both OCI VMs: SSH allowlist for normal access, rebuild as break-glass, no Bastion (recorded in the CR-16 design PR) | ADR-011 d16, section 7.2 |
+| Q32 | The reserved public IP goes to the lab operator VM and the lab VM uses an ephemeral IP. Conditional on VO-12 | ADR-011 d16, section 7.1 |
+| Q33 | The lab operator VM is disposable: no block volume, no volume backups, nothing durable | ADR-011 d14, section 7.1 |
+| Q34 | After an alarm, a stopped VM is started. It is rebuilt only when it was terminated. Conditional on VO-11 | ADR-011 d14, section 7.4 |
+| Q35 | Alarm parameters for all OCI VMs: 72-hour absence detection period, repeat notification every 12 hours while firing, trigger delay of 15 to 30 minutes (longer than a reboot), `groupBy` in the query, suppression windows for planned stops and rebuilds set by the approver | ADR-011 d15, section 7.3 |
+| Q36 | Recovery after an alarm: the lab operator VM per Q17 and Q34, the lab VM per ADR-006 and ADR-007, Q23 and Q24 | ADR-011 d14, section 7.4 |
+| Q37 | A simple `setup` script (`scripts/operator/setup`, Bash) triggers the runbook commands: install `ansible-core` from apt, run the operator profile in check mode by default, and apply it with `--apply`. It follows the operator script contract. Cloud-init on the lab operator VM calls the same script with `--apply`. Sudo is allowed only in `setup` and in `facts --privileged` (R4) | ADR-011 d10, OP-11, section 5.4 |
+| Q38 | Design principle (reading confirmed): facts are gathered by scripts that run on both operator machines (host facts on the host they describe, OCI facts on the lab operator VM). Sudo is used only where a fact absolutely requires it | ADR-011 d12, section 5.1 |
+| Q39 | Design principle: fact-collection scripts may use API tokens to connect to other environments (for example OCI or GitHub), with read-only access only | ADR-011 d12, sections 4 rule 10 and 6 |
+| R1 | The operator machines are configured by an Ansible `operator` profile (`ansible/operator.yml`: hardening, sudoers with `timestamp_timeout=0`, firewall with a timer-based revert role, apt packages, tools through `scripts/toolchain`, OCI CLI in a hash-locked venv `toolchain/python/operator.lock`), triggered by `setup`. A pre-task refuses a real run unless the explicit apply variable is set. The first run from the provider's initial admin account creates the operator user. Locking that account's SSH access is a separate tagged play. Privileged steps outside `setup` and `facts` exist only as Ansible tasks with `become`. Conditional on VO-7 | ADR-011 d10, section 5.5, ADR-005 d10 |
+| R2 | Operator scripts other than `setup` are Python standard library. The OCI CLI is called as a subprocess with argument arrays. GitHub calls use `urllib` through the `pr-contract` API client, so tokens never leave the script process and `gh` is not needed. Gate rules: no `shell=True`, `os.system`, `eval`, or `exec`; subprocesses limited to `oci`, `ssh`, `git`, and the allowlisted privileged commands of `facts` | ADR-011 d11, section 4 rules 5 and 9, S-11 |
+| R3 | A tag ruleset restricts creation, update, and deletion of `v*` tags to the approver's account, so Q29 is enforced. Verified by a negative test from the machine account. Applied by the approver in the repository settings | ADR-011 d3, U-4, RR-OP-28 |
+| R4 | One `facts` script for both machines (host scope; `--privileged` runs a fixed list of read-only root commands; `--write-allowlist`; optional bandwidth; egress as a salted local hash). Off-host facts stay manual lines | ADR-011 d12, section 5.1, F-1 |
+| R5 | `facts --scope oci` on the lab operator VM with the instance principal reports limits, usage, alarms per instance, and IP retention. `oci-audit` is merged into it. Before the VM exists it runs in Cloud Shell from an anonymous clone at a release tag, with `list`, `get`, and `inspect` verbs only. Fallback: the approver reads the values in the Console | ADR-011 d12, section 5.1, F-2 |
+| R6 | Read-only credentials for fact collection: `facts --scope github` uses T3 (fine-grained, two repositories, Administration read, Environments read, Metadata read, 1-day expiry, `getpass`, in-process, revoked after each run), usable on either machine. `github-setup` dry runs use T3 and its apply uses T2. Read-only is enforced in code (GET-only client). Any further environment gets its own read-only credential and an ADR-001 matrix row. T1 never goes on an operator machine, and T2 is never used for fact collection | ADR-011 d4 and d12, sections 4 rule 10 and 6, F-3 |
 
-Correction of 2026-11-18: I first read "no change to the current approach" for Q2 as keeping my recommendation (a usage error when no
-mode flag is given). The approver then stated the decision: dry run by default and `--apply` to execute changes. The rows above
-reflect the decision.
+History: the earlier decisions of 2026-11-18 (Q1, Q2, and "the operator may use sudo to install packages") stand as refined above: the sudo decision became Q9 and Q37, and the earlier reading that mapped an answer labelled Q3 to Q6 is replaced by the handoff.
 
-How I read the other answers: the message gave Q1, Q2, and a third answer labelled Q3 that is about package installation, so I
-recorded it as the answer to Q6 (the OCI CLI install route). Q3 as written in this design (the OCI authentication method) is
-therefore still open. The sudo sentence came with Q2 but does not concern the dry-run question, so I recorded it as its own
-decision. If any of this is read wrongly, the approver corrects it and the rows change.
+### 10.2 Withdrawn and rejected
 
-### 10.2 Open
+| Item | Outcome | Replaced by |
+|---|---|---|
+| Q6, Q15, Q27: dedicated `init` and `setup` scripts that perform the host configuration themselves, with sudo allowed in both | Withdrawn by the approver | Q37 and R1. The earlier reading that the answer labelled "Q3" on 2026-11-18 meant Q6 stays on record |
+| Q12: 50 GB of block storage kept as a spare for a future host | Withdrawn by the approver | No storage is reserved for a future host |
+| Q21 as first decided: a PowerShell access script on Z0 | Replaced | Direct SSH (Q21 revised): no script delivery, no execution-policy exception, no extra CI check |
+| Bastion as the normal access path to the lab operator VM (access paths P2 and P3, `lab-connect`, a Bastion-session credential on the platform operator VM or Z0) | Omitted by the approver | Direct SSH with an NSG allowlist (Q22) |
+| Bastion as break-glass and the break-glass ladder (Bastion session, allowlist fix, serial console in maintenance mode) | Replaced | Rebuild through the lab stack (Q23) |
+| An OCI session token or API key on the platform operator VM (the Q3 alternatives) | Replaced | A read-only instance principal on the lab operator VM and Cloud Shell, which need no stored or typed credential |
+| `origin/main` `HEAD` as the run source | Replaced | Release tags (Q29), enforced by R3 |
+| Bash with `jq` for operator scripts and `gh` with an environment token for GitHub calls | Replaced | R2 |
+| R4 as first proposed: a facts script without any sudo, with root-only facts as manual lines | Superseded | Q38 and R4 as revised |
+| `oci-audit` as a separate script | Merged | `facts --scope oci` (R5) |
 
-| # | Question | Recommendation | Status |
-|---|---|---|---|
-| Q3 | OCI authentication for the operator | A short-lived session token (VO-1). An API key for a read-only user would need a bootstrap IAM change | Not decided |
-| Q4 | Handling of T2 | Prompt only, shortest practical expiry, revoked after use, separate from T1 | Not decided |
-| Q5 | Operator login on the lab VM | Optional, off by default, no sudo, no credentials (OP-8). The sudo decision above covers the workspace only | Not decided |
-| Q7 | PR order and the user-only actions in the plan | As in implementation-plan.md (updated: `operator-setup` is PR 2) | Not decided |
-| Q8 | Start the implementation after CR-16 merges? | Yes for the acceptance runner. The library, the setup script, the audit script, and the GitHub script do not depend on CR-16 | Not decided |
-| Q9 | Scope of the operator's sudo | Sudo asks for the operator's password, with no `NOPASSWD` rule, and only `setup` calls it. The alternative, a sudoers rule limited to one command, only helps if that command is a root-owned file the operator cannot edit, which a script in the operator's clone is not | Not decided |
+### 10.3 Open items and the PR each one blocks
 
-### 10.3 User-only actions (summary)
+No design question is open for the approver. What remains are verifications and inputs, each tied to the PR that needs it (details in section 9).
 
-Run the separation test U-1 (now including the operator's sudo setting); choose the OCI authentication and T2 handling; run `setup` as the operator; create and revoke T2 per run; review operator scripts, `setup` first.
+| Item | Blocks |
+|---|---|
+| Platform operator VM facts beyond architecture and release (`facts`, host scope, with `--privileged` where required, and its manual lines) | PR 3 `operator-profile` |
+| VO-15 (`python3` present, `git` and `curl` may be absent on minimal Ubuntu 24.04) | PR 2 `operator-facts` |
+| VO-3, VO-4, VO-17 (T2 and T3 permissions per API call, the token type for personal-account repositories, which facts need no token) | PR 4 `github-setup` |
+| VO-1, VO-16 (the instance principal covers the OCI scope; tenancy-level read-only policy; Cloud Shell run from an anonymous clone) | PR 5 `facts-oci` |
+| VO-7 (the OCI CLI, the monitoring plugin, `ansible-core`, and the profile fit in 1 GB) | The CR-16 design PR |
+| VO-8 to VO-14 (micro AD and image, image match, dynamic group on a recreated instance, idle reclamation, IPv4 limits and IP retention, alarm behavior and limits, in-place boot-volume replacement) | The CR-16 design PR |
+| The CR-16 inputs listed in section 9 | The CR-16 design PR |
+
+### 10.4 Readings and gaps noted while applying the handoff (not decisions)
+
+- **"Keep PC-8, the extended gate patterns, the dry-run limitation statements, and the optional egress allowlist":** these did not exist in the earlier text. They are written as the "Kept statements" of section 4, with the inbound allowlist read as optional. The approver may correct the reading.
+- **VO numbering:** VO-12 is the public IPv4 limits and IP retention (so Q32 stays conditional on VO-12), and VO-13 is alarm behavior and the Always Free limits for alarms and Notifications. This is the approver's answer in the session of 2026-11-18, because the handoff's list order and Q32 disagreed.
+- **VO-2, VO-5, VO-6** of the earlier design are not in the handoff's open list and are closed: VO-2 and VO-6 are content of the `operator-profile` PR, and VO-5 is acceptance U-1.
+- **D5:** the baseline proposes about 100 GB for D5, and Q24 says it stays at about 50 GB or less. It is recorded as a reduction that the CR-16 design PR must carry.
+- **Operator sudo password on the lab operator VM:** R1 sets it interactively at the first profile run from the provider's initial admin account, but cloud-init runs `setup --apply` as root on that VM, with no interactive run. How the password is set there is not stated. It is for the approver to decide in the `operator-profile` PR or the CR-16 design PR. Until then `facts --privileged` and a manual `setup --apply` cannot use sudo on that machine.
+- **72-hour absence detection (Q35):** whether the Monitoring service supports an absence detection period of that length is checked in VO-13.
+
+### 10.5 User-only actions (summary)
+
+See the implementation plan, section 4. In short: apply the tag ruleset (R3) and create release tags; run `facts`, `setup`, the lock play, and U-1 on each operator machine; create and revoke T2 and T3 per run; provide the stack variables and apply the lab stack for rebuilds; retire the Z1 operator user; review operator scripts, `setup`, the profile, and `facts` with extra care.
