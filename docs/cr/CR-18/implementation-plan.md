@@ -27,7 +27,7 @@ PRs 3 and 4 are independent of each other and may be reviewed in parallel. PR 5 
 
 ## 3. Work detail by PR
 
-**PR 1: operator-lib.** A shell library sourced by every operator script. It parses `--dry-run` and `--apply`, prints the commit and refuses a dirty tree or a commit outside `origin/main`, provides the confirmation prompt, the sanitiser, and the exit-code convention. A gate check rejects `eval`, Terraform calls, and OCI write calls under `scripts/operator/`. The runbook covers the one-time clone setup, the run flow, and T2 handling.
+**PR 1: operator-lib.** A shell library sourced by every operator script. It parses `--dry-run` and `--apply` (dry run is the default), prints the commit and refuses a dirty tree or a commit outside `origin/main`, provides the confirmation prompt, the sanitiser, and the exit-code convention. A gate check rejects `eval`, Terraform calls, and OCI write calls under `scripts/operator/`. The runbook covers the one-time clone setup, the run flow, and T2 handling.
 
 **PR 2: operator-setup.** The one script that may call sudo. It installs a fixed list of Debian packages and, from pinned sources with checksums for both architectures, the tools that are not packages (the OCI CLI among them). A dry run lists everything and installs nothing. The PR shows the approver the exact package list and sources.
 

@@ -30,7 +30,7 @@ the OCI baseline (CR-16), and a separate host for the operator.
 |---|---|---|
 | OP-1 | One operator user on the platform workspace (Z1), without general admin rights, with its own home (mode 700), its own clone of the repository, and sudo only for package installation (OP-11). It already exists. | Credentials the AI user cannot read are the point of the tier. |
 | OP-2 | Scripts live in `scripts/operator/`, reach `main` through a PR, and run only from the operator's own clone at a commit contained in `origin/main`. | The AI can edit its own working tree. A merged commit is what the approver reviewed. |
-| OP-3 | Every operator script takes `--dry-run` or `--apply`. A dry run makes no change and no write call, and prints each action it would take. The rule covers operator scripts only. `CLAUDE.md` is unchanged. | The approver's requirement. Nothing else in the repository changes. |
+| OP-3 | Every operator script runs as a dry run by default, and `--apply` is required to execute changes (the approver's decision of 2026-11-18). `--dry-run` is also accepted explicitly. A dry run makes no change and no write call, and prints each action it would take. The rule covers operator scripts only. `CLAUDE.md` is unchanged. | The approver's requirement. Nothing else in the repository changes. |
 | OP-4 | Credentials are prompted for or short-lived, and never stored in the repository, a file the AI user can read, or shell history. | Same handling as T1 in ADR-001 section 4. |
 | OP-5 | OCI: a short-lived session token preferred over an API key (VO-1). GitHub configuration: a separate token T2, entered at the prompt, shortest practical expiry, revoked after use. | The administrator user has no API keys today (CR-16 inputs). T1 has no admin rights and stays unchanged. |
 | OP-6 | Operator scripts never run Terraform and never create, change, or delete OCI resources. They may read OCI. | An operator script must not become a second deployment path (ADR-002). |
@@ -63,7 +63,7 @@ and runs it again with `--apply`. Credentials are entered at a prompt during the
 
 | # | Rule | Reason |
 |---|---|---|
-| 1 | Modes: `--dry-run` or `--apply` is required. A script offers both, and with neither flag it prints usage and exits with a usage error (open question Q2) | The approver's requirement. A script never changes anything by accident |
+| 1 | Modes: dry run is the default, and `--apply` executes the changes. A script accepts `--dry-run` explicitly too, and rejects both flags together with a usage error | The approver's decision of 2026-11-18. A script never changes anything by accident |
 | 2 | A dry run makes no write call. A read-only script lists the calls it would send. A changing script shows the current state against the wanted state | The approver can see the effect before it happens |
 | 3 | Apply mode asks for confirmation before any step that deletes or overwrites | The last check before a change |
 | 4 | Commit check: the script prints the repository commit, and refuses to run with local changes or a commit that is not contained in `origin/main` | OP-2 |
@@ -175,11 +175,15 @@ Documentation checks or read-only inspection. Anything that creates credentials 
 | # | Decision | Recorded in |
 |---|---|---|
 | Q1 | The amendment of ADR-001 decision 5 and the OCI credentials row is accepted. ADR-011 becomes Accepted when this PR is merged | ADR-011 decision 7 |
-| Q2 | No change to the current approach: with neither `--dry-run` nor `--apply`, a script stops with a usage error (section 4 rule 1) | Section 4 |
+| Q2 | Dry run by default, and `--apply` to actually execute changes (section 4 rule 1) | OP-3, ADR-011 decision 2 |
 | New | The operator may use sudo to install packages (this replaces "no admin privileges" for that one purpose) | OP-1, OP-11, ADR-011 decisions 1 and 10 |
 | Q6 | Package installation, including the OCI CLI, is triggered by one dedicated script that sets up the operator workspace | OP-11, section 5.4 |
 
-How I read the approver's answers: the message gave Q1, Q2, and a third answer labelled Q3 that is about package installation, so I
+Correction of 2026-11-18: I first read "no change to the current approach" for Q2 as keeping my recommendation (a usage error when no
+mode flag is given). The approver then stated the decision: dry run by default and `--apply` to execute changes. The rows above
+reflect the decision.
+
+How I read the other answers: the message gave Q1, Q2, and a third answer labelled Q3 that is about package installation, so I
 recorded it as the answer to Q6 (the OCI CLI install route). Q3 as written in this design (the OCI authentication method) is
 therefore still open. The sudo sentence came with Q2 but does not concern the dry-run question, so I recorded it as its own
 decision. If any of this is read wrongly, the approver corrects it and the rows change.

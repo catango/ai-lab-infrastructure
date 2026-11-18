@@ -16,7 +16,7 @@ sizes, never identifiers, addresses, or names.
 
 | ID | Criterion | Evidence |
 |---|---|---|
-| S-1 | Every script under `scripts/operator/` accepts `--dry-run` and `--apply`, and exits with a usage error when it gets neither or both. | Test enumerating the scripts, run in CI (`gate-tests`) |
+| S-1 | Every script under `scripts/operator/` accepts `--dry-run` and `--apply`, runs as a dry run when it gets neither (it changes nothing), and exits with a usage error when it gets both. | Test enumerating the scripts, run in CI (`gate-tests`) |
 | S-2 | A dry run makes no write call: with a stub CLI that records calls, a dry run records none that change state. | Tests with stub CLIs |
 | S-3 | A script refuses to run with local changes in the clone, and with a commit that is not contained in `origin/main`. | Tests in a temporary repository |
 | S-4 | A second `--apply` run changes nothing. | Tests with stub state |
