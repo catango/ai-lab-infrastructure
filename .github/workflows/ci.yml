@@ -43,6 +43,22 @@ jobs:
         shell: bash
         run: ./scripts/quality-gate.sh --strict
 
+  # The operator tests again, under the memory and CPU limits of the smallest operator machine (CR-18 acceptance S-10).
+  # The limits are read from scripts/operator/machine-profiles.toml. Needs only the runner's Python and git.
+  operator-limits:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Operator tests under the strictest machine profile
+        shell: bash
+        run: bash tests/operator/limited.sh
+
   toolchain:
     name: toolchain-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}

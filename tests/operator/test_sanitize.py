@@ -39,9 +39,9 @@ class Scrub(unittest.TestCase):
 
 class SummaryValues(unittest.TestCase):
     def test_classified_values_pass(self):
-        cases = {True: "yes", False: "no", 0: "0", 12: "12", "yes": "yes", "no": "no", "unknown": "unknown",
-                 "47 GB": "47 GB", "1024 MB": "1024 MB", "3": "3"}
-        for value, expected in cases.items():
+        cases = [(True, "yes"), (False, "no"), (0, "0"), (12, "12"), ("yes", "yes"), ("no", "no"), ("unknown", "unknown"),
+                 ("47 GB", "47 GB"), ("1024 MB", "1024 MB"), ("3", "3")]
+        for value, expected in cases:
             with self.subTest(value=value):
                 self.assertEqual(sanitize.summary_value(value), expected)
 
