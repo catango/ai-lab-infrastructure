@@ -30,9 +30,9 @@
 |---|---|---|---|---|
 | Windows client | Corporate laptop | Claude Desktop (chat with read-only GitHub Integration, Code tab), browser, OpenSSH keys and `~/.ssh/config` with `ProxyJump` | ADR-001 | Designed |
 | Platform workspace | Corporate-assigned, x86-64 Debian 13, ephemeral home | Builds platform repos; `builder` toolchain profile; restore by script | ADR-001 (D15, D16) | Designed |
-| OCI lab VM | `uk-london-1`, A1 2 OCPU / 12 GB, Ubuntu 24.04 ARM64 | Engineering lab for application projects; `lab` toolchain profile | ADR-001; ADR-004 | Pending design (ADR-004) |
-| OCI bootstrap stack (Tier 0) | Resource Manager, started by you | Compartment, quotas, budget, IAM, dynamic group, Vault secret, federation trust | ADR-002; ADR-004 | Pending design (ADR-004) |
-| OCI lab stack | Resource Manager | VCN, subnet, NSG, A1 instance, block volume, backup bucket | ADR-002; ADR-004 | Pending design (ADR-004) |
+| OCI lab VM | `uk-london-1`, A1 2 OCPU / 12 GB, Ubuntu 24.04 ARM64 | Engineering lab for application projects; `lab` toolchain profile | ADR-001; ADR-004 | Proposed (ADR-004, CR-16) |
+| OCI bootstrap stack (Tier 0) | Resource Manager, started by you | Compartment, quotas, budget, IAM, dynamic group, Vault secret, federation trust | ADR-002; ADR-004 | Proposed (ADR-004, CR-16) |
+| OCI lab stack | Resource Manager | VCN, subnet, NSG, A1 instance, block volume, backup bucket | ADR-002; ADR-004 | Proposed (ADR-004, CR-16) |
 | Infrastructure pipeline | GitHub Actions (public infra repo) → OIDC → Resource Manager | Plan and apply with two human gates; private plans and state | ADR-002 | Designed, conditional on S2 |
 | Toolchain manifest + Ansible roles | `ai-lab-infrastructure` | Pinned, verified tools for `builder` and `lab` profiles | ADR-001 (D15); ADR-005 | Pending design (ADR-005) |
 | Workspace restore | `ai-lab-infrastructure/workspace/` | Rebuild the workspace after a home reset in about 15 minutes | ADR-001 (D16) | Designed |
@@ -53,10 +53,10 @@
 | CHG-003 | PR-centric workflow; no automatic Claude responses | Accepted | ADR-003 |
 | D1 | Claude Code via Claude Desktop SSH sessions; CLI in `tmux` as fallback | Accepted | ADR-001 |
 | D2 | Terraform via OCI Resource Manager (HCL kept OpenTofu-compatible) | Accepted | ADR-002 |
-| D3 | Ansible runs locally on each host | **Proposed** | ADR-005 |
-| D4 | SSH from the last corporate hop's egress IP only; key-only; Bastion as break-glass | **Proposed**, pending O-9 | ADR-004 |
-| D5 | 50 GB boot + ~100 GB block volume for `/srv/work` | **Proposed** | ADR-004 |
-| D6 | Always-Free-only account + compartment quotas + plan allowlist + budget alert | **Proposed** | ADR-004 |
+| D3 | Ansible runs locally on each host | Accepted | ADR-005 |
+| D4 | SSH from the last corporate hop's egress IP only; key-only; Bastion as break-glass | Accepted (the address itself, O-9, is a stack variable set before the first lab apply) | ADR-004 |
+| D5 | 50 GB boot + ~100 GB block volume for `/srv/work` | Accepted | ADR-004 |
+| D6 | Always-Free-only account + compartment quotas + plan allowlist + budget alert | Accepted | ADR-004 |
 | D7 | Level-3 rebuild by boot-volume replacement | Pending design | ADR-006 |
 | D8/D13 | Machine account for all AI GitHub access; you only approve and merge | Accepted | ADR-001 |
 | D9 | Approval = your approving review + merge; design PR merge commit as evidence | Accepted | ADR-003 |
