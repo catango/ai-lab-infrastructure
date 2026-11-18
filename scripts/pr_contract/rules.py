@@ -1,4 +1,4 @@
-"""Rules PC-1 to PC-7 (ADR-003 section 6, design 6.2). Messages are fixed text plus sanitized paths."""
+"""Rules PC-1 to PC-8 (ADR-003 section 6, design 6.2; PC-8 from CR-21). Messages are fixed text plus sanitized paths."""
 import re
 from dataclasses import dataclass
 
@@ -18,13 +18,17 @@ BRANCHES = (
 PROTECTED = re.compile(r"docs/cr/[^/]+/(design|acceptance-criteria)\.md")
 WORKFLOW_PREFIXES = (".github/workflows/", ".github/actions/")
 JUSTIFICATION = "Workflow change justification"
+OPERATOR_REVIEW = "Operator script review"
+# The operator set of PC-8 (CR-21 design section 1): matched by exact path or directory prefix, case-sensitive.
+OPERATOR_PREFIXES = ("scripts/operator/", "ansible/roles/operator_")
+OPERATOR_PATHS = frozenset({"ansible/operator.yml", "toolchain/python/operator.lock"})
 
 MANIFEST_NAMES = frozenset({
     "package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "requirements.txt",
     "Pipfile", "Pipfile.lock", "pyproject.toml", "poetry.lock", "uv.lock", "go.mod", "go.sum", "Cargo.toml",
     "Cargo.lock", "Gemfile", "Gemfile.lock", "composer.json", "composer.lock", ".terraform.lock.hcl",
 })
-MANIFEST_PATHS = frozenset({"toolchain/python/builder.lock"})
+MANIFEST_PATHS = frozenset({"toolchain/python/builder.lock", "toolchain/python/operator.lock"})
 _REQUIREMENTS = re.compile(r"requirements[A-Za-z0-9_.-]*\.txt")
 _USES_LINE = re.compile(r"\s*(?:-\s+)?uses:\s+\S+(?:\s+#.*)?")
 MAX_PATCH_LINE = 500
@@ -62,6 +66,10 @@ def template_headings(kind, templates_dir):
     except OSError:
         raise InputError("PR template not found") from None
     return list(markdown.parse(text).sections)
+
+
+def is_operator_path(path):
+    return path in OPERATOR_PATHS or path.startswith(OPERATOR_PREFIXES)
 
 
 def touched(files):
@@ -124,6 +132,10 @@ def evaluate(pr, client, templates_dir):
             justification = parsed.sections.get(JUSTIFICATION, "") if parsed is not None else ""
             if not markdown.has_content(justification):
                 violations.append(Violation("PC-6", f"workflow change without a non-empty '{JUSTIFICATION}' section"))
+        if any(is_operator_path(p) for p in touched(files)):
+            review = parsed.sections.get(OPERATOR_REVIEW, "") if parsed is not None else ""
+            if not markdown.has_content(review):
+                violations.append(Violation("PC-8", f"operator change without a non-empty '{OPERATOR_REVIEW}' section"))
     return violations
 
 

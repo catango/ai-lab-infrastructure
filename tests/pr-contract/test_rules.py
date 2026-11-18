@@ -227,6 +227,87 @@ class PC6(unittest.TestCase):
         self.assertNotIn("PC-6", ids(evaluate(make_pr(), files=[fc(".github/PULL_REQUEST_TEMPLATE/x.md")])))
 
 
+class PC8(unittest.TestCase):
+    SECTION = "Operator script review"
+    PATHS = ("scripts/operator/lib/modes.py", "scripts/operator/setup", "scripts/operator/machine-profiles.toml",
+             "ansible/operator.yml", "ansible/roles/operator_hardening/tasks/main.yml",
+             "toolchain/python/operator.lock")
+    LOOKALIKES = ("scripts/operators/x.py", "scripts/operator", "scripts/Operator/x.py", "docs/scripts/operator/x.py",
+                  "ansible/operator.yaml", "ansible/roles/operator/tasks/main.yml", "ansible/roles/builder_x/tasks/main.yml",
+                  "ansible/builder.yml", "toolchain/python/builder.lock", "docs/operations/operator.md")
+
+    def pr(self, kind="implementation", **kw):
+        top = helpers.IMPL_TOP if kind == "implementation" else ""
+        return make_pr(kind, body=body(kind, top=top, **kw))
+
+    def test_operator_change_without_the_section_fails(self):
+        for path in self.PATHS:
+            with self.subTest(path=path):
+                violations = evaluate(self.pr(), files=[fc(path)])
+                self.assertIn("PC-8", ids(violations), text(violations))
+
+    def test_every_pr_type_needs_the_section(self):
+        for kind in ("implementation", "change", "infra", "toolchain"):
+            with self.subTest(kind=kind):
+                self.assertIn("PC-8", ids(evaluate(self.pr(kind), files=[fc("scripts/operator/setup")])))
+
+    def test_empty_or_comment_only_section_fails(self):
+        for content in ("", "<!-- nothing -->", "   "):
+            with self.subTest(content=content):
+                pr = self.pr(extra=f"## {self.SECTION}\n{content}")
+                self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+
+    def test_section_inside_a_fence_does_not_count(self):
+        pr = self.pr(extra=f"```\n## {self.SECTION}\ntext\n```")
+        self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+
+    def test_non_empty_section_passes(self):
+        for path in self.PATHS:
+            with self.subTest(path=path):
+                pr = self.pr(extra=f"## {self.SECTION}\nCredentials: none. Commands: none. Modes: dry run default.")
+                self.assertEqual(evaluate(pr, files=[fc(path)]), [])
+
+    def test_no_operator_change_needs_nothing(self):
+        for path in self.LOOKALIKES:
+            with self.subTest(path=path):
+                self.assertNotIn("PC-8", ids(evaluate(self.pr(), files=[fc(path)])))
+        pr = self.pr(extra=f"## {self.SECTION}\nPresent but not needed.")
+        self.assertEqual(evaluate(pr, files=[fc("docs/README.md")]), [])
+
+    def test_rename_source_counts(self):
+        renamed = fc("scripts/other/setup", "renamed", previous="scripts/operator/setup")
+        self.assertIn("PC-8", ids(evaluate(self.pr(), files=[renamed])))
+
+    def test_design_pr_is_checked_too(self):
+        pr = make_pr("design")
+        self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+
+    def test_message_names_the_rule_and_section_and_no_pr_text(self):
+        canary = "CANARY-PR-TEXT-5f3a"
+        pr = self.pr(extra=f"## {self.SECTION}\n", sections={"Summary": canary})
+        violations = [v for v in evaluate(pr, files=[fc("scripts/operator/setup")]) if v.rule == "PC-8"]
+        self.assertEqual(len(violations), 1)
+        self.assertIn(self.SECTION, violations[0].message)
+        self.assertNotIn(canary, text(violations))
+        self.assertNotIn("scripts/operator", text(violations))
+
+    def test_section_is_not_a_required_template_heading(self):
+        for kind in helpers.TYPES:
+            with self.subTest(kind=kind):
+                self.assertNotIn(self.SECTION, helpers.headings(kind))
+
+    def test_templates_carry_the_hint_except_design(self):
+        for kind in helpers.TYPES:
+            with self.subTest(kind=kind):
+                has = f'"{self.SECTION}" (PC-8)' in "\n".join(helpers.template_lines(kind))
+                self.assertEqual(has, kind != "design")
+
+    def test_a_template_body_still_passes_pc1_without_the_section(self):
+        for kind in ("change", "infra", "toolchain"):
+            with self.subTest(kind=kind):
+                self.assertEqual(evaluate(make_pr(kind), files=[fc("README.md")]), [])
+
+
 USES_PATCH = ("@@ -10,7 +10,7 @@ jobs:\n steps:\n"
               "-      - uses: actions/checkout@" + "a" * 40 + " # v7.0.1\n"
               "+      - uses: actions/checkout@" + "b" * 40 + " # v7.0.2\n with:\n")
@@ -246,6 +327,15 @@ class PC7(unittest.TestCase):
         files = [fc("toolchain/python/builder.lock", patch="@@ -1 +1 @@\n-a\n+b\n"), fc("requirements.txt"),
                  fc("sub/requirements-dev.txt"), fc("package-lock.json"), fc("go.sum")]
         self.assertEqual(evaluate(bot_pr(), files=files), [])
+
+    def test_operator_lock_file_passes_and_is_exempt_from_pc8(self):
+        files = [fc("toolchain/python/operator.lock", patch="@@ -1 +1 @@\n-a\n+b\n")]
+        self.assertEqual(evaluate(bot_pr(), files=files), [])
+
+    def test_other_operator_paths_still_fail_pc7(self):
+        for path in ("scripts/operator/setup", "ansible/operator.yml", "ansible/roles/operator_x/tasks/main.yml"):
+            with self.subTest(path=path):
+                self.assertIn("PC-7", ids(evaluate(bot_pr(), files=[fc(path)])))
 
     def test_exemption_skips_pc1_to_pc3(self):
         self.assertEqual(evaluate(bot_pr(body=""), files=[fc("requirements.txt")]), [])
