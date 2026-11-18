@@ -1,5 +1,6 @@
 <!-- PR type: toolchain. Branch: toolchain/<slug>. Rule PC-1 (ADR-003) requires every section below, non-empty. -->
 <!-- Every download needs amd64 and arm64 entries with checksums. Never use curl | sh. -->
+<!-- If operator code changes (scripts/operator/, ansible/operator.yml, ansible/roles/operator_*, toolchain/python/operator.lock), add a section "Operator script review" (PC-8): credentials, commands, modes, calls, output, resources, release tag. No identifiers, addresses, or names. -->
 
 ## Summary
 <!-- Which tools change and why. -->

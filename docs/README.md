@@ -52,7 +52,7 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | Path | Purpose | Status |
 |---|---|---|
 | [scripts/quality-gate.sh](../scripts/quality-gate.sh) | Quality gate: the checks in `scripts/checks/` (same entry point locally and in CI) | Active |
-| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-7 (run from the base checkout in CI); PR body skeleton from a template | Active |
+| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-8 (run from the base checkout in CI); PR body skeleton from a template | Active |
 | [scripts/toolchain](../scripts/toolchain) | Install engine for the toolchain manifest: `check`, `list`, `install`, `verify` | Active |
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
 | [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |
