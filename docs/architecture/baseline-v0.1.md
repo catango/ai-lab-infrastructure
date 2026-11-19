@@ -89,6 +89,8 @@ Each stage starts only when its entry criteria are met. Work inside a stage foll
 | 6. First application project | A real small project end-to-end on the lab VM | Stage 5 done | Full Class 3 CR completed under ADR-003 |
 | 7. Resilience | `labctl` reset levels and rebuild, DR test, Scorecard, metrics review | Stage 6 done | Documented recovery test; metrics baseline recorded |
 
+**Postponed (2026-11-19, approver).** Stages 2 to 4 (OCI seed, Lab VM, Pipeline) are postponed, and with them the CR-16 design (issue #16, PR #17), because no Oracle Always Free resources are available. Stage 5 (software template) proceeds first, on the platform workspace; its entry criteria are unchanged (ADR-008/009/010 approved). Stage 6 needs the lab VM and waits for Stages 2 to 4, and so does Stage 7. Work that needs a lab VM or the lab operator VM, such as CR-18 PR 6 (`acceptance`), waits until OCI resources are available again. Nothing already decided changes.
+
 ## 7. Designs still to be written (each as a design PR)
 
 | ADR | Topic | Needed by stage |
