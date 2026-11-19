@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Platform operator VM: active. Lab operator VM, SSH templates, break-glass: **not written yet** (PR 7b, OCI work postponed) |
+| Status | Platform operator VM: active. Lab operator VM, SSH templates, break-glass: **not written yet** (PR 7b; the OCI work is postponed) |
 | Implements | ADR-011 (operator tier), CR-18 design sections 3, 5.7, 6 |
 | Performed by | The approver, as the operator user, in a plain SSH terminal. Claude Code never runs, reaches, or probes these machines |
 
@@ -226,7 +226,7 @@ firewall configuration under `/var/lib/operator` for a manual restore.
 
 ## 8. Lab operator VM
 
-> **Not written yet.** PR 7b (`operator-finish`) adds this section after the lab VM exists (OCI work postponed, baseline section 6).
+> **Not written yet.** PR 7b (`operator-finish`) adds this section after the lab VM exists (the OCI work is postponed by the approver).
 > Planned content: bootstrap by cloud-init running `setup --apply`, the first `facts` runs (host and OCI scope), U-1 for this
 > machine, and the instance principal.
 

@@ -26,16 +26,17 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | CR | Summary | Status |
 |---|---|---|
 | [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
-| [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). Not implemented; verifications open, each tied to the PR it blocks |
+| [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). PRs 1 to 5 merged (release v0.4.4); PR 7a (runbook and evidence table) in review. The lab operator VM, PR 6 (`acceptance`), and PR 7b wait for the OCI VMs, which are postponed (approver, 2026-11-19). Open until PR 7b merges |
 | [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section required for changes to operator code | Design in review |
 
 ## Operations
 
 | Document | Purpose | Status |
 |---|---|---|
-| [GitHub setup](operations/github-setup.md) | Stage 0 runbook: accounts, repositories, rulesets, token | Executed (Stage 0 complete) |
+| [Operator machines](operations/operator.md) | Runbook for the operator machines: platform operator VM, tokens T2 and T3, rollback | Platform operator VM sections active. Lab operator VM, `ssh` templates, and break-glass sections not written (PR 7b, OCI postponed) |
+| [GitHub setup](operations/github-setup.md) | Stage 0 runbook: accounts, repositories, rulesets, token; the scripted parts point at `github-setup`, the manual steps they replaced are in Appendix A | Executed (Stage 0 complete); shortened by CR-18 |
 | [Workspace restore](operations/workspace-restore.md) | Runbook: rebuild the workspace after a home reset, token T1, verification, reset test | Active |
-| [Gate 0 audit](operations/gate-0-audit.md) | Pre-architecture audit checklist for the OCI tenancy | Ready for execution |
+| [Gate 0 audit](operations/gate-0-audit.md) | Pre-architecture audit checklist for the OCI tenancy; the OCI part is `facts --scope oci`, the manual steps it replaced are in Appendix A | Ready for execution; shortened by CR-18 |
 
 ## Configuration and workflow files
 
@@ -57,6 +58,6 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
 | [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |
 | [workspace/](../workspace/) | `restore.sh`, `verify.sh`, repositories, user-level Claude Code configuration | Active |
-| `scripts/operator/machine-profiles.toml` | Architecture, OS, memory, CPU, disk, and bandwidth per operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Planned |
+| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, memory, CPU, disk, and bandwidth per operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture and OS only (its measured memory, CPU, and disk are not in the file yet); the lab operator VM entry holds design inputs and waits for the VM (OCI postponed) |
 | [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `toolchain-arm64`, `builder-profile`) and `pr-contract.yml` | Active |
 | [.github/dependabot.yml](../.github/dependabot.yml) | Weekly version updates for the pinned Actions and the Python lock | Active |
