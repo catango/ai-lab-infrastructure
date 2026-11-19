@@ -114,6 +114,7 @@ pr-checkpoint-show = 2048
 [regression]                           # section 10.4; placeholders until the baseline
 always_loaded_bytes_pct = 10
 output_bytes_pct = 25
+min_prs = { rate = 10, median = 5 }    # PRs needed before a rate or a median is not "indicative"
 ```
 
 A project raises one value in the seeded `.template/overrides.toml` (illustrative):
@@ -265,7 +266,7 @@ Owned template script, run **only on the user's request** in a session the user 
 | Command | Does | Network |
 |---|---|---|
 | `metrics static` | Tier A for the working tree; prints a compact table | None |
-| `metrics prs --last <n>` or `--prs <list>` | Tier B for merged PRs; counts and medians; refuses fewer than `min_prs` for a median and says "indicative" | `gh api` GET only (`forbidden-api` applies) |
+| `metrics prs --last <n>` or `--prs <list>` | Tier B for merged PRs; counts, medians, and rates; says "indicative" for a median over fewer than 5 PRs or a rate over fewer than 10 (`min_prs`) | `gh api` GET only (`forbidden-api` applies) |
 | `metrics snapshot --label <l> [--dir <path>]` | Writes `<dir>/<l>.toml` (default `docs/metrics/`) from the two above plus the optional `[usage.<pr>]` table (section 10.3); refuses to overwrite | As above |
 | `metrics compare <a> <b>` | Prints each value that crosses a `[regression]` threshold; exit 1 if any, 0 if none | None |
 
@@ -321,9 +322,9 @@ Stage 7 waits for the postponed Stages 2 to 4 (baseline section 6). The static b
 **What a regression is.**
 
 1. **Hard, in the gate:** any budget of section 4 exceeded, or any script output over its `[outputs]` value. Fails CI. Deterministic.
-2. **Soft, reported by `compare`, decided by the approver:** against the baseline, always-loaded bytes up by more than 10%; a script's fixture output up by more than 25%; for tier B over at least 5 PRs, median `review_rounds` up by 1 or more, first-pass rate down by 20 points or more, median `pushes_after_ready` up by 2 or more; for tier C, median tokens per merged PR up by more than 30%. A soft regression changes no exit code in CI, because CI computes none of it.
+2. **Soft, reported by `compare`, decided by the approver:** against the baseline, always-loaded bytes up by more than 10%; a script's fixture output up by more than 25%; for tier B, over at least 5 PRs (medians) or 10 PRs (rates), median `review_rounds` up by 1 or more, first-pass rate down by 20 points or more, median `pushes_after_ready` up by 2 or more; for tier C, median tokens per merged PR up by more than 30%. A soft regression changes no exit code in CI, because CI computes none of it.
 
-The soft thresholds are **placeholders**: no data exists. They live in `[regression]` of `budgets.toml`, and the approver re-confirms them in the baseline PR (Q11). With fewer than 5 PRs the output says "indicative only".
+The soft thresholds are **placeholders**: no data exists. They live in `[regression]` of `budgets.toml`, and the approver re-confirms them in the baseline PR (Q11). `min_prs` is 10 for rates (the first-pass rate) and 5 for medians; with fewer PRs the output says "indicative only". Thresholds change by a template release, or in a project by a per-key `[[budget]]` entry (Q3, class `regression`).
 
 ## 11. Dependencies and assumptions
 
@@ -367,6 +368,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q8 | Accepted, changed. A `review-threads` page closes at 5 threads or once 4 KiB is reached, whichever comes first; it never splits an item and always holds at least one thread; the per-round bound holds on the fixture and one oversized approver item makes its page larger, by design. M-9: the 3 KiB item goes in a fixture of its own, and page 1 of the 12-thread fixture stays within 4 KiB. A review round is an approver review submission in any state other than approved, followed by at least one push (replaces "review submissions that request changes") | TM-12, sections 9, 10.1, 14, M-9, ADR-010 decision 8 |
 | Q9 | Accepted, changed. `metrics snapshot --label <l> [--dir <path>]`, default `docs/metrics/`. In an application repository the directory is created by the project and is not part of the payload manifest, like CR instances. The template writes its snapshots with `--dir template-dev/docs/metrics` (template-only, ADR-008 decision 1). The hygiene checks still apply. M-13, M-16 (a), ADR-010 decision 10, and plan PR 4 updated | sections 10.2, 10.3, 10.4, M-13, M-16, ADR-010 decision 10, plan PR 4 |
 | Q10 | Accepted. Added: an optional `indicative-stage5` snapshot of tier B over the template's own PRs, labelled "indicative, not a regression reference". The full baseline is recorded in the repository whose PRs it measures. Both noted in M-16 | TM-15, section 10.4, M-16 |
+| Q11 | Accepted as placeholders. `min_prs` is 10 for rates (first-pass rate) and 5 for medians. Thresholds change by a template release, or in a project by a per-key entry (Q3) | section 10.4, `[regression]` in section 4.3, section 10.2, M-12, ADR-010 decision 11 |
 
 ## 14. Still open
 
