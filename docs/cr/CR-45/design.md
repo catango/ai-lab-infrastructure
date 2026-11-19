@@ -23,7 +23,7 @@ I read of ADR-009 only the `README.md` of its CR (`docs/cr/CR-43/`). Its design 
 | TM-1 | Budgets are limits on **lines and bytes** of files, checked by the gate. Tokens are never computed or gated. `ceil(bytes / 4)` is printed as an indication only | Bytes are exact, offline, and independent of the model. A line limit alone is bypassed by long lines (section 3) |
 | TM-2 | Per-file values in section 4.1 (Q1) | Basis in section 3: about twice the measured size of comparable files |
 | TM-3 | The **always-loaded set** has an aggregate limit of 20 KiB (Q2) | The set is paid in every session; per-file limits alone allow a sum nobody chose |
-| TM-4 | `.template/budgets.toml` is **owned** (as ADR-008 design section 3 already classes it); `size-budget` reads every value from it; a project raises a value only through an entry in `.template/overrides.toml` (Q3) | A raise becomes visible in review; no code change moves a budget |
+| TM-4 | `.template/budgets.toml` is **owned** (as ADR-008 design section 3 already classes it) and is never declared as a whole-file override. `size-budget` reads every value from it. A project raises a single value with a per-key entry in the seeded `.template/overrides.toml`, table `[[budget]]` with `class`, `key`, `value`, `reason`, and `pr`. `size-budget` applies each entry, prints each active raise as `raise: <class>.<key> <old> -> <new> (<pr>)`, and fails a whole-file override of `budgets.toml`. `template-sync` lists the active raises in the sync PR body (Q3) | A raise becomes visible in review and in the sync PR; no code change moves a budget. A per-path override would freeze every future budget, output limit, and threshold for that project |
 | TM-5 | **One loading order for every Skill:** its `SKILL.md`, the output of its script, then only the files that output names, by range. Each `SKILL.md` has the headings `Reads (in order)`, `Does not read`, `Report`; new gate check `skill-layout` (Q15) | Makes "what a Skill may load" checkable instead of advisory |
 | TM-6 | The per-Skill reads of section 5.2 | One decision per Skill, so the check has something to test |
 | TM-7 | CR files: `README.md` first, then the others by outline (`scripts/cr-context` prints the `##` headings with line numbers). ADR files: by heading and range. `docs/README.md` is the locator. Gated: the docs index and the CR `README.md`. Reported, not gated: ADR files and the other CR files (Q4) | A hard cap on a design pushes content into more files; the control is reading by section |
@@ -116,7 +116,20 @@ always_loaded_bytes_pct = 10
 output_bytes_pct = 25
 ```
 
-`size-budget` expands the globs, counts lines and bytes (`wc -l`, `wc -c` semantics) and characters for the description, compares them with the class, and prints `path: <lines> lines > <max>` style findings. A class with no matching file passes. A value changed in the file changes the outcome without a code change. A file over its limit, or a project override of the file, is the only way the numbers move: `owned-drift` fails a changed `budgets.toml` without an `overrides.toml` entry, which names the path, the reason, and the PR (ADR-008 decision 2).
+A project raises one value in the seeded `.template/overrides.toml` (illustrative):
+
+```toml
+[[budget]]
+class  = "rule"
+key    = "max_bytes"
+value  = 4096
+reason = "the project's security rule needs the room"
+pr     = "owner/repo#12"
+```
+
+`size-budget` expands the globs, counts lines and bytes (`wc -l`, `wc -c` semantics) and characters for the description, compares them with the class, and prints `path: <lines> lines > <max>` style findings. A class with no matching file passes. A value changed in the file changes the outcome without a code change.
+
+`.template/budgets.toml` is owned and is never declared as a whole-file override. A project raises a single value with a per-key entry in the seeded `.template/overrides.toml`, table `[[budget]]` with `class`, `key`, `value`, `reason`, and `pr`. `size-budget` applies each entry, prints each active raise as `raise: <class>.<key> <old> -> <new> (<pr>)`, and fails a whole-file override of `budgets.toml`. `template-sync` lists the active raises in the sync PR body. The reason for the per-key form: a per-path override would freeze every future budget, output limit, and threshold for that project, because the project's copy would no longer follow the template's releases. The ADR-008 change that records this is in section 12 (Q13).
 
 ## 5. Loading order (D10-1)
 
@@ -330,6 +343,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 |---|---|---|
 | Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 |
 | Q2 | 20 KiB accepted for the always-loaded set. The estimate is corrected to about 14 to 16 KiB and the headroom to 4 to 6 KiB; the 28 KiB sum of the limits assumes one unscoped rule. User-level configuration under `~/.claude/` and Claude Code's own prompt and tool definitions are outside the set and not budgeted | TM-3, sections 3 and 4.2 |
+| Q3 | Accepted, changed. `budgets.toml` stays owned and is never a whole-file override. A project raises one value through a per-key `[[budget]]` entry in `overrides.toml` (`class`, `key`, `value`, `reason`, `pr`); `size-budget` applies it and prints `raise: <class>.<key> <old> -> <new> (<pr>)`, and fails a whole-file override; `template-sync` lists the active raises in the sync PR body. Reason: a per-path override would freeze every future budget, output limit, and threshold for that project. M-1 extended | TM-4, section 4.3, M-1, ADR-010 decision 3, section 12 (ADR-008, Q13) |
 
 ## 14. Still open
 

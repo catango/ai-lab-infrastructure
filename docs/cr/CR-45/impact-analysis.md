@@ -51,7 +51,7 @@ No OCI cost and no new CI job. The new gate checks read a handful of small files
 
 ## 7. Rollback
 
-Before the template is released, revert the implementation PRs. After release, a project reverts its sync PR. Raising a budget is an `overrides.toml` entry, which is also the way to live with a budget that proves too tight until a corrected tag. The design PR is reverted by a new PR if the ADR is not accepted.
+Before the template is released, revert the implementation PRs. After release, a project reverts its sync PR. Raising a budget is a per-key `[[budget]]` entry in `overrides.toml`, which is also the way to live with a budget that proves too tight until a corrected tag. The design PR is reverted by a new PR if the ADR is not accepted.
 
 ## 8. Alternatives considered
 
