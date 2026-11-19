@@ -22,6 +22,7 @@ This repository provisions, configures, and maintains the AI engineering platfor
 - **Commit and push** after each completed checklist item and before any long-running step.
 - Class 3: implementation starts only after the design PR is **merged**. Never edit an approved `design.md`, `acceptance-criteria.md`, or ADR in an implementation PR; propose a new design PR instead.
 - When finished, mark the PR ready for review and stop. The user reviews, approves, and merges.
+- **Next PR of a multi-PR change:** each PR runs in its own session. When a PR is done and the plan names a next one, end with a ready-to-paste prompt for it: repository, PR and slug from `implementation-plan.md`, scope, acceptance criteria IDs, preconditions, the user-only steps, and what to report. If a precondition is not met yet, say so instead of starting. Do not begin the next PR in the same session.
 
 ## Never
 
