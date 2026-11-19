@@ -364,10 +364,38 @@ class Unknowns(Base):
 
     def test_a_full_page_is_unknown_even_without_a_paging_key(self):
         responses = oci.default_responses()
-        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * int(ocifacts.PAGE))
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * int(ocifacts.ONS_PAGE))
         self.stub.set(responses)
         self.apply()
         self.assertEqual(self.values()["topics"], "unknown")
+
+    def test_a_page_just_under_the_page_size_is_a_complete_count(self):
+        responses = oci.default_responses()
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * (int(ocifacts.ONS_PAGE) - 1))
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual(self.values()["topics"], str(int(ocifacts.ONS_PAGE) - 1))
+
+    def test_the_other_services_keep_their_larger_page(self):
+        responses = oci.default_responses()
+        responses["volumes"] = oci.entry(["bv", "volume", "list", oci.LAB], [{"size-in-gbs": 1, "lifecycle-state": "AVAILABLE"}] * int(ocifacts.ONS_PAGE))
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual(self.values()["block_volumes"], str(ocifacts.ONS_PAGE))
+
+    def test_notifications_calls_ask_for_no_more_than_the_service_allows(self):
+        self.apply()
+        pages = [int(a[a.index("--limit") + 1]) for a in self.stub.argvs() if "ons" in a]
+        self.assertEqual(len(pages), 4, "topics and subscriptions for each of the two compartments")
+        self.assertTrue(all(0 < page <= 100 for page in pages), pages)
+        self.assertEqual((self.values()["topics"], self.values()["subscriptions"], self.values()["calls_failed"]), ("1", "2", "0"))
+
+    def test_a_refused_page_size_shows_as_a_failed_call_not_a_wrong_count(self):
+        responses = oci.default_responses()
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}], max_limit=10)
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual((self.values()["topics"], self.values()["calls_failed"]), ("unknown", "1"))
 
     def test_output_that_is_not_json_is_a_failed_call(self):
         responses = oci.default_responses()

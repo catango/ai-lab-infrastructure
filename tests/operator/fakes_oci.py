@@ -36,6 +36,9 @@ with open(os.path.join(here, "responses.json")) as handle:
 for entry in responses:
     if all(token in argv for token in entry["match"]):
         time.sleep(entry.get("sleep", 0))
+        if "max_limit" in entry and "--limit" in argv and int(argv[argv.index("--limit") + 1]) > entry["max_limit"]:
+            sys.stderr.write('ServiceError:\\n{"code": "InvalidParameter", "message": "query param limit must be less than or equal to %d", "status": 400}\\n' % entry["max_limit"])
+            sys.exit(1)
         if "big" in entry:
             sys.stdout.write("x" * entry["big"])
         elif "raw" in entry:
@@ -80,6 +83,8 @@ class Stub:
 def entry(match, out=None, **extra):
     """A successful answer. An empty list is printed the way oci-cli 3.96 prints it: nothing at all (its renderer leaves out the
     `data` key when the list is empty, and prints nothing when no response header is shown either)."""
+    if "ons" in match:
+        extra.setdefault("max_limit", 100)  # Notifications refuses a page size over 100 (found in the Cloud Shell run)
     if not out:
         return {"match": list(match), "raw": "", **extra}
     return {"match": list(match), "out": {"data": out}, **extra}
