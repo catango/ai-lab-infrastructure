@@ -266,14 +266,14 @@ Owned template script, run **only on the user's request** in a session the user 
 |---|---|---|
 | `metrics static` | Tier A for the working tree; prints a compact table | None |
 | `metrics prs --last <n>` or `--prs <list>` | Tier B for merged PRs; counts and medians; refuses fewer than `min_prs` for a median and says "indicative" | `gh api` GET only (`forbidden-api` applies) |
-| `metrics snapshot --label <l>` | Writes `docs/metrics/<l>.toml` from the two above plus the optional `[usage]` table; refuses to overwrite | As above |
+| `metrics snapshot --label <l> [--dir <path>]` | Writes `<dir>/<l>.toml` (default `docs/metrics/`) from the two above plus the optional `[usage.<pr>]` table (section 10.3); refuses to overwrite | As above |
 | `metrics compare <a> <b>` | Prints each value that crosses a `[regression]` threshold; exit 1 if any, 0 if none | None |
 
 It has `--fixture` for offline tests, calls `gh api` with argument arrays, reads no path outside the repository, and prints **no login, name, email, or token**: approver identity is matched by account ID and only counts are printed.
 
 ### 10.3 Storage and readers
 
-Snapshots are committed in a change PR as `docs/metrics/<label>.toml`: numbers, PR numbers (public), and a label. No date (git has it), no identifier. The schema:
+Snapshots are committed in a change PR as `<dir>/<label>.toml`, where `<dir>` is `--dir` and defaults to `docs/metrics/`: numbers, PR numbers (public), and a label. No date (git has it), no identifier. In an application repository the directory is created by the project and is not part of the payload manifest, like CR instances. The template writes its own snapshots with `--dir template-dev/docs/metrics` (template-only, ADR-008 decision 1). The hygiene checks apply to every snapshot. The schema:
 
 ```toml
 schema = 1
@@ -306,13 +306,13 @@ output_tokens = 0
 cache_read_tokens = 0
 ```
 
-Numbers above are placeholders to show the shape, not measurements. **Readers:** the approver at a metrics review and when a budget change is proposed; Claude Code only when the user asks in the session to run `metrics compare` or to read a snapshot. No Skill loads `docs/metrics/`, and `docs/README.md` lists the directory as "not read by default".
+Numbers above are placeholders to show the shape, not measurements. **Readers:** the approver at a metrics review and when a budget change is proposed; Claude Code only when the user asks in the session to run `metrics compare` or to read a snapshot. No Skill loads the snapshot directory, and the `docs/README.md` of a project that keeps snapshots` lists the directory as "not read by default".
 
 ### 10.4 Baseline and regression (TM-15)
 
 | | When | Holds | Recorded by |
 |---|---|---|---|
-| **Static baseline** | The last implementation PR of the template, the Stage 5 exit | Tier A on the template and on a generated repository | `metrics snapshot --label baseline-static` in that PR |
+| **Static baseline** | The last implementation PR of the template, the Stage 5 exit | Tier A on the template and on a generated repository | `metrics snapshot --label baseline-static --dir template-dev/docs/metrics` in that PR |
 | **Full baseline** | Stage 7 ("metrics baseline recorded"), after the first real project (Stage 6) | Tiers A and B over the PRs of one full Class 3 CR, tier C if the user supplies it | A change PR `docs/metrics/baseline.toml`, reviewed by the approver |
 
 Stage 7 waits for the postponed Stages 2 to 4 (baseline section 6). The static baseline does not.
@@ -364,6 +364,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q6 | Accepted, changed. Escaping after `sanitize()`: message `%`, CR, LF; properties also `:` and `,`; the check ID in `title=` comes from the PR's own checkout. Findings cut at 200 characters, not bytes. `pr-contract` reports its failures as annotations (at most 10). Fallback: `pr-checkpoint show` prints at most 10 filtered, sanitised `FAIL` lines of the failing job's log; Claude Code never reads a raw log. The cap of 10 is GitHub's per-step limit, confirmed in V-3 (the cap follows the limit). If V-3 fails the filtered log becomes primary, with no new design PR and the result recorded in PR 2. Plan: PR 2 also needs CR-39 PR 3 (`pr-contract`). M-5 extended; impact analysis updated | section 6, TM-9, M-5, ADR-010 decision 6, plan PR 2, impact analysis section 3 |
 | Q7 | Accepted, changed. Wording: read one `##` section, or a range of at most 100 lines and 8 KiB; a file over 200 lines or over 8 KiB is not read whole (`rg -n '^#'` or `rg -n <term>` first); command output over 40 lines is summarised or cut with `head` or `tail`. Basis sentence replaced (section = about 800 tokens, whole CR design about 11,000; a line limit alone lets most ADR files be read whole, so a byte limit). Line and byte counts of ADR-001, ADR-003, ADR-008 added to section 3. M-10 updated. Also applies to this repository's `CLAUDE.md` in a change PR after ADR-010 is accepted | TM-13, sections 3, 5.1, 8, M-10, ADR-010 decision 9 |
 | Q8 | Accepted, changed. A `review-threads` page closes at 5 threads or once 4 KiB is reached, whichever comes first; it never splits an item and always holds at least one thread; the per-round bound holds on the fixture and one oversized approver item makes its page larger, by design. M-9: the 3 KiB item goes in a fixture of its own, and page 1 of the 12-thread fixture stays within 4 KiB. A review round is an approver review submission in any state other than approved, followed by at least one push (replaces "review submissions that request changes") | TM-12, sections 9, 10.1, 14, M-9, ADR-010 decision 8 |
+| Q9 | Accepted, changed. `metrics snapshot --label <l> [--dir <path>]`, default `docs/metrics/`. In an application repository the directory is created by the project and is not part of the payload manifest, like CR instances. The template writes its snapshots with `--dir template-dev/docs/metrics` (template-only, ADR-008 decision 1). The hygiene checks still apply. M-13, M-16 (a), ADR-010 decision 10, and plan PR 4 updated | sections 10.2, 10.3, 10.4, M-13, M-16, ADR-010 decision 10, plan PR 4 |
 
 ## 14. Still open
 
