@@ -18,8 +18,9 @@ Open only the document and section relevant to the task. Decision status is trac
 | [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted; rule PC-8 proposed by CR-21 |
 | [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile) |
 | [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: two dedicated machines (platform operator VM, lab operator VM) for credentialed and extended-permission scripts; amends ADR-001 credential placement | Accepted (2026-11-18, merge of the CR-18 design PR) |
+| [ADR-008](adr/ADR-008-software-template.md) | Software template: structure, `CLAUDE.md`, rules, Skills, CR and ADR templates, template-sync, template gate and CI | Proposed (CR-39 design in review) |
 
-ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written as design PRs.
+ADR-004, ADR-006, ADR-007, ADR-009, and ADR-010 are listed in baseline section 7 and are written as design PRs.
 
 ## Change requests
 
@@ -28,6 +29,7 @@ ADR-004 and ADR-006 to ADR-010 are listed in baseline section 7 and are written 
 | [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
 | [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). PRs 1 to 5 merged (release v0.4.4); PR 7a (runbook and evidence table) in review. The lab operator VM, PR 6 (`acceptance`), and PR 7b wait for the OCI VMs, which are postponed (approver, 2026-11-19). Open until PR 7b merges |
 | [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section required for changes to operator code | Design in review |
+| [CR-39](cr/CR-39/README.md) | Software template design (ADR-008): structure, `CLAUDE.md`, rules, Skills, template-sync, template gate and CI, Stage 5 dry run | Design draft in review; questions for the approver open |
 
 ## Operations
 
