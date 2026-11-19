@@ -78,7 +78,11 @@ class Stub:
 
 
 def entry(match, out=None, **extra):
-    return {"match": list(match), "out": {"data": out if out is not None else []}, **extra}
+    """A successful answer. An empty list is printed the way oci-cli 3.96 prints it: nothing at all (its renderer leaves out the
+    `data` key when the list is empty, and prints nothing when no response header is shown either)."""
+    if not out:
+        return {"match": list(match), "raw": "", **extra}
+    return {"match": list(match), "out": {"data": out}, **extra}
 
 
 def compartment(identifier, parent, name="canary-name"):
