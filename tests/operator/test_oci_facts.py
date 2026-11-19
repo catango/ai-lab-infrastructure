@@ -364,30 +364,36 @@ class Unknowns(Base):
 
     def test_a_full_page_is_unknown_even_without_a_paging_key(self):
         responses = oci.default_responses()
-        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * int(ocifacts.ONS_PAGE))
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * int(ocifacts.TOPIC_PAGE))
         self.stub.set(responses)
         self.apply()
         self.assertEqual(self.values()["topics"], "unknown")
 
     def test_a_page_just_under_the_page_size_is_a_complete_count(self):
         responses = oci.default_responses()
-        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * (int(ocifacts.ONS_PAGE) - 1))
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB], [{"lifecycle-state": "ACTIVE"}] * (int(ocifacts.TOPIC_PAGE) - 1))
+        responses["subscriptions"] = oci.entry(["ons", "subscription", "list", oci.LAB], [{"lifecycle-state": "ACTIVE", "protocol": "EMAIL"}] * (int(ocifacts.SUBSCRIPTION_PAGE) - 1))
         self.stub.set(responses)
         self.apply()
-        self.assertEqual(self.values()["topics"], str(int(ocifacts.ONS_PAGE) - 1))
+        self.assertEqual(self.values()["topics"], str(int(ocifacts.TOPIC_PAGE) - 1))
+        self.assertEqual(self.values()["subscriptions"], str(int(ocifacts.SUBSCRIPTION_PAGE) - 1))
 
     def test_the_other_services_keep_their_larger_page(self):
         responses = oci.default_responses()
-        responses["volumes"] = oci.entry(["bv", "volume", "list", oci.LAB], [{"size-in-gbs": 1, "lifecycle-state": "AVAILABLE"}] * int(ocifacts.ONS_PAGE))
+        responses["volumes"] = oci.entry(["bv", "volume", "list", oci.LAB], [{"size-in-gbs": 1, "lifecycle-state": "AVAILABLE"}] * int(ocifacts.SUBSCRIPTION_PAGE))
         self.stub.set(responses)
         self.apply()
-        self.assertEqual(self.values()["block_volumes"], str(ocifacts.ONS_PAGE))
+        self.assertEqual(self.values()["block_volumes"], str(ocifacts.SUBSCRIPTION_PAGE))
 
-    def test_notifications_calls_ask_for_no_more_than_the_service_allows(self):
+    def test_each_notifications_call_asks_for_no_more_than_its_service_allows(self):
+        """Found one at a time in the Cloud Shell runs: topics allow 50, subscriptions 100."""
         self.apply()
-        pages = [int(a[a.index("--limit") + 1]) for a in self.stub.argvs() if "ons" in a]
-        self.assertEqual(len(pages), 4, "topics and subscriptions for each of the two compartments")
-        self.assertTrue(all(0 < page <= 100 for page in pages), pages)
+        argvs = self.stub.argvs()
+        topics = [int(a[a.index("--limit") + 1]) for a in argvs if "topic" in a and "ons" in a]
+        subscriptions = [int(a[a.index("--limit") + 1]) for a in argvs if "subscription" in a and "ons" in a]
+        self.assertEqual((len(topics), len(subscriptions)), (2, 2), "one call of each kind for each of the two compartments")
+        self.assertTrue(all(0 < page <= 50 for page in topics), topics)
+        self.assertTrue(all(0 < page <= 100 for page in subscriptions), subscriptions)
         self.assertEqual((self.values()["topics"], self.values()["subscriptions"], self.values()["calls_failed"]), ("1", "2", "0"))
 
     def test_a_refused_page_size_shows_as_a_failed_call_not_a_wrong_count(self):
