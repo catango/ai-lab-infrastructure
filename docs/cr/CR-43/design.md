@@ -56,7 +56,7 @@ Out of scope: ADR-010 (token optimisation, metrics). Section 13 lists where ADR-
 | Application repository, public | `pr-contract`, `quality-gate` | Ruleset printed by `initialize-project` (section 8) |
 | Application repository, private (GitHub Free) | None enforceable | The approver confirms `pr-contract` and `quality-gate` green on the PR's head before merging (SC-2, RR-10) |
 
-**Rules that keep the names honest (SC-3).** GitHub documents that a skipped job "will report its status as 'Success'" and does not block a merge. So a required job has no `if:` that can skip it, and the aggregate runs `always()`. A ruleset that requires a name that never reports blocks every merge: the ordered list in section 12 therefore adds the checks after a first run, or checks the names against a green run first. **Not verified in GitHub's documentation:** that a matrix job's check name is its expanded `name`, and how a `paths` filter interacts with a required check. The acceptance criteria verify the first on a real run (S-3) and `workflow-policy` forbids the second.
+**Rules that keep the names honest (SC-3).** GitHub documents that a skipped job "will report its status as 'Success'" and does not block a merge. So a required job has no `if:` that can skip it, and the aggregate runs `always()`. A ruleset that requires a name that never reports blocks every merge: the ordered list in section 12 therefore adds the checks after a first run, or checks the names against a green run first. **Observed, not documented:** the checks of this design PR list the matrix job of `ci.yml` as `toolchain-amd64` and `toolchain-arm64`, that is, its expanded `name`; GitHub's pages read for this design do not state it. **Not verified:** how a `paths` filter interacts with a required check; `workflow-policy` forbids the filter. S-3 checks the names of the aggregate and matrix jobs on a real run.
 
 **Up-to-date branches.** The ruleset does not require "branches up to date" (Q3 recommends off). With "dismiss stale approvals" and "approval of the most recent reviewable push" on, every branch update is a new push that needs a new approval; an up-to-date requirement would multiply re-approvals for a single approver.
 
@@ -284,7 +284,7 @@ Each question has my recommendation first. None is decided.
 | Item | Who decides | When |
 |---|---|---|
 | The live state of both repositories: whether required checks, code scanning, and the settings of section 4.2 match what is stated. I could not read them. `github-setup` dry run and `facts --scope github` show it | Approver | Section 12, U-A1, before the implementation PRs |
-| Whether a matrix job's check name is its expanded `name`, and how the aggregate behaves on a skipped matrix job | Claude Code and approver | First template CI run (S-3, S-2) |
+| How the aggregate `quality-gate` behaves on a skipped or `not run` matrix job (the expanded matrix name is observed on this repository's checks, section 3) | Claude Code and approver | First template CI run (S-3, S-2) |
 | CodeQL language support for GitHub Actions workflows and Python on a personal Free account | Approver | When enabling (Q11) |
 | Private vulnerability reporting and community files on private repositories | Approver | Not needed while repositories are public |
 | ARM64 private runner availability and usage | Approver | Q14 |
