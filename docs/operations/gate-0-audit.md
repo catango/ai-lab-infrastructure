@@ -51,7 +51,6 @@ Open **Billing & Cost Management** and the account upgrade/payment page. Record:
 
 If the account is **Pay As You Go**, paid resources *can* be created. Compartment quotas become a critical control rather than defense in depth. Record this; it is not a stop.
 
-
 ### 2.2 Limits, usage, and resource counts (script)
 
 `facts --scope oci` uses `list`, `get`, and `inspect` calls only, handles no OCI credential, and prints counts and yes/no. In
@@ -174,7 +173,6 @@ GH  Plan=Free? __  2FA=__  machine account exists? __  spending limit $0? __
 Q2  OCI facts: paste the yes/no and counts of `facts --scope oci` (no identifiers)
 VO  VO-12=__  VO-13=__
 ```
-
 
 ---
 

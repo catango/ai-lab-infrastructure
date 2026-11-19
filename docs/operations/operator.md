@@ -165,7 +165,7 @@ used to collect facts.
 | **T3** (read-only) | `facts --scope github --use-token`, `github-setup` dry run | Fine-grained token of the personal account, the two repositories only. Administration read, Environments read, Metadata read | 1 day | Either operator machine |
 | **T2** (write) | `github-setup --apply` only | Fine-grained token of the personal account, the two repositories only. Administration and Environments read and write, Metadata read. No Contents, Pull requests, Workflows, or Secrets write | 1 day | Platform operator VM only |
 
-**Steps for a run**
+### 4.1 Steps for a run
 
 1. In the browser (personal profile), create the token with exactly the permissions above and a 1-day expiry. Do not copy it
    anywhere except the prompt.
@@ -176,7 +176,7 @@ used to collect facts.
 
 If a token was ever typed outside a prompt, or you are unsure, revoke it and remove the shell history entry.
 
-### 4.1 GitHub facts and setup runs
+### 4.2 GitHub facts and setup runs
 
 ```bash
 scripts/operator/facts --scope github --owner <owner> --repo ai-lab-infrastructure --repo ai-software-template            # dry run
