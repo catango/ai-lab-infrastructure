@@ -6,7 +6,7 @@ In this design PR:
 
 - [ADR-010](../../adr/ADR-010-token-optimisation-and-metrics.md) (Proposed) and the CR-45 files are added.
 - `docs/README.md` gets rows for ADR-010 and CR-45.
-- [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) and [ADR-008](../../adr/ADR-008-software-template.md) are **not changed**. The amendment text is drafted in design section 12 and applied only if the approver decides Q12 and Q13.
+- [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) and [ADR-008](../../adr/ADR-008-software-template.md) are **amended** as the approver decided in Q12 and Q13 (design section 12): ADR-003 section 7 and its header row, ADR-008 header row, decisions 2 and 7, and consequences. ADR-008's Status is Accepted because the CR-39 design PRs #40 and #42 are merged. The amendments take effect when this design PR is merged.
 
 Later, in implementation PRs in `ai-software-template`: the budgets and checks, the checkpoint validation, the outline and paging, the numbers in `CLAUDE.md`, and `scripts/metrics` (see the plan).
 
@@ -16,8 +16,8 @@ Nothing in this PR changes code, a workflow, a PR template, a label, a setting, 
 
 | Item | Effect |
 |---|---|
-| ADR-003 | Proposed amendment of section 7: the checkpoint format reference and the CI summary channel (a correction: the step summary is not readable through the API) |
-| ADR-008 and CR-39 design | D10-1 and D10-2 answered. ADR-008 gets a proposed amendment (header row, decision 7, consequences). The approved CR-39 design file is not edited |
+| ADR-003 | Amended in section 7 (applied in this PR): the checkpoint format reference and the CI summary channel (a correction: the step summary is not readable through the API) |
+| ADR-008 and CR-39 design | D10-1 and D10-2 answered. ADR-008 is amended (header row, decisions 2 and 7, consequences). ADR-008 is Accepted. The approved CR-39 design file is not edited |
 | ADR-009 (CR #43) | Dependencies X-1 to X-4 (design section 11): the check catalogue lists two more checks, no new job, no new permission or Action, snapshots pass the hygiene patterns. Nothing of it is decided here |
 | `ai-software-template` | Receives four implementation PRs on top of CR-39's |
 | This repository's `CLAUDE.md` | Gets the context-discipline numbers in a change PR after ADR-010 is accepted (Q7) |
@@ -34,7 +34,7 @@ Nothing in this PR changes code, a workflow, a PR template, a label, a setting, 
 
 ## 4. Operational impact on the approver
 
-- Decides Q1 to Q15 in the architecture discussion, reviews, and merges the design PR. Approving ADR-010 is part of the Stage 5 entry.
+- Decided Q1 to Q15 in the architecture discussion (applied in this PR), reviews, and merges the design PR. Approving ADR-010 is part of the Stage 5 entry.
 - Reviews four implementation PRs in the template and, when it is wanted, runs `metrics` in a session and reviews the baseline PR at Stage 7.
 - **Optional:** types or supplies usage figures from Claude Desktop (tier C). Nothing requires it.
 

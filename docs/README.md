@@ -19,7 +19,7 @@ Open only the document and section relevant to the task. Decision status is trac
 | [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile); scope amended by CR-39 (Proposed): the template's CI manifest is not a host profile |
 | [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: two dedicated machines (platform operator VM, lab operator VM) for credentialed and extended-permission scripts; amends ADR-001 credential placement | Accepted (2026-11-18, merge of the CR-18 design PR) |
 | [ADR-008](adr/ADR-008-software-template.md) | Software template: structure, `CLAUDE.md`, rules, Skills, CR and ADR templates, template-sync, template gate and CI | Accepted (2026-11-19, merge of the CR-39 design PR #40) |
-| [ADR-010](adr/ADR-010-token-optimisation-and-metrics.md) | Token optimisation and metrics: size budgets and loading order, checkpoint format, concise CI output, review-loop cost, metrics tiers, baseline and regression | Proposed (CR-45 design PR, in draft; proposes amendments to ADR-003 and ADR-008, not applied) |
+| [ADR-010](adr/ADR-010-token-optimisation-and-metrics.md) | Token optimisation and metrics: size budgets and loading order, checkpoint format, concise CI output, review-loop cost, metrics tiers, baseline and regression | Proposed (CR-45 design PR #46, decisions Q1 to Q15 applied, in review; amends ADR-003 section 7 and ADR-008) |
 
 ADR-004, ADR-006, ADR-007, and ADR-009 are listed in baseline section 7 and are written as design PRs.
 
@@ -31,7 +31,7 @@ ADR-004, ADR-006, ADR-007, and ADR-009 are listed in baseline section 7 and are 
 | [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). PRs 1 to 5 merged (release v0.4.4); PR 7a (runbook and evidence table) in review. The lab operator VM, PR 6 (`acceptance`), and PR 7b wait for the OCI VMs, which are postponed (approver, 2026-11-19). Open until PR 7b merges |
 | [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section required for changes to operator code | Implemented (design PR #22 and implementation PR #24 merged, 2026-11-18) |
 | [CR-39](cr/CR-39/README.md) | Software template design (ADR-008): structure, `CLAUDE.md`, rules, Skills, template-sync, template gate and CI, Stage 5 dry run | Design in review with the approver's decisions Q1 to Q14 applied. Also amends ADR-003 and ADR-005 |
-| [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010): budgets, loading order, checkpoint format, CI output, review-loop cost, metrics tiers, baseline and regression | Draft design PR, architecture discussion pending. Nothing is implemented |
+| [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010): budgets, loading order, checkpoint format, CI output, review-loop cost, metrics tiers, baseline and regression | Design in review with the approver's decisions Q1 to Q15 applied. Also amends ADR-003 and ADR-008. Nothing is implemented |
 
 ## Operations
 

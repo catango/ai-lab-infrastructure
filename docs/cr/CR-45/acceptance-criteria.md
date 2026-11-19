@@ -1,6 +1,6 @@
 # CR-45 Acceptance criteria
 
-Verified by the implementation PRs in `ai-software-template` (see the plan). "CI" means a green run of the named template job. "Gate check" means a check of `./scripts/quality-gate.sh` with a passing fixture and failing fixtures. A "documented manual measurement" names its procedure in the evidence column. The criteria become binding when the design PR is merged; those that depend on a question for the approver follow its decision.
+Verified by the implementation PRs in `ai-software-template` (see the plan). "CI" means a green run of the named template job. "Gate check" means a check of `./scripts/quality-gate.sh` with a passing fixture and failing fixtures. A "documented manual measurement" names its procedure in the evidence column. The criteria become binding when the design PR is merged; those that depend on a decision of the approver (design section 13) follow it.
 
 | ID | Criterion | Evidence |
 |---|---|---|

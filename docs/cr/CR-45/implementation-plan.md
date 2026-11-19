@@ -36,6 +36,6 @@ These PRs add to the template content of CR-39 and so follow its PRs. The CR-39 
 
 - No change to ADR-009, and no decision that belongs to it.
 - No change to repository settings, rulesets, labels, secrets, collaborators, or tags by Claude Code.
-- No change to ADR-003 or ADR-008 except as the approver decides Q12 and Q13 in the design PR; no change to an approved design file.
+- No change to ADR-003 or ADR-008 beyond what the approver decided in Q12 and Q13 (applied in the design PR); no change to an approved design file.
 - No telemetry, scheduled or event-driven run, workflow that invokes Claude, new credential, or MCP server. No analysis of session transcripts.
 - No lab VM, OCI, or operator-machine work. The full baseline waits for Stage 7.

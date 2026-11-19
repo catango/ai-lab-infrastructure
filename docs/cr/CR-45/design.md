@@ -4,9 +4,9 @@
 |---|---|
 | CR | issue #45 (Class 3) |
 | Governing records | Baseline v0.1 (sections 3, 6, 7, 8), ADR-003 (sections 4, 7, 8; as amended by CR-39), ADR-008 (in full) and [CR-39 design](../CR-39/design.md) (sections 5, 6, 8, 11), CR-39 criteria T-4, T-6, T-12, T-13 |
-| Record produced | [ADR-010](../../adr/ADR-010-token-optimisation-and-metrics.md), status Proposed. Amendments to ADR-003 and ADR-008 are **drafted in section 12 and not applied** (Q12, Q13) |
+| Record produced | [ADR-010](../../adr/ADR-010-token-optimisation-and-metrics.md), status Proposed. Amendments to ADR-003 and ADR-008 are **applied in this PR** (section 12; Q12, Q13) |
 | Scope | Design only. Nothing is implemented, and the `ai-software-template` repository is not touched |
-| State | First draft. The architecture discussion has not taken place. Every open point is a question for the approver (section 13) or a verification item (section 14) |
+| State | The approver's decisions Q1 to Q15 of the architecture discussion (review on PR #46, reviewed at `8ee0da0`, 2026-11-19) are applied in this file, in ADR-010, in ADR-003 and ADR-008, and in the other CR-45 files. Section 13 records them. Section 14 lists what stays open, including the verification items V-1 to V-4 |
 
 ## 1. Scope and boundaries
 

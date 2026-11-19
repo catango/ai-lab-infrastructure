@@ -4,8 +4,8 @@
 |---|---|
 | Issue | #45 |
 | Class | 3 |
-| Status | Draft design. Architecture discussion pending. Nothing is implemented |
-| ADR | [ADR-010](../../adr/ADR-010-token-optimisation-and-metrics.md) (Proposed). Proposed amendments to ADR-003 and ADR-008 are drafted in design section 12 and are **not** applied |
+| Status | Design in review with the approver's decisions Q1 to Q15 applied (architecture discussion, 2026-11-19). Nothing is implemented |
+| ADR | [ADR-010](../../adr/ADR-010-token-optimisation-and-metrics.md) (Proposed). The amendments to ADR-003 (section 7, header row) and ADR-008 (header row, decisions 2 and 7, consequences) are applied in this PR (design section 12) |
 | Origin | Baseline v0.1 section 7 (ADR-010) and the dependencies D10-1 and D10-2 of [CR-39 design section 11](../CR-39/design.md) |
 
 ## Summary
@@ -19,7 +19,7 @@ Stage 5 entry needs ADR-008, ADR-009, and ADR-010 approved. This CR delivers ADR
 | File | Purpose |
 |---|---|
 | [impact-analysis.md](impact-analysis.md) | What changes, security and privacy, rollback, alternatives |
-| [design.md](design.md) | Decisions TM-1 to TM-17, the measurements behind the budgets, loading order, checkpoint format, metrics, dependencies, proposed amendments, questions Q1 to Q15 for the approver, and what stays open |
+| [design.md](design.md) | Decisions TM-1 to TM-17, the measurements behind the budgets, loading order, checkpoint format, metrics, dependencies, the applied amendments, the approver's decisions Q1 to Q15, and what stays open |
 | [acceptance-criteria.md](acceptance-criteria.md) | Criteria M-1 to M-17 with evidence |
 | [implementation-plan.md](implementation-plan.md) | Four proposed implementation PRs in `ai-software-template`, preconditions, and user-only actions |
 

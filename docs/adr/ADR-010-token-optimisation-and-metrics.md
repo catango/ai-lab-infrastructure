@@ -10,7 +10,7 @@
 | Related | ADR-001 (section 5, instruction trust), ADR-003 (sections 4, 7, 8; section 7 amended by this CR), ADR-008 (decision 7, design section 11 D10-1 and D10-2; amended by this CR), ADR-009 (reserved; dependencies in design section 11) |
 
 > This ADR records a decision. It does not create or change a repository, a label, a ruleset, a workflow, a setting, or a tag, and it does not authorize any of them.
-> Detail, rationale, and the questions for the approver are in `docs/cr/CR-45/design.md`. Decisions marked "proposed" become decisions when the approver decides the question named in the design.
+> Detail, rationale, and the approver's decisions Q1 to Q15 (architecture discussion, 2026-11-19) are in `docs/cr/CR-45/design.md`. The decisions are applied below.
 
 ---
 
@@ -58,7 +58,7 @@
 
 ## 5. Open items
 
-Questions for the approver Q1 to Q15 and the verification items V-1 to V-4 are in `docs/cr/CR-45/design.md` sections 13 and 14.
+The approver's decisions Q1 to Q15 are recorded in `docs/cr/CR-45/design.md` section 13. The verification items V-1 to V-4 stay open in section 14.
 
 ## 6. Acceptance criteria
 
