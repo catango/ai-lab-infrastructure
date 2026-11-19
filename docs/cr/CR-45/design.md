@@ -328,7 +328,8 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 
 | # | Decision | Applied in |
 |---|---|---|
-| Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 || Q2 | 20 KiB accepted for the always-loaded set. The estimate is corrected to about 14 to 16 KiB and the headroom to 4 to 6 KiB; the 28 KiB sum of the limits assumes one unscoped rule. User-level configuration under `~/.claude/` and Claude Code's own prompt and tool definitions are outside the set and not budgeted | TM-3, sections 3 and 4.2 |
+| Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 |
+| Q2 | 20 KiB accepted for the always-loaded set. The estimate is corrected to about 14 to 16 KiB and the headroom to 4 to 6 KiB; the 28 KiB sum of the limits assumes one unscoped rule. User-level configuration under `~/.claude/` and Claude Code's own prompt and tool definitions are outside the set and not budgeted | TM-3, sections 3 and 4.2 |
 
 ## 14. Still open
 
