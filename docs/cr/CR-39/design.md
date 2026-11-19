@@ -6,7 +6,7 @@
 | Governing records | Baseline v0.1 (sections 3, 6, 7, 8), ADR-001 (decisions 6 to 8, section 5), ADR-003 (sections 3 to 8), ADR-005 (decisions 1 and 3 to 7), ADR-011 (decision 17) |
 | Record produced | [ADR-008](../../adr/ADR-008-software-template.md), status Proposed. Amended in this PR: [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Q8) and [ADR-005](../../adr/ADR-005-toolchain.md) (Q7), each with an "Amended by" row |
 | Scope | Design only. Nothing is implemented, and the `ai-software-template` repository is not touched |
-| State | The approver's decisions Q1 to Q14 of the architecture discussion (review on PR #40, 2026-11-19) are applied in this file, in ADR-008, and in the other CR-39 files. Section 13 records them. Section 14 lists what stays open |
+| State | The approver's decisions Q1 to Q14 of the architecture discussion (review on PR #40, 2026-11-19) are applied in this file, in ADR-008, and in the other CR-39 files. Section 13 records them. Section 14 lists what stays open. Amended after the merge of PR #40 (design PR `design/CR-39-provenance-location`): the provenance of the seeded generic code is recorded in a template-only file, not in the payload manifest (sections 3, 4, and 14) |
 
 ## 1. Scope and boundaries
 
@@ -49,7 +49,7 @@ Class: O = owned (template-owned, synced), S = seeded (written once by `initiali
 | `docs/PROJECT.md` | S | The project's own conventions. Contains no import |
 | `README.md`, `docs/README.md` | S | Placeholder readme and documentation index, written from `--config` |
 | `config/project.yaml` | S | Written from `--config`. Never copied from the template |
-| `.template/manifest.toml` | O | File classes, template version, provenance of the seeded generic code (history only) |
+| `.template/manifest.toml` | O | File classes and the template version. It holds no provenance and names no other repository |
 | `.template/state.toml` | S, then written by sync and init only | Template version and tag commit last synced, SHA-256 of each owned file as synced, entries recorded as `override` |
 | `.template/overrides.toml` | S | Declared divergences from owned files: path, reason, PR reference. Written by the project; never by sync |
 | `.template/budgets.toml` | O | Size budgets (values from ADR-010, section 11) |
@@ -68,7 +68,7 @@ Class: O = owned (template-owned, synced), S = seeded (written once by `initiali
 | `toolchain/` (engine and the template's CI manifest) | O | Gate tools, exact versions, both architectures, checksums (section 8) |
 | `docs/adr/_template.md`, `docs/cr/_template/` | O | Section 7 |
 | `docs/adr/`, `docs/cr/` instances | S | Created by the project; never touched by sync. The template has none |
-| `template-dev/**` and `.github/workflows/template-ci.yml` | T | The generation test and its fixtures, the sync test, the dry-run script, release checklist, and the template's own records under `template-dev/docs/` (CR-39 stays in `ai-lab-infrastructure` as the one transitional exception) |
+| `template-dev/**` and `.github/workflows/template-ci.yml` | T | The generation test and its fixtures, the sync test, the dry-run script, release checklist, `template-dev/provenance.toml` (the repository and commit the generic code was seeded from, history only; the one file that may name another repository), and the template's own records under `template-dev/docs/` (CR-39 stays in `ai-lab-infrastructure` as the one transitional exception) |
 
 **Never in the payload:** operator scripts or an operator profile, anything that names this platform, OCI, a host, a CR or ADR number of another repository, a fixed architecture, an identifier, or a credential. Gate check `leak` and criterion T-21 scan for it.
 
@@ -98,7 +98,7 @@ TC-1 and TC-2 are defined by the template (this section and ADR-008). ADR-003 re
 
 **Amendment of ADR-005 in this PR (Q7).** Scope amendment on decision 1: "ADR-005's manifest is the single source for this platform's hosts (`builder`, `lab`, `operator`). The software template's CI manifest is owned by the template, uses the same schema and rules (exact versions, both architectures, SHA-256), and is not a host profile."
 
-**Provenance.** The template's generic code is seeded once from `ai-lab-infrastructure` at a commit recorded in `.template/manifest.toml`. That commit is history only; no later link exists. After Stage 5 the template is the origin of the generic code. Generic code is the same in every repository; differences come only from data (configuration).
+**Provenance.** The template's generic code is seeded once from `ai-lab-infrastructure` at a commit recorded in `template-dev/provenance.toml`, a `template-only` file: `initialize-project` removes it, the `leak` scan and T-21 do not cover template-only files, and the payload (including `.template/manifest.toml`) therefore names no other repository. That commit is history only; no later link exists. After Stage 5 the template is the origin of the generic code. Generic code is the same in every repository; differences come only from data (configuration).
 
 ## 5. `CLAUDE.md`, rules, and guardrails
 
@@ -169,7 +169,7 @@ Each `SKILL.md` is short: when to use it, the inputs, the script to run, what to
 | `generate` | The dry run of section 12 (steps 1 to 4 and 8) with two configurations, on both architectures |
 | `sync` | Section 12, step 6 |
 | `skills` | Skill and script fixtures (steps 5 and 7); every script has `--fixture` or `--offline` |
-| `leak` | No identifier pattern and no platform reference in the payload or in a generated tree |
+| `leak` | No identifier pattern and no platform reference in the payload (every file not classed `template-only`) or in a generated tree |
 
 **Tools in CI.** The template carries the install engine and its **own CI manifest** (the gate tools, exact versions, both architectures, SHA-256) under the schema and rules of ADR-005 (decisions 1, 3, 4). It is not a host profile, and ADR-005 is amended to say so (section 4). CI fetches no other repository.
 
@@ -273,6 +273,7 @@ Two consequences I derived and the approver may correct: the rule `arm64.md` of 
 | The check that the core deny list plus this platform's `deny.platform.txt` equals ADR-001 section 5, in `ai-lab-infrastructure` (form) | Approver | With the preset PR |
 | Whether `ai-lab-infrastructure` later adopts the template's generic code | Approver (a later CR) | After Stage 5 |
 | **This repository does not yet implement ADR-003 as amended:** `config/project.yaml` has no `approver_id`, `design_repos`, or `operator_paths`, and `scripts/pr_contract` hard-codes the PC-8 paths, accepts only same-repository PC-3 references, and has no `template-sync` or `init` type. The amendment text states these rules; this repository follows through the preset or adoption PR | Approver (form of the change) | With the preset PR |
+| Provenance location (found while preparing implementation PR 1): the first design put the provenance of the seeded generic code in the payload manifest, which T-21 forbids from naming another repository. Resolved by the approver on 2026-11-19, following the recommendation: `template-dev/provenance.toml`, a template-only file | Closed by this amendment | This PR |
 | ADR-003 header state: the amendment row of CR-21 said "Proposed" at `b7257f7`. I checked: the CR-21 design PR (#22) and implementation PR (#24) are merged, so PC-8 is in force and enforced. The header row now says so | Closed by the amendment | This PR |
 | `owned-drift` and `uses:`-only changes (Dependabot pin bumps): my reading in section 8, to be confirmed | Approver | In implementation PR 8 |
 | Verification items for implementation, recorded in the PRs: `CLAUDE.md` import behaviour (two imports, no nesting); GitHub semantics for editing other users' comments and the editor fields; current availability of hosted ARM64 runners for private repositories; T-12 on the lab VM, deferred to Stage 6 | Claude Code | Implementation PRs |
