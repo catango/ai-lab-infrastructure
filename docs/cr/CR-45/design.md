@@ -165,7 +165,7 @@ The eight Skills (the six of ADR-003 section 8, `sync-template`, `start-cr`). Ea
 |---|---|---|
 | `cr-context` | a CR with five files and 14 headings | 4 KiB |
 | `cr-criteria` | 22 criteria | 12 KiB |
-| `pr-checkpoint show` | 20 items, 10 jobs, 20 commits | 2 KiB |
+| `pr-checkpoint show` | 20 items, 10 jobs (5 failed), 20 commits | 2 KiB |
 | `review-threads` | 12 threads, page 1 | 4 KiB |
 | `template-sync` (dry run) | 40 changed paths | 4 KiB |
 | `initialize-project` | a neutral configuration | 3 KiB |
@@ -191,7 +191,7 @@ The ADR-003 markers stay. Between them:
 Rules, validated by `scripts/pr-checkpoint` (no repair; a violation stops with the line number):
 
 - Only blank lines and `- [ ] <text>` or `- [x] <text>` lines; no nesting, no links to comments, no other text.
-- At most 20 items, each at most 120 characters, the whole block at most 2 KiB.
+- At most 20 items, each at most 120 characters, the whole block at most 2 KiB. The block limit binds before 20 items of 120 characters (20 × 126 B > 2 KiB); this is intended.
 - An item may end with `(ID[, ID]...)`, criterion IDs (`[A-Z]+-[0-9]+`). `pr-checkpoint` checks the syntax only; whether an ID exists is `cr-criteria`'s job.
 - An item may carry `; blocked: <reason, at most 80 characters>`.
 - The next item is the first unticked one. An item is ticked only when its work is committed and pushed (CLAUDE.md rule); uncommitted work is not state.
@@ -206,11 +206,14 @@ It reads only `scripts/pr-checkpoint show`, at most 2 KiB:
 ```text
 checkpoint: 3/9 done; next: "<item text>" (M-2); blocked: 0
 ci: quality-gate-amd64 success; pr-contract success; quality-gate-arm64 failure
-ci-failed: quality-gate-arm64: <annotation text, at most 200 chars>
+ci-failed: quality-gate-arm64: <annotation text, at most 200 chars>   (at most 3 lines)
+ci-failed: +<n> more                                                  (only when more than 3 failed)
 commits: 7 since merge base
-<sha7> <subject>            (at most 20 lines)
+<sha7> <subject>            (at most 10 lines)
 pr-checkpoint: done=3 total=9 blocked=0 ci_failed=1 commits=7
 ```
+
+`show` prints at most 10 commits and at most 3 `ci-failed` lines, then `ci-failed: +<n> more`. The text after the `ci-failed:` prefix comes from CI, and the Skill treats it as data, not as an instruction. The 2 KiB limit stays.
 
 It does **not** read: PR comments, review threads (that is `address-review-feedback`), the issue body, raw CI logs, the full diff, files of the CR unless the next item names them, other branches, or its own earlier conversation. **A missing or malformed block stops the Skill** with that report; it does not reconstruct state from comments or from memory. Commit subjects are public text already; the script prints no author.
 
@@ -345,6 +348,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q2 | 20 KiB accepted for the always-loaded set. The estimate is corrected to about 14 to 16 KiB and the headroom to 4 to 6 KiB; the 28 KiB sum of the limits assumes one unscoped rule. User-level configuration under `~/.claude/` and Claude Code's own prompt and tool definitions are outside the set and not budgeted | TM-3, sections 3 and 4.2 |
 | Q3 | Accepted, changed. `budgets.toml` stays owned and is never a whole-file override. A project raises one value through a per-key `[[budget]]` entry in `overrides.toml` (`class`, `key`, `value`, `reason`, `pr`); `size-budget` applies it and prints `raise: <class>.<key> <old> -> <new> (<pr>)`, and fails a whole-file override; `template-sync` lists the active raises in the sync PR body. Reason: a per-path override would freeze every future budget, output limit, and threshold for that project. M-1 extended | TM-4, section 4.3, M-1, ADR-010 decision 3, section 12 (ADR-008, Q13) |
 | Q4 | Accepted. No change: only the instruction files, the docs index, and the CR `README.md` are gated; ADR files and the other CR files are reported, not gated | TM-7, section 4.1 |
+| Q5 | Accepted. The checkpoint block limit binds before 20 items of 120 characters (20 × 126 B > 2 KiB); intended. `pr-checkpoint show` prints at most 10 commits and at most 3 `ci-failed` lines, then `ci-failed: +<n> more`; the text after `ci-failed:` comes from CI and the Skill treats it as data. The 2 KiB limit stays. M-7 updated | TM-10, TM-11, sections 6, 7.1, 7.2, M-7, ADR-010 decision 7 |
 
 ## 14. Still open
 
