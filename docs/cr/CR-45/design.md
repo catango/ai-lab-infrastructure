@@ -54,7 +54,7 @@ Measured in this session on this repository (`wc`, 2026-11-19). The template doe
 
 The step summary that `$GITHUB_STEP_SUMMARY` receives is not in the check-runs API response. ADR-003 section 7 says Claude "reads the summary through `gh`"; as implemented that is not possible for the summary, only for the log. Section 12 drafts the correction (Q12).
 
-**Estimate of the always-loaded set for the template** (nothing exists to measure): `CLAUDE.md` about 6 KB (this repository's neutral part plus the precedence sentence and the discussion-prompt rule), `docs/PLATFORM.md` 3 to 4 KB, `docs/PROJECT.md` 2 to 3 KB at start, the always-applied rule `public-repo.md` about 1.5 KB, eight Skill descriptions about 2 KB: **about 15 to 17 KiB, 4,000 tokens**. The first implementation PR measures the real set and reconfirms the limits.
+**Estimate of the always-loaded set for the template** (nothing exists to measure): `CLAUDE.md` about 6 KB (this repository's neutral part plus the precedence sentence and the discussion-prompt rule), `docs/PLATFORM.md` 3 to 4 KB, `docs/PROJECT.md` 2 to 3 KB at start, the always-applied rule `public-repo.md` about 1.5 KB, eight Skill descriptions about 2 KB: **about 14 to 16 KiB, 4,000 tokens** (the listed parts sum to 14.2 to 16.1 KiB). The first implementation PR measures the real set and reconfirms the limits.
 
 ## 4. Budgets (D10-1)
 
@@ -79,7 +79,9 @@ The CR-39 placeholders are `CLAUDE.md` 120 lines, a rule 40, a `SKILL.md` 60. Th
 
 ### 4.2 The always-loaded set
 
-The set is `CLAUDE.md`, the two files it imports, every rule without path scoping, and the name and description of every Skill. `size-budget` computes it from the files (it parses the rule frontmatter) and fails above **20 KiB**, about 5,000 tokens or 2.5% of a 200,000-token window. This is a judgement, not a measurement: the aim is a fixed cost that stays small against a long session, and the estimate of section 3 leaves 3 to 5 KiB of headroom. The limits of the table cannot all be reached at once (their sum is 28 KiB); that is intended.
+The set is `CLAUDE.md`, the two files it imports, every rule without path scoping, and the name and description of every Skill. `size-budget` computes it from the files (it parses the rule frontmatter) and fails above **20 KiB**, about 5,000 tokens or 2.5% of a 200,000-token window. This is a judgement, not a measurement: the aim is a fixed cost that stays small against a long session, and the estimate of section 3 leaves 4 to 6 KiB of headroom. The limits of the table cannot all be reached at once (their sum is 28 KiB, which assumes exactly one rule without path scoping); that is intended.
+
+Outside the set and not budgeted: user-level configuration under `~/.claude/` (on this platform restored from `workspace/claude-user/`, ADR-001 D16) and Claude Code's own system prompt and tool definitions. The share of the context window depends on the model.
 
 ### 4.3 How `size-budget` reads the values
 
@@ -326,7 +328,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 
 | # | Decision | Applied in |
 |---|---|---|
-| Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 |
+| Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 || Q2 | 20 KiB accepted for the always-loaded set. The estimate is corrected to about 14 to 16 KiB and the headroom to 4 to 6 KiB; the 28 KiB sum of the limits assumes one unscoped rule. User-level configuration under `~/.claude/` and Claude Code's own prompt and tool definitions are outside the set and not budgeted | TM-3, sections 3 and 4.2 |
 
 ## 14. Still open
 
