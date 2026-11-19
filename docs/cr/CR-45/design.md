@@ -352,7 +352,11 @@ Applied in this PR as the approver decided. Wording is the approver's where it i
 
 **CR-39 status (Q12 check, 2026-11-19).** `gh pr view 40 --json state,mergedAt` and the same for 42: **PR #40 merged 2026-11-19 (14:13 UTC), PR #42 merged 2026-11-19 (14:22 UTC), both by the approver account.** So, as decided: the CR-39 entry in the ADR-003 header row `Amended by` now reads "(design PR #40 merged, 2026-11-19) ... checks are enforced once the template's implementation PRs are merged" (it read "(Proposed) ... takes effect when the CR-39 design PR is merged"), and ADR-008's Status is "**Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver)". The `docs/README.md` row of ADR-008 follows. The result is reported in the PR body.
 
-**ADR-008** (Q13): see the end of this section.
+**ADR-008** (Q13, minimal). Header row added: "`| Amended by | ADR-010 (Proposed, CR-45): budgets and loading order, checkpoint format, metrics; closes D10-1 and D10-2 of design section 11. Takes effect when the CR-45 design PR is merged |`". Appended:
+
+- Decision 2: "A project raises a single value of `.template/budgets.toml` only by a per-key entry in `.template/overrides.toml` (ADR-010); `budgets.toml` itself is never a whole-file override."
+- Decision 7: "Each `SKILL.md` follows the layout and size budgets of ADR-010." The headings are not listed in ADR-008; they are in ADR-010 decision 4.
+- Section 4 (Consequences): "ADR-010 adds `scripts/metrics`, the gate checks `output-budget` and `skill-layout`, an extended `size-budget`, and the values of `.template/budgets.toml`. They follow the template's implementation PRs."
 
 ## 13. Decisions of the approver (architecture discussion, 2026-11-19)
 
@@ -372,6 +376,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q10 | Accepted. Added: an optional `indicative-stage5` snapshot of tier B over the template's own PRs, labelled "indicative, not a regression reference". The full baseline is recorded in the repository whose PRs it measures. Both noted in M-16 | TM-15, section 10.4, M-16 |
 | Q11 | Accepted as placeholders. `min_prs` is 10 for rates (first-pass rate) and 5 for medians. Thresholds change by a template release, or in a project by a per-key entry (Q3) | section 10.4, `[regression]` in section 4.3, section 10.2, M-12, ADR-010 decision 11 |
 | Q12 | Accepted, changed wording. ADR-003 section 7: *Concise CI output* replaced as quoted in the review (job summary for the approver; Claude Code reads CI results through the API in the bounded form of ADR-010, never raw logs); the checkpoint bullet and the header row as drafted. PR #40 and PR #42 are both merged (2026-11-19), so the CR-39 entry in ADR-003's `Amended by` row now reads "(design PR #40 merged, 2026-11-19) ... checks are enforced once the template's implementation PRs are merged" and ADR-008's Status is **Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver). Reported in the PR body | section 12, ADR-003 (header row, section 7), ADR-008 (Status), `docs/README.md` |
+| Q13 | Accepted, minimal. ADR-008: header row `Amended by` as drafted; decision 2 gets the per-key raise sentence; decision 7 gets "Each `SKILL.md` follows the layout and size budgets of ADR-010" (the headings are not listed in ADR-008); section 4 gets the consequences sentence as drafted | section 12, ADR-008 (header row, decisions 2 and 7, section 4) |
 
 ## 14. Still open
 
