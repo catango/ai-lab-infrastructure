@@ -23,7 +23,10 @@ FORWARDED = {"OCI_CLI_CONFIG_FILE": re.compile(r"/[A-Za-z0-9_./-]{1,127}"), "OCI
 MAX_COMPARTMENTS = 10
 MAX_CALLS = 250
 PAGE = "500"
-ONS_PAGE = "100"  # Notifications refuses a larger page: "query param limit must be less than or equal to 100" (first Cloud Shell runs)
+# Notifications refuses a larger page, and the two calls differ. The service's own answers in the Cloud Shell runs:
+# "query param limit must be less than or equal to 50" (ListTopics) and "... to 100" (ListSubscriptions). Its documentation states no range.
+TOPIC_PAGE = "50"
+SUBSCRIPTION_PAGE = "100"
 CALL_TIMEOUT = 90
 TOTAL_SECONDS = 900
 MAX_OUTPUT = 2 * 1024 * 1024
@@ -53,8 +56,8 @@ IP_RESERVED = ("oci", "network", "public-ip", "list", "--compartment-id", COMPAR
 IP_EPHEMERAL = ("oci", "network", "public-ip", "list", "--compartment-id", COMPARTMENT, "--scope", "AVAILABILITY_DOMAIN",
                 "--availability-domain", DOMAIN, "--lifetime", "EPHEMERAL", "--limit", PAGE)
 ALARMS = ("oci", "monitoring", "alarm", "list", "--compartment-id", COMPARTMENT, "--limit", PAGE)
-TOPICS = ("oci", "ons", "topic", "list", "--compartment-id", COMPARTMENT, "--limit", ONS_PAGE)
-SUBSCRIPTIONS = ("oci", "ons", "subscription", "list", "--compartment-id", COMPARTMENT, "--limit", ONS_PAGE)
+TOPICS = ("oci", "ons", "topic", "list", "--compartment-id", COMPARTMENT, "--limit", TOPIC_PAGE)
+SUBSCRIPTIONS = ("oci", "ons", "subscription", "list", "--compartment-id", COMPARTMENT, "--limit", SUBSCRIPTION_PAGE)
 PLAN = (VERSION, COMPARTMENTS, DOMAINS, LIMIT_VALUES, AVAILABILITY, AVAILABILITY_AD, INSTANCES, VOLUMES, BOOT_VOLUMES, BACKUPS, BOOT_BACKUPS,
         IP_RESERVED, IP_EPHEMERAL, ALARMS, TOPICS, SUBSCRIPTIONS)
 LIMITS = (("standard-a1-core-count", "a1_ocpu"), ("standard-a1-memory-count", "a1_memory_gb"), ("standard-e2-micro-core-count", "micro_core"))
