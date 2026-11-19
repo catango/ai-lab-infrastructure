@@ -5,14 +5,14 @@
 | Issue | #43 |
 | Class | 3 |
 | Status | Draft design. Architecture discussion pending. Nothing is implemented |
-| ADR | [ADR-009](../../adr/ADR-009-security-and-ci-baseline.md) (Proposed). Proposed amendments to ADR-001, ADR-003, ADR-005, and ADR-008 are drafted in design section 13 and are **not** applied |
+| ADR | [ADR-009](../../adr/ADR-009-security-and-ci-baseline.md) (Proposed). Proposed amendments to ADR-001, ADR-003, ADR-005, and ADR-008 are drafted in design section 14 and are **not** applied |
 | Origin | Baseline v0.1 section 7 (ADR-009) and the dependencies D9-1 to D9-8 of [CR-39 design section 11](../CR-39/design.md) |
 
 ## Summary
 
 Designs the security and CI baseline of every repository on this platform: which checks are required status checks, the Actions hardening rules, the repository security features on GitHub Free for public and for private repositories, fork pull requests and third-party Actions, the host-reported evidence line for an architecture with no hosted runner, the rulesets that `initialize-project` prints, and the gate checks `forbidden-api`, `operator-contract`, and `owned-drift`. It also fixes the catalogue of quality-gate checks, how this repository and the software template share the same rules without a live link, and the settings the approver applies by hand. Design only: no change to code, a workflow, a setting, a ruleset, or the `ai-software-template` repository.
 
-Stage 5 entry needs ADR-008, ADR-009, and ADR-010 approved. This CR delivers ADR-009 only. ADR-010 (token optimisation and metrics) is a separate CR; design section 12 lists the dependencies and assumptions and decides nothing of it.
+Stage 5 entry needs ADR-008, ADR-009, and ADR-010 approved. This CR delivers ADR-009 only. ADR-010 (token optimisation and metrics) is a separate CR; design section 13 lists the dependencies and assumptions and decides nothing of it.
 
 ## Files
 
