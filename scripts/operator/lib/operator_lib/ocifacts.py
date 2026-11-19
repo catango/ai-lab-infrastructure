@@ -23,6 +23,7 @@ FORWARDED = {"OCI_CLI_CONFIG_FILE": re.compile(r"/[A-Za-z0-9_./-]{1,127}"), "OCI
 MAX_COMPARTMENTS = 10
 MAX_CALLS = 250
 PAGE = "500"
+ONS_PAGE = "100"  # Notifications refuses a larger page: "query param limit must be less than or equal to 100" (first Cloud Shell runs)
 CALL_TIMEOUT = 90
 TOTAL_SECONDS = 900
 MAX_OUTPUT = 2 * 1024 * 1024
@@ -52,8 +53,8 @@ IP_RESERVED = ("oci", "network", "public-ip", "list", "--compartment-id", COMPAR
 IP_EPHEMERAL = ("oci", "network", "public-ip", "list", "--compartment-id", COMPARTMENT, "--scope", "AVAILABILITY_DOMAIN",
                 "--availability-domain", DOMAIN, "--lifetime", "EPHEMERAL", "--limit", PAGE)
 ALARMS = ("oci", "monitoring", "alarm", "list", "--compartment-id", COMPARTMENT, "--limit", PAGE)
-TOPICS = ("oci", "ons", "topic", "list", "--compartment-id", COMPARTMENT, "--limit", PAGE)
-SUBSCRIPTIONS = ("oci", "ons", "subscription", "list", "--compartment-id", COMPARTMENT, "--limit", PAGE)
+TOPICS = ("oci", "ons", "topic", "list", "--compartment-id", COMPARTMENT, "--limit", ONS_PAGE)
+SUBSCRIPTIONS = ("oci", "ons", "subscription", "list", "--compartment-id", COMPARTMENT, "--limit", ONS_PAGE)
 PLAN = (VERSION, COMPARTMENTS, DOMAINS, LIMIT_VALUES, AVAILABILITY, AVAILABILITY_AD, INSTANCES, VOLUMES, BOOT_VOLUMES, BACKUPS, BOOT_BACKUPS,
         IP_RESERVED, IP_EPHEMERAL, ALARMS, TOPICS, SUBSCRIPTIONS)
 LIMITS = (("standard-a1-core-count", "a1_ocpu"), ("standard-a1-memory-count", "a1_memory_gb"), ("standard-e2-micro-core-count", "micro_core"))
@@ -103,8 +104,8 @@ def forwarded_env(auth, environ):
 
 
 class Reply:
-    def __init__(self, status, data=None, more=False):
-        self.status, self.data, self.more = status, data, more
+    def __init__(self, status, data=None, more=False, page=int(PAGE)):
+        self.status, self.data, self.more, self.page = status, data, more, page
 
 
 class Client:
@@ -166,7 +167,7 @@ class Client:
         if not isinstance(body, dict) or "data" not in body:
             self.failed += 1
             return Reply("failed")
-        return Reply("ok", body["data"], more=bool(body.get("opc-next-page")))
+        return Reply("ok", body["data"], more=bool(body.get("opc-next-page")), page=_page_size(template))
 
 
 def _pick(item, *keys):
@@ -186,12 +187,17 @@ def _whole(value):
     return None
 
 
+def _page_size(template):
+    """The page size a command asks for (the value after --limit)."""
+    return int(template[template.index("--limit") + 1]) if "--limit" in template else int(PAGE)
+
+
 def _items(reply):
     """The list of objects of a complete answer, or None (not ok, another page, or an unexpected shape). A full page counts as
     another page too, because the documentation does not state the name of the paging key."""
     if reply.status != "ok" or reply.more or not isinstance(reply.data, list) or not all(isinstance(i, dict) for i in reply.data):
         return None
-    return None if len(reply.data) >= int(PAGE) else reply.data
+    return None if len(reply.data) >= reply.page else reply.data
 
 
 def _live(item):
