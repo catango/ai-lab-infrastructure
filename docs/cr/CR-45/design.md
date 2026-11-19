@@ -313,9 +313,10 @@ Numbers above are placeholders to show the shape, not measurements. **Readers:**
 | | When | Holds | Recorded by |
 |---|---|---|---|
 | **Static baseline** | The last implementation PR of the template, the Stage 5 exit | Tier A on the template and on a generated repository | `metrics snapshot --label baseline-static --dir template-dev/docs/metrics` in that PR |
-| **Full baseline** | Stage 7 ("metrics baseline recorded"), after the first real project (Stage 6) | Tiers A and B over the PRs of one full Class 3 CR, tier C if the user supplies it | A change PR `docs/metrics/baseline.toml`, reviewed by the approver |
+| **Full baseline** | Stage 7 ("metrics baseline recorded"), after the first real project (Stage 6) | Tiers A and B over the PRs of one full Class 3 CR, tier C if the user supplies it | A change PR `docs/metrics/baseline.toml` **in the repository whose PRs it measures**, reviewed by the approver |
+| **Indicative snapshot** (optional) | The Stage 5 exit, after the dry run | Tier B over the template's own PRs, labelled "indicative, not a regression reference" | `metrics snapshot --label indicative-stage5 --dir template-dev/docs/metrics` |
 
-Stage 7 waits for the postponed Stages 2 to 4 (baseline section 6). The static baseline does not.
+Stage 7 waits for the postponed Stages 2 to 4 (baseline section 6). The static baseline does not. The full baseline is recorded in the repository whose PRs it measures, not in the template. The optional `indicative-stage5` snapshot covers tier B over the template's own PRs, which are few and are not those of an application project: it is labelled "indicative, not a regression reference", and `metrics compare` against it is for information only.
 
 **What a regression is.**
 
@@ -365,6 +366,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q7 | Accepted, changed. Wording: read one `##` section, or a range of at most 100 lines and 8 KiB; a file over 200 lines or over 8 KiB is not read whole (`rg -n '^#'` or `rg -n <term>` first); command output over 40 lines is summarised or cut with `head` or `tail`. Basis sentence replaced (section = about 800 tokens, whole CR design about 11,000; a line limit alone lets most ADR files be read whole, so a byte limit). Line and byte counts of ADR-001, ADR-003, ADR-008 added to section 3. M-10 updated. Also applies to this repository's `CLAUDE.md` in a change PR after ADR-010 is accepted | TM-13, sections 3, 5.1, 8, M-10, ADR-010 decision 9 |
 | Q8 | Accepted, changed. A `review-threads` page closes at 5 threads or once 4 KiB is reached, whichever comes first; it never splits an item and always holds at least one thread; the per-round bound holds on the fixture and one oversized approver item makes its page larger, by design. M-9: the 3 KiB item goes in a fixture of its own, and page 1 of the 12-thread fixture stays within 4 KiB. A review round is an approver review submission in any state other than approved, followed by at least one push (replaces "review submissions that request changes") | TM-12, sections 9, 10.1, 14, M-9, ADR-010 decision 8 |
 | Q9 | Accepted, changed. `metrics snapshot --label <l> [--dir <path>]`, default `docs/metrics/`. In an application repository the directory is created by the project and is not part of the payload manifest, like CR instances. The template writes its snapshots with `--dir template-dev/docs/metrics` (template-only, ADR-008 decision 1). The hygiene checks still apply. M-13, M-16 (a), ADR-010 decision 10, and plan PR 4 updated | sections 10.2, 10.3, 10.4, M-13, M-16, ADR-010 decision 10, plan PR 4 |
+| Q10 | Accepted. Added: an optional `indicative-stage5` snapshot of tier B over the template's own PRs, labelled "indicative, not a regression reference". The full baseline is recorded in the repository whose PRs it measures. Both noted in M-16 | TM-15, section 10.4, M-16 |
 
 ## 14. Still open
 
