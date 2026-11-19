@@ -9,7 +9,7 @@ These PRs add to the template content of CR-39 and so follow its PRs. The CR-39 
 | # | PR (branch slug) | Content | Needs | Acceptance criteria |
 |---|---|---|---|---|
 | 1 | `budgets` | `.template/budgets.toml` with the values of design section 4 (the real always-loaded set measured first), `size-budget` extended (classes, description characters, the always-loaded group), tests; V-1 and V-2 checked and recorded | CR-39 PR 4 (`CLAUDE.md`, rules, `claude-md`) and PR 2 (`size-budget`); ADR-009 assumption X-1 still valid | M-1, M-2, M-17 (part) |
-| 2 | `ci-output` | Finding cap at 200 characters, annotations under Actions, the summary-line rule, check `output-budget` and the `[outputs]` values for the scripts that exist, tests; V-3 checked on a test PR | PR 1; CR-39 PR 2 | M-4 (part), M-5, M-17 (part) |
+| 2 | `ci-output` | Finding cap at 200 characters, annotations under Actions (gate and `pr-contract`) with the escaping rule, the summary-line rule, check `output-budget` and the `[outputs]` values for the scripts that exist, tests; V-3 checked on a test PR | PR 1; CR-39 PR 2 (`size-budget`, gate) and PR 3 (`pr-contract`) | M-4 (part), M-5, M-17 (part) |
 | 3 | `loading` | Skill headings and check `skill-layout`; `pr-checkpoint` validation and `show`; `cr-context` outline; `review-threads` paging; the context-discipline numbers in the template's `CLAUDE.md` text; `[outputs]` for all scripts | PR 2; CR-39 PR 7 (all Skills and their scripts exist) | M-3, M-4, M-6, M-7, M-8, M-9, M-10 |
 | 4 | `metrics` | `scripts/metrics` (`static`, `prs`, `snapshot`, `compare`), the snapshot schema, the `docs/metrics/` handling and its line in the docs index seed, the static baseline `baseline-static`, the constraints checklist | PR 3; CR-39 PR 9 (the dry run exists, so the baseline covers a generated repository) | M-11, M-12, M-13, M-14, M-15, M-16 (a) |
 
@@ -28,7 +28,7 @@ These PRs add to the template content of CR-39 and so follow its PRs. The CR-39 
 |---|---|
 | Before PR 1 | Approve ADR-008, ADR-009, and ADR-010 (Stage 5 entry) |
 | After ADR-010 is accepted | Review the change PR that adds the context-discipline numbers to this repository's `CLAUDE.md` (Q7); Claude Code proposes it after ADR-010 is accepted |
-| PR 2 | Nothing, unless the annotation channel does not work (V-3): then decide the fallback of Q6 |
+| PR 2 | Nothing. If the annotation channel does not work (V-3), the filtered log through `pr-checkpoint show` becomes the primary channel without a new design PR; the result is recorded in the PR |
 | Optional, at Stage 7 | Supply usage figures from Claude Desktop for tier C, as per-PR numbers, or keep them locally (Q14) |
 | Stage 7 | Ask for `metrics snapshot --label baseline` in a session you start, review the baseline PR, and re-confirm the soft thresholds (M-16 (b)) |
 

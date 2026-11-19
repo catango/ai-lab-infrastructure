@@ -30,7 +30,7 @@ Nothing in this PR changes code, a workflow, a PR template, a label, a setting, 
 - **Usage figures** are typed by the user. No script reads Claude Desktop, a session transcript, or a credential. Transcripts are not analysed because they hold whatever was pasted into a session.
 - **Instruction trust.** The budgets bound what is loaded; they do not change who may instruct. `address-review-feedback` keeps its filters (T-11). Paging adds no filter and removes none, and never truncates approver text.
 - **A budget that is too tight** could push someone to move a guardrail out of `CLAUDE.md` into a file that is not loaded. The mitigation is that the instruction-trust rule, the Never list, and the precedence sentence are in the owned `CLAUDE.md`, whose hash is checked, and the budget leaves room for them (design section 4.1).
-- **Annotations** carry the first finding of a failed check, cut at 200 characters and escaped. Findings are paths and messages produced by the gate, which already sanitises them for the job summary.
+- **Annotations** carry the first finding of a failed check, cut at 200 characters and escaped after the gate's `sanitize()`: in the message `%`, CR, and LF; in properties (`title=`) also `:` and `,`. The check ID in `title=` comes from the PR's own checkout. Findings are paths and messages produced by the gate, which already sanitises them for the job summary. `pr-contract` annotations follow the same rule. The fallback through `pr-checkpoint show` keeps only filtered, sanitised `FAIL` lines; Claude Code never reads a raw log.
 
 ## 4. Operational impact on the approver
 
