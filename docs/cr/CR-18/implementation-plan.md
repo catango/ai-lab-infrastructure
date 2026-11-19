@@ -12,7 +12,8 @@ Starts only after the design PR is merged (ADR-003 section 4). Each implementati
 | 4 | `github-setup` | `scripts/operator/github-setup`, the desired-state file, and `facts --scope github`, with tests | PR 1 and PR 3 applied on the platform operator VM with U-1 done; VO-3, VO-4, VO-17 answered; the tag ruleset (R3) applied | F-3, G-2, G-3, U-4 |
 | 5 | `facts-oci` | `facts --scope oci`, merging `oci-audit` into it, usable in Cloud Shell before CR-16, with tests using sample output | PR 2; VO-1 and VO-16 answered | F-2, G-5 |
 | 6 | `acceptance` | `scripts/operator/acceptance`, the criterion registry from CR-16's acceptance tables | PR 1; CR-16 merged and its stacks applied; the lab operator VM working | G-4, L-1, L-2, W-1, W-2 |
-| 7 | `operator-finish` | `docs/operations/operator.md` (platform operator VM runbook, lab operator VM bootstrap, `ssh` config templates, break-glass runbook, token handling, rollback), the shortened `gate-0-audit.md` and `github-setup.md` with their appendices, `docs/README.md`, the evidence table; `Closes #18` | PRs 1 to 6 and the approver's run | D-1 to D-4, U-2, U-3 |
+| 7a | `operator-finish-docs` | Split from PR 7 by the approver on 2026-11-19, because the OCI VMs are postponed. `docs/operations/operator.md` for what does not need an OCI VM (platform operator VM runbook, token handling, rollback), the shortened `gate-0-audit.md` and `github-setup.md` with their appendices, `docs/README.md`, and an evidence table that marks every criterion needing an OCI VM as deferred. No `Closes #18` | PRs 1 to 5; the approver's runs on the platform operator VM (`setup`, U-1, GitHub scope) | D-2, D-3, the part of D-1 above, U-2 and U-3 for the platform operator VM |
+| 7b | `operator-finish` | The rest of `docs/operations/operator.md` (lab operator VM bootstrap, `ssh` config templates for both OCI VMs, break-glass runbook), the finished evidence table; `Closes #18` | PR 6, 7a, and the approver's run on the lab operator VM | D-1, D-4, U-2, U-3 for the lab operator VM |
 
 PRs 4 and 5 are independent of each other and may be reviewed in parallel. PR 6 may be drafted earlier, but it needs CR-16's criteria. Implementation PRs that do not need OCI (1 to 4) start after this design merges. PR 6 waits for CR-16 to be merged and applied (Q8). PR 5 does not need the lab operator VM, because the OCI scope runs in Cloud Shell until it exists.
 
@@ -42,7 +43,9 @@ The host-separation test U-1 runs on each operator machine after its first profi
 
 **PR 6: acceptance.** A registry of criteria by ID, each with how to run it (or `manual`). The runner reports yes or no per ID and reaches the lab VM with a dedicated SSH key over private IPs.
 
-**PR 7: operator-finish.** Runbook updates, the shortened manual runbooks, and the evidence table.
+**PR 7a: operator-finish-docs.** The runbook parts that do not need an OCI VM, the shortened manual runbooks (the removed manual steps stay in an appendix), the `docs/README.md` status, and the evidence table with the criteria that need an OCI VM marked deferred (L-1, L-2, W-1, W-2, G-4, and U-1, U-2, U-3 for the lab operator VM). Written while the OCI work is postponed (baseline, section 6). It does not close #18.
+
+**PR 7b: operator-finish.** The runbook parts that describe the lab operator VM and the break-glass rebuild, the `ssh` config templates for both OCI VMs, and the finished evidence table. It closes #18 and needs PR 6 and the approver's runs.
 
 ## 4. User-only actions (Claude does not run these)
 
@@ -56,7 +59,8 @@ The host-separation test U-1 runs on each operator machine after its first profi
 | Each `github-setup` apply run | Create T2 at the prompt's request, then revoke it |
 | After CR-16 is applied | Check the lab operator VM (L-1, L-2), run U-1 on it, and test a break-glass rebuild once per OCI VM (W-2) |
 | After PR 6 | Run the acceptance script with `--apply` on the lab operator VM |
-| After PR 7 | Review and merge; the CR closes with the merge |
+| After PR 7a | Review and merge; the CR stays open |
+| After PR 7b | Review and merge; the CR closes with the merge |
 
 ## 5. What this plan does not do
 
