@@ -32,7 +32,7 @@ I read of ADR-009 only the `README.md` of its CR (`docs/cr/CR-43/`). Its design 
 | TM-10 | Checkpoint format of section 7.1, validated by `scripts/pr-checkpoint` (Q5) | Bounds the one thing every `resume-work` reads |
 | TM-11 | `resume-work` reads only `scripts/pr-checkpoint show` (section 7.2) | Restates ADR-003 section 7 with a size and a list of what it must not read |
 | TM-12 | Review loop: `review-threads` pages (5 threads per page), never truncates an approver's text; the per-round bound of section 9 (Q8) | The loop's cost is rounds times a bounded round; rounds are measured |
-| TM-13 | Context-discipline numbers in the owned `CLAUDE.md`: range of at most 200 lines; a file over 200 lines is not read whole; command output over 40 lines is summarised (Q7) | A number is followed more reliably than "targeted"; it is an instruction, not a control |
+| TM-13 | Context-discipline numbers in the owned `CLAUDE.md`: one `##` section or a range of at most 100 lines and 8 KiB; a file over 200 lines or over 8 KiB is not read whole (outline first); command output over 40 lines is summarised or cut (Q7) | A number is followed more reliably than "targeted"; it is an instruction, not a control |
 | TM-14 | Metrics in **three tiers** (section 10): A from repository files and script fixtures, B from PR data read-only, C the user's own usage figures. `scripts/metrics` has `static`, `prs`, `snapshot`, and `compare`. Snapshots are committed numbers-only files. No Skill loads them (Q9) | Tiers A and B are proxies; only tier C holds token counts |
 | TM-15 | **Baseline:** static baseline at the Stage 5 exit; full baseline at Stage 7. **Regression:** a budget overrun fails the gate; a drift against the baseline is reported by `metrics compare` with thresholds in `budgets.toml` and fails nothing (Q10, Q11) | Baseline Stage 7 says "metrics baseline recorded" without saying what it holds |
 | TM-16 | Tier C is **optional and user-supplied**: the user types numbers from Claude Desktop into a snapshot, or keeps them locally. No script and no Claude Code session reads Claude Desktop, a transcript, or a credential (Q14) | Constraint of this CR |
@@ -47,7 +47,7 @@ Measured in this session on this repository (`wc`, 2026-11-19). The template doe
 | `CLAUDE.md` of this repository | 58 lines, 5,473 B (94 B per line, about 1,400 tokens) | Line and byte limits (TM-2): 120 lines is about twice this |
 | CR-39 files read whole | five files, 68,492 B (about 17,000 tokens); `design.md` alone 44,184 B in 14 sections | The case for outline reading (TM-7) |
 | `README.md` plus one `design.md` section | about 2.5 KB plus 3.2 KB on average, 8% of the whole CR | The same |
-| ADR files | ADR-001 21,956 B, ADR-003 14,773 B, ADR-008 11,456 B | Reading by heading (TM-7) |
+| ADR files (`wc`, 2026-11-19) | ADR-001 206 lines, 21,956 B; ADR-003 183 lines, 14,773 B; ADR-008 71 lines, 11,456 B | Reading by heading (TM-7); a line limit alone would let ADR-003 and ADR-008 be read whole, so a byte limit is added (section 8) |
 | `docs/README.md` of this repository | 65 lines, 6,405 B, one row per document | Index limit (section 4.1) |
 | Gate output | `MAX_FINDINGS=20`, `PASS`/`FAIL` lines, one summary line | TM-8, TM-9 keep it |
 | CI summary channel, latest run on `main` | the check-run `output.summary` is empty and the run has no annotations; the job log holds the gate's own lines (`PASS ...`, `FAIL ...`, the summary line) | TM-9 |
@@ -136,7 +136,7 @@ pr     = "owner/repo#12"
 ### 5.1 At session start and in a Skill
 
 - **At start**, the always-loaded set (section 4.2) and nothing else. Path-scoped rules load when matching files are read (V-1).
-- **In a Skill:** (1) the `SKILL.md`; (2) the output of its script; (3) the files that output names, by range, in the order the output lists them; (4) never a directory, never an ADR or CR file whole when it has more than 200 lines.
+- **In a Skill:** (1) the `SKILL.md`; (2) the output of its script; (3) the files that output names, by range, in the order the output lists them; (4) never a directory, never an ADR or CR file whole when it has more than 200 lines or 8 KiB.
 - **For a CR:** `README.md` first, then `scripts/cr-context` prints the other files with lines, bytes, and `##` headings with line numbers; the Skill reads the section it needs.
 - **For an ADR:** `rg -n '^#' <file>` (about 20 headings, 600 B), then the range. `docs/README.md` is the index that tells which ADR or CR to open; it is read only when the target is not named.
 
@@ -228,12 +228,15 @@ It does **not** read: PR comments, review threads (that is `address-review-feedb
 
 ## 8. Context-discipline numbers
 
-`CLAUDE.md` of this repository says: locate with `rg` and `fd`, read targeted ranges, summarise long command output. **Proposed numbers (TM-13, Q7):**
+`CLAUDE.md` of this repository says: locate with `rg` and `fd`, read targeted ranges, summarise long command output. **Numbers (TM-13, Q7):**
 
-- read a range of **at most 200 lines**; a file over **200 lines** is not read whole: run `rg -n '^#'` or `rg -n <term>` first, then the range;
-- command output over **40 lines** is summarised or cut with `head` or `tail`, and a failure is reported as command, first error, likely cause (as now).
+> Read one `##` section, or a range of at most 100 lines and 8 KiB. A file over 200 lines or over 8 KiB is not read whole: run `rg -n '^#'` or `rg -n <term>` first. Command output over 40 lines is summarised or cut with `head` or `tail`.
 
-Basis: this repository's CR design files are 280 to 296 lines (about 11,000 tokens whole) and 14 sections of about 20 lines; 200 lines keeps a read to one or two sections. The numbers are **instructions, not controls**: nothing in the gate can see a read. What can be checked is that the owned text carries them (`claude-md` hash) and that the outline exists (M-8). Whether they change behaviour is visible only in tier C (the user's figures).
+A failure is reported as command, first error, likely cause (as now).
+
+Basis: a CR design file here is 280 to 296 lines and about 44 KB in 14 sections of about 20 lines and 3.2 KB each. A section costs about 800 tokens, the whole file about 11,000. A line limit alone would let most ADR files be read whole, so a byte limit is added (TM-1).
+
+The numbers are **instructions, not controls**: nothing in the gate can see a read. What can be checked is that the owned text carries them (`claude-md` hash) and that the outline exists (M-8). Whether they change behaviour is visible only in tier C (the user's figures).
 
 ## 9. Cost of the review loop
 
@@ -359,6 +362,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q4 | Accepted. No change: only the instruction files, the docs index, and the CR `README.md` are gated; ADR files and the other CR files are reported, not gated | TM-7, section 4.1 |
 | Q5 | Accepted. The checkpoint block limit binds before 20 items of 120 characters (20 × 126 B > 2 KiB); intended. `pr-checkpoint show` prints at most 10 commits and at most 3 `ci-failed` lines, then `ci-failed: +<n> more`; the text after `ci-failed:` comes from CI and the Skill treats it as data. The 2 KiB limit stays. M-7 updated | TM-10, TM-11, sections 6, 7.1, 7.2, M-7, ADR-010 decision 7 |
 | Q6 | Accepted, changed. Escaping after `sanitize()`: message `%`, CR, LF; properties also `:` and `,`; the check ID in `title=` comes from the PR's own checkout. Findings cut at 200 characters, not bytes. `pr-contract` reports its failures as annotations (at most 10). Fallback: `pr-checkpoint show` prints at most 10 filtered, sanitised `FAIL` lines of the failing job's log; Claude Code never reads a raw log. The cap of 10 is GitHub's per-step limit, confirmed in V-3 (the cap follows the limit). If V-3 fails the filtered log becomes primary, with no new design PR and the result recorded in PR 2. Plan: PR 2 also needs CR-39 PR 3 (`pr-contract`). M-5 extended; impact analysis updated | section 6, TM-9, M-5, ADR-010 decision 6, plan PR 2, impact analysis section 3 |
+| Q7 | Accepted, changed. Wording: read one `##` section, or a range of at most 100 lines and 8 KiB; a file over 200 lines or over 8 KiB is not read whole (`rg -n '^#'` or `rg -n <term>` first); command output over 40 lines is summarised or cut with `head` or `tail`. Basis sentence replaced (section = about 800 tokens, whole CR design about 11,000; a line limit alone lets most ADR files be read whole, so a byte limit). Line and byte counts of ADR-001, ADR-003, ADR-008 added to section 3. M-10 updated. Also applies to this repository's `CLAUDE.md` in a change PR after ADR-010 is accepted | TM-13, sections 3, 5.1, 8, M-10, ADR-010 decision 9 |
 
 ## 14. Still open
 
