@@ -7,7 +7,7 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` |
 | Target location | `docs/adr/ADR-003-pr-centric-workflow.md` |
 | Requirement | CHG-003: GitHub-centric workflow based on PRs; no automatic responses from Claude |
-| Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (Proposed): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body. Takes effect when the CR-39 design PR is merged; checks are enforced once the template's implementation PRs are merged |
+| Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (Proposed): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body. Takes effect when the CR-39 design PR is merged; checks are enforced once the template's implementation PRs are merged. CR-43 (design PR #44): section 6 required checks, rule PC-9, the PC-7 exemption, and AC3-8. Takes effect when the CR-43 design PR is merged; PC-9 is enforced once implemented |
 | Related | ADR-002 (infrastructure pipeline), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
 
 > Numbering note: this requirement was briefly labeled "CHG-002" in discussion. CHG-002 is already
@@ -98,9 +98,9 @@ The approver login and the approver's immutable account ID are stored in the pro
 
 ## 6. `pr-contract` check
 
-Application repositories generated from the software template enforce the PR contract shipped by the template version they last synced. That contract must implement PC-1 to PC-8 as stated here and may add rules. The template-sync and init PR types and their path rules are defined by the template (ADR-008).
+Application repositories generated from the software template enforce the PR contract shipped by the template version they last synced. That contract must implement PC-1 to PC-9 as stated here and may add rules. The template-sync and init PR types and their path rules are defined by the template (ADR-008).
 
-This is a required status check on public repositories and advisory on private repositories (GitHub Free). It runs on `pull_request` with a read-only `GITHUB_TOKEN`, uses no secrets, and runs safely for fork PRs.
+The checks `pr-contract` and `quality-gate` are required status checks on public repositories, enforced by the branch ruleset with GitHub Actions as their source. GitHub Free offers rulesets on private repositories only with a paid plan, so on a private repository both are advisory and the approver confirms them on the PR's head before merging. `pr-contract` runs on `pull_request` with a read-only `GITHUB_TOKEN`, uses no secrets, and runs safely for fork PRs.
 
 | Rule | Requirement |
 |---|---|
@@ -110,8 +110,9 @@ This is a required status check on public repositories and advisory on private r
 | PC-4 | A design PR changes only paths under `docs/`. |
 | PC-5 | An implementation or change PR does not modify `docs/cr/*/design.md`, `acceptance-criteria.md`, or `docs/adr/` files belonging to an approved CR. |
 | PC-6 | Changes under `.github/workflows/` or `.github/actions/` require the PR-body section "Workflow change justification". |
-| PC-7 | Dependabot PRs are exempt from PC-1 to PC-3 and PC-8, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
+| PC-7 | Dependabot PRs are exempt from PC-1 to PC-3, PC-8, and PC-9, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
 | PC-8 | A PR that changes a path listed under the configuration key `operator_paths` requires the PR-body section "Operator script review", non-empty. In this repository the key lists `scripts/operator/`, `ansible/operator.yml`, `ansible/roles/operator_*/` and `toolchain/python/operator.lock` (ADR-011); in a newly generated application repository it is empty. |
+| PC-9 | A change or implementation PR on a repository that has no hosted runner for an architecture listed under the configuration key `architectures` (read from the base commit) contains, in the section "Architecture evidence", one line `evidence: <arch> \| <machine> \| <os> \| <40-hex SHA> \| clean \| <gate command> \| exit 0 \| <UTC time>` per such architecture, with the SHA equal to the PR's current head. Design and Dependabot PRs are exempt. The line is informational; the approver accepts it per PR. |
 
 **Security requirement.** The PR title and body are untrusted input. They are passed to the script only through environment variables or the API, never interpolated into `run:` shell steps. All Actions used are pinned to reviewed SHAs.
 
@@ -181,3 +182,4 @@ This is a required status check on public repositories and advisory on private r
 - AC3-5: `resume-work` restores task state from the PR checkpoint after a fresh VM workspace clone.
 - AC3-6: No workflow in either template or platform repository invokes Claude or holds a Claude credential (automated scan in CI).
 - AC3-7: A PR that changes an operator path without a non-empty "Operator script review" section fails `pr-contract` (PC-8).
+- AC3-8: A change or implementation PR on a repository with no runner for a configured architecture fails `pr-contract` unless it carries a valid evidence line whose SHA equals the PR's head (PC-9).
