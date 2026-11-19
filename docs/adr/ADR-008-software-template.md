@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** (CR-39 design PR #40; accepted when that PR is merged by the approver) |
+| Status | **Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver) |
 | Date | 2026-11-19 |
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` (this record) |
 | Change request | CR-39 (issue #39) |

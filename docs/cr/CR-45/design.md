@@ -341,16 +341,18 @@ Listed, not decided. ADR-009's design was not read, only its CR `README.md` (CR-
 | D10-1 | CR-39 design section 11 | **Answered** by sections 4 and 5 and Q1 to Q4. The CR-39 file is approved and is not edited; this table records the closure |
 | D10-2 | CR-39 design section 11 | **Answered** by sections 6, 7, and 10 and Q5, Q6, Q9 to Q11. CR-39 assumed one summary line per run and no collection; that holds (TM-8, TM-17) |
 
-## 12. Proposed amendments (drafted, not applied)
+## 12. Amendments to ADR-003 and ADR-008 (applied, Q12 and Q13)
 
-Applied only if the approver decides yes in Q12 or Q13. Wording is mine.
+Applied in this PR as the approver decided. Wording is the approver's where it is quoted in the review.
 
-**ADR-003** (Q12). Header row `Amended by`: append "CR-45 (Proposed): section 7, the reference to the checkpoint format and the CI summary channel. Takes effect when the CR-45 design PR is merged". Section 7:
+**ADR-003** (Q12). Header row `Amended by`: appended "CR-45 (Proposed): section 7, the reference to the checkpoint format and the CI summary channel. Takes effect when the CR-45 design PR is merged". Section 7:
 
-- Bullet *Draft PR as checkpoint*: replace the last sentence ("`resume-work` reads only the checklist, the latest CI summary, and `git log` since the merge base.") with: "`resume-work` reads only the checklist, the latest CI result, and `git log` since the merge base, through `scripts/pr-checkpoint show`, in the format and within the limits of ADR-010."
-- Bullet *Concise CI output*: replace the text with: "CI failures are written to the job summary as short, structured output for the approver, and as at most 10 check-run annotations, one per failed check, for Claude Code, which reads them through `gh api` and not raw logs. The step summary itself is not exposed by the API. Sizes are limited by ADR-010."
+- Bullet *Draft PR as checkpoint*: the last sentence is replaced with: "`resume-work` reads only the checklist, the latest CI result, and `git log` since the merge base, through `scripts/pr-checkpoint show`, in the format and within the limits of ADR-010."
+- Bullet *Concise CI output*: the text is replaced with: "CI failures are written to the job summary as short, structured output for the approver. Claude Code reads CI results through the API in the bounded form defined by ADR-010, and never raw logs."
 
-**ADR-008** (Q13). Add the header row `| Amended by | ADR-010 (Proposed, CR-45): budgets and loading order, checkpoint format, metrics; closes D10-1 and D10-2 of design section 11. Takes effect when the CR-45 design PR is merged |`. Append to decision 7: "Each `SKILL.md` has the headings `Reads (in order)`, `Does not read`, and `Report`, and stays within the size budgets of ADR-010." Append to section 4 (Consequences): "ADR-010 adds `scripts/metrics`, the gate checks `output-budget` and `skill-layout`, an extended `size-budget`, and the values of `.template/budgets.toml`. They follow the template's implementation PRs."
+**CR-39 status (Q12 check, 2026-11-19).** `gh pr view 40 --json state,mergedAt` and the same for 42: **PR #40 merged 2026-11-19 (14:13 UTC), PR #42 merged 2026-11-19 (14:22 UTC), both by the approver account.** So, as decided: the CR-39 entry in the ADR-003 header row `Amended by` now reads "(design PR #40 merged, 2026-11-19) ... checks are enforced once the template's implementation PRs are merged" (it read "(Proposed) ... takes effect when the CR-39 design PR is merged"), and ADR-008's Status is "**Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver)". The `docs/README.md` row of ADR-008 follows. The result is reported in the PR body.
+
+**ADR-008** (Q13): see the end of this section.
 
 ## 13. Decisions of the approver (architecture discussion, 2026-11-19)
 
@@ -369,6 +371,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q9 | Accepted, changed. `metrics snapshot --label <l> [--dir <path>]`, default `docs/metrics/`. In an application repository the directory is created by the project and is not part of the payload manifest, like CR instances. The template writes its snapshots with `--dir template-dev/docs/metrics` (template-only, ADR-008 decision 1). The hygiene checks still apply. M-13, M-16 (a), ADR-010 decision 10, and plan PR 4 updated | sections 10.2, 10.3, 10.4, M-13, M-16, ADR-010 decision 10, plan PR 4 |
 | Q10 | Accepted. Added: an optional `indicative-stage5` snapshot of tier B over the template's own PRs, labelled "indicative, not a regression reference". The full baseline is recorded in the repository whose PRs it measures. Both noted in M-16 | TM-15, section 10.4, M-16 |
 | Q11 | Accepted as placeholders. `min_prs` is 10 for rates (first-pass rate) and 5 for medians. Thresholds change by a template release, or in a project by a per-key entry (Q3) | section 10.4, `[regression]` in section 4.3, section 10.2, M-12, ADR-010 decision 11 |
+| Q12 | Accepted, changed wording. ADR-003 section 7: *Concise CI output* replaced as quoted in the review (job summary for the approver; Claude Code reads CI results through the API in the bounded form of ADR-010, never raw logs); the checkpoint bullet and the header row as drafted. PR #40 and PR #42 are both merged (2026-11-19), so the CR-39 entry in ADR-003's `Amended by` row now reads "(design PR #40 merged, 2026-11-19) ... checks are enforced once the template's implementation PRs are merged" and ADR-008's Status is **Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver). Reported in the PR body | section 12, ADR-003 (header row, section 7), ADR-008 (Status), `docs/README.md` |
 
 ## 14. Still open
 

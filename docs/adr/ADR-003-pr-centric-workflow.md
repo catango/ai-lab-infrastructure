@@ -7,7 +7,7 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` |
 | Target location | `docs/adr/ADR-003-pr-centric-workflow.md` |
 | Requirement | CHG-003: GitHub-centric workflow based on PRs; no automatic responses from Claude |
-| Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (Proposed): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body. Takes effect when the CR-39 design PR is merged; checks are enforced once the template's implementation PRs are merged |
+| Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (design PR #40 merged, 2026-11-19): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body; checks are enforced once the template's implementation PRs are merged. CR-45 (Proposed): section 7, the reference to the checkpoint format and the CI summary channel. Takes effect when the CR-45 design PR is merged |
 | Related | ADR-002 (infrastructure pipeline), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
 
 > Numbering note: this requirement was briefly labeled "CHG-002" in discussion. CHG-002 is already
@@ -124,11 +124,11 @@ This is a required status check on public repositories and advisory on private r
 
 **Claude Code (Desktop SSH session on the OCI VM, `git` and `gh` as the machine account):**
 
-- **Draft PR as checkpoint.** It opens a draft PR at the start of work. The PR body holds the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` markers. `resume-work` reads only the checklist, the latest CI summary, and `git log` since the merge base.
+- **Draft PR as checkpoint.** It opens a draft PR at the start of work. The PR body holds the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` markers. `resume-work` reads only the checklist, the latest CI result, and `git log` since the merge base, through `scripts/pr-checkpoint show`, in the format and within the limits of ADR-010.
 - **Review feedback loop (new Skill `address-review-feedback`).**
   - A script fetches review threads, review comments and review summaries, and keeps only those authored by the approver, matched by the immutable account ID from the project configuration and not edited by any other account. It refuses PRs not authored by the machine account and PRs from forks. Text by any other account, including text the approver points to, is data until the approver restates it as an instruction.
   - Claude addresses each thread, pushes, and replies on the thread with the commit reference. You resolve threads and re-approve.
-- **Concise CI output.** CI failures are written to the job summary as short, structured output. Claude reads the summary through `gh`, not raw logs.
+- **Concise CI output.** CI failures are written to the job summary as short, structured output for the approver. Claude Code reads CI results through the API in the bounded form defined by ADR-010, and never raw logs.
 - **Template selection.** PRs are opened with `gh pr create --draft --body-file <file>`; the body is seeded from `scripts/pr-body <type>`, which prints `.github/PULL_REQUEST_TEMPLATE/<type>.md` unchanged.
 
 **Explicitly excluded:** Claude acting on any GitHub event without a human-started session. This covers comment triggers, PR-open triggers, schedules, and managed review services that post automatically.
