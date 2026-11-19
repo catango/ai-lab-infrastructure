@@ -2,11 +2,12 @@
 
 | Field | Value |
 |---|---|
-| Status | **Executed** 2026-11-17 (Stage 0 complete) |
+| Status | **Executed** 2026-11-17 (Stage 0 complete). Since CR-18, repository settings, security features, rulesets, and the collaborator are applied by `scripts/operator/github-setup`; the manual steps it replaced are in Appendix A |
 | Date | 2026-11-17 |
+| Updated | 2026-11-19 (CR-18, PR 7a) |
 | Target location | `ai-lab-infrastructure/docs/operations/github-setup.md` |
-| Implements | ADR-001 (D8/D13, D14, D16, D17), ADR-003, preparation for ADR-002 |
-| Performed by | You, in the browser and in one plain SSH terminal to the workspace |
+| Implements | ADR-001 (D8/D13, D14, D16, D17), ADR-003, ADR-011, preparation for ADR-002 |
+| Performed by | You, in the browser and in one plain SSH terminal to the workspace; the scripted parts on the platform operator VM |
 
 > Executing this runbook is your explicit authorization of the actions it describes:
 > account creation, repository creation, settings, token creation, and connecting the chat GitHub Integration.
@@ -20,6 +21,35 @@
 | `<you>` | Your personal GitHub username | `jdoe` |
 | `<bot>` | Machine account username | `jdoe-ai-bot` |
 | `<bot-id>` | Numeric user ID of the machine account (shown in Part 2.6) | `123456789` |
+
+---
+
+## What is scripted and what stays manual
+
+| Part | Now |
+|---|---|
+| 0, 1, 2 (preparation, account hardening, machine account) | **Manual**, below |
+| 3 (create the repositories) | **Manual**, below. The script configures repositories that exist |
+| 4, 5, 6 (settings, Actions, security features) | **Script**: `github-setup`. Manual steps in Appendix A.1 to A.3 |
+| 7.1 (`main-protection`) | **Script**. Manual steps in Appendix A.4 |
+| 7.2 (`release-tags`) | **Manual the first time** (the first release tag needs it, and the approver applies it), below. The script keeps it in the wanted state afterwards |
+| 8 (environments) | Declared, deferred to Stage 4. Appendix A.5 |
+| 9 (collaborator) | **Script** sends the invitation; **accepting it stays manual**, below. Appendix A.6 |
+| 10, 11, 12 (token T1, chat integration, first login) | **Manual**, below |
+| 13 (verification) | V3, V7, V8, V9 are covered by the script's dry run and `facts --scope github`; the others stay manual, below |
+
+Run the scripted parts on the platform operator VM, as described in [operator.md](operator.md) (sections 3 and 4). The dry run
+needs token T3 and the apply needs T2; both are created for the run and revoked after it. The wanted state is the data file
+`scripts/operator/github-desired-state.toml` (its comments name the Parts it implements).
+
+```bash
+scripts/operator/github-setup --owner <you> --collaborator <bot>            # dry run (T3): current against wanted, no write call
+scripts/operator/github-setup --owner <you> --collaborator <bot> --apply    # apply (T2)
+scripts/operator/facts --scope github --owner <you> --repo ai-lab-infrastructure --repo ai-software-template --apply --use-token   # facts (T3)
+```
+
+The script cannot set Dependabot grouped updates, discussions, sponsorships, LFS in archives, or the chat integration. Those stay
+manual (Appendix A.1 and A.3 list the Console steps).
 
 ---
 
@@ -73,80 +103,13 @@ In your **personal** browser profile: **+** → **New repository**, once for eac
 
 Do **not** add any other files by hand. Everything else arrives through PRs.
 
-## Part 4: General repository settings (5 min per repo)
+## Parts 4 to 6: settings, Actions, security features
 
-Repository → **Settings** → **General**. Apply to **both** repositories.
+By `github-setup`. The Console steps are in Appendix A.1 to A.3.
 
-| Section | Setting | Value | Why |
-|---|---|---|---|
-| Template repository | "Template repository" | `ai-software-template`: **on**. `ai-lab-infrastructure`: off. | Template use |
-| Features | Wikis | Off | Docs live in the repo |
-| | Issues | **On** | CR identity (ADR-003) |
-| | Sponsorships, Discussions, Projects | Off | Not used in v1 |
-| Pull Requests | Allow merge commits | **Off** | ADR-003 |
-| | Allow squash merging | **On**. Default message: **Pull request title and description** | ADR-003 traceability |
-| | Allow rebase merging | **Off** | ADR-003 |
-| | Always suggest updating pull request branches | On | Fewer stale branches |
-| | **Allow auto-merge** | **Off** | Collaborators on personal repositories can enable auto-merge on a PR when this setting allows it |
-| | Automatically delete head branches | On | Tidy branches |
-| Archives | Include Git LFS objects | Off | Not used |
+## Part 7: Rulesets
 
-## Part 5: GitHub Actions settings (5 min per repo)
-
-Repository → **Settings** → **Actions** → **General**. Apply to **both** repositories.
-
-| Setting | Value |
-|---|---|
-| Actions permissions | **Allow `<you>`, and select non-`<you>`, actions and reusable workflows**. Enable **Allow actions created by GitHub**. Leave the allowlist empty for now; Claude Code proposes entries by PR, and you add them here. |
-| Require full-length commit SHA pinning | **On**, if your settings page offers it |
-| Approval for running fork pull request workflows | **Require approval for all external contributors** |
-| Workflow permissions | **Read repository contents and packages permissions** |
-| Allow GitHub Actions to create and approve pull requests | **Off** |
-| Artifact and log retention | 30 days (reduces exposure of public logs) |
-
-## Part 6: Security settings (5 min per repo)
-
-Repository → **Settings** → **Advanced Security** (may be labeled **Code security**). Apply to **both** repositories.
-
-| Setting | Value | Note |
-|---|---|---|
-| Private vulnerability reporting | **Enable** | Public repos only |
-| Dependency graph | **Enabled** | Default for public repos; confirm |
-| Dependabot alerts | **Enable** | |
-| Dependabot security updates | **Enable** | Creates PRs; never auto-merged |
-| Grouped security updates | **Enable** | Fewer PRs |
-| Dependabot version updates | Leave as is | Configured later by PR via `.github/dependabot.yml` |
-| Secret scanning (Secret Protection) | **Enabled** | Free for public repos; confirm it is on |
-| Push protection | **Enabled** | Confirm it is on |
-| Code scanning (CodeQL) | **Defer** | Enable "Default setup" after the first code PR is merged (Stage 1); it needs analyzable content |
-
-## Part 7: Rulesets (10 min per repo)
-
-Repository → **Settings** → **Rules** → **Rulesets**. Create both rulesets in **both** repositories.
-
-### 7.1 Branch ruleset `main-protection`
-
-**New ruleset** → **New branch ruleset**.
-
-| Field | Value |
-|---|---|
-| Ruleset name | `main-protection` |
-| Enforcement status | **Active** |
-| Bypass list | **Empty** (no bypass, including you) |
-| Target branches | **Include default branch** |
-| Restrict deletions | **On** |
-| Require linear history | **On** |
-| Require a pull request before merging | **On** |
-| → Required approvals | **1** |
-| → Dismiss stale pull request approvals when new commits are pushed | **On** |
-| → Require review from Code Owners | Off |
-| → Require approval of the most recent reviewable push | **On** |
-| → Require conversation resolution before merging | **On** |
-| → Allowed merge methods | **Squash** only |
-| Require status checks to pass | **Leave off for now.** Checks can be selected only after they have run once. Add `pr-contract` and `quality-gate` at the end of Stage 1 (a reminder is in the Stage 1 hand-off). |
-| Block force pushes | **On** |
-
-**Break-glass:** if you must change `main` without a machine-account PR, temporarily set the ruleset to **Disabled**, make the change, and re-enable it. Record the reason in an issue. Do not add yourself to the bypass list permanently.
+`main-protection` (7.1) is applied by `github-setup`; the Console steps are in Appendix A.4.
 
 ### 7.2 Tag ruleset `release-tags`
 
@@ -165,20 +128,16 @@ Protects release tags. The lab VM and workspace restore pull only reviewed tags.
 | Restrict deletions | **On** |
 | Block force pushes | **On** |
 
-## Part 8: Environments for `ai-lab-infrastructure` (defer to Stage 4)
+## Part 8: Environments
 
-Do not create them yet. ADR-002 workflows and Spike S2 come first. They are listed here for completeness.
+Declared and deferred to Stage 4. See Appendix A.5.
 
-| Environment | Deployment branches | Required reviewers | Prevent self-review | Allow admins to bypass |
-|---|---|---|---|---|
-| `oci-plan` | Selected branches: `main` | None | — | **Off** |
-| `oci-apply` | Selected branches: `main` | **`<you>` only** | **Off** (you merge and approve) | **Off** |
+## Part 9: Add the machine account as collaborator
 
-## Part 9: Add the machine account as collaborator (5 min)
+`github-setup` sends the invitation (Appendix A.6 has the Console steps). Accepting it stays manual:
 
-1. **Personal profile:** in each repository, go to **Settings** → **Collaborators** → **Add people** → `<bot>` → **Add**. Personal-account repositories have a single collaborator permission level, push access, so there is no role to choose.
-2. **Machine-account profile:** open the invitation from the notification or email and accept it for both repositories.
-3. **Personal profile:** confirm both repositories list `<bot>` as an active collaborator.
+1. **Machine-account profile:** open the invitation from the notification or email and accept it for both repositories.
+2. **Personal profile:** confirm both repositories list `<bot>` as an active collaborator.
 
 The machine account must never be added to any other repository. Its token reaches every repository it can access (ADR-001 AC1-1).
 
@@ -234,7 +193,10 @@ If `gh` is not available from Debian's repositories, install it from the GitHub 
 
 ## Part 13: Verification (10 min)
 
-**On the workspace** (same terminal). Replace `<you>`.
+V3 (rulesets visible and active), V7, V8, and V9 are covered by the script's dry run and by `facts --scope github`. The rest stay
+manual. V5 is also the negative test of acceptance U-4 (the machine account cannot create a `v*` tag).
+
+**On the workspace** (a plain terminal). Replace `<you>`.
 
 ```bash
 # V1  Logged in as the machine account, with the expected scopes
@@ -245,9 +207,6 @@ gh api user --jq .login                           # expect: <bot>
 for r in ai-lab-infrastructure ai-software-template; do
   gh api "repos/<you>/$r" --jq "\"$r: \" + (.permissions|tostring)"
 done                                               # expect: admin:false, push:true
-
-# V3  Rulesets visible and active
-gh api "repos/<you>/ai-lab-infrastructure/rulesets" --jq '.[].name'   # expect: main-protection, release-tags
 
 # V4  Direct push to main is rejected (no change results)
 cd /tmp && rm -rf v4 && gh repo clone "<you>/ai-lab-infrastructure" v4 && cd v4
@@ -268,14 +227,11 @@ cd ~ && rm -rf /tmp/v4
 
 | # | Check | Expected |
 |---|---|---|
-| V7 | Both repos → Settings → General → Pull Requests | Squash only; auto-merge off |
-| V8 | Both repos → Settings → Rules → Rulesets | Two active rulesets; `main-protection` bypass list empty |
-| V9 | Both repos → Settings → Advanced Security | Items in Part 6 enabled |
 | V10 | Machine account → Settings → Applications | Claude GitHub Integration authorized here and **not** on your personal account; no Claude app installed on any repository |
 
 ## Part 14: Results summary
 
-Paste this back into the architecture discussion. No tokens, emails, or IDs.
+Parts 4 to 9 and V3, V7 to V9 are covered by the `github-setup` dry run summary: paste its summary line instead of the lines below.
 
 ```text
 Part 1  Free plan=__ no payment method=__ passkey=__ push protection=__
@@ -291,3 +247,113 @@ Part 11 GitHub Integration authorized as machine account=__ no Claude app instal
 Part 13 V1=__ V2=__ V3=__ V4=__ V5=__ V6=__ V7=__ V8=__ V9=__ V10=__
 Deviations from this runbook: ________
 ```
+
+---
+
+## Appendix A: Manual steps replaced by `github-setup`
+
+These are the original manual steps. They stay valid. Use them for anything the script cannot set, when the script is unavailable,
+and to roll back the script (see [operator.md](operator.md), section 6). Part numbers are the original ones.
+
+### A.1 Part 4: General repository settings (5 min per repo)
+
+Repository → **Settings** → **General**. Apply to **both** repositories.
+
+| Section | Setting | Value | Why |
+|---|---|---|---|
+| Template repository | "Template repository" | `ai-software-template`: **on**. `ai-lab-infrastructure`: off. | Template use |
+| Features | Wikis | Off | Docs live in the repo |
+| | Issues | **On** | CR identity (ADR-003) |
+| | Sponsorships, Discussions, Projects | Off | Not used in v1 |
+| Pull Requests | Allow merge commits | **Off** | ADR-003 |
+| | Allow squash merging | **On**. Default message: **Pull request title and description** | ADR-003 traceability |
+| | Allow rebase merging | **Off** | ADR-003 |
+| | Always suggest updating pull request branches | On | Fewer stale branches |
+| | **Allow auto-merge** | **Off** | Collaborators on personal repositories can enable auto-merge on a PR when this setting allows it |
+| | Automatically delete head branches | On | Tidy branches |
+| Archives | Include Git LFS objects | Off | Not used |
+
+### A.2 Part 5: GitHub Actions settings (5 min per repo)
+
+Repository → **Settings** → **Actions** → **General**. Apply to **both** repositories.
+
+| Setting | Value |
+|---|---|
+| Actions permissions | **Allow `<you>`, and select non-`<you>`, actions and reusable workflows**. Enable **Allow actions created by GitHub**. Leave the allowlist empty for now; Claude Code proposes entries by PR, and you add them here. |
+| Require full-length commit SHA pinning | **On**, if your settings page offers it |
+| Approval for running fork pull request workflows | **Require approval for all external contributors** |
+| Workflow permissions | **Read repository contents and packages permissions** |
+| Allow GitHub Actions to create and approve pull requests | **Off** |
+| Artifact and log retention | 30 days (reduces exposure of public logs) |
+
+### A.3 Part 6: Security settings (5 min per repo)
+
+Repository → **Settings** → **Advanced Security** (may be labeled **Code security**). Apply to **both** repositories.
+
+| Setting | Value | Note |
+|---|---|---|
+| Private vulnerability reporting | **Enable** | Public repos only |
+| Dependency graph | **Enabled** | Default for public repos; confirm |
+| Dependabot alerts | **Enable** | |
+| Dependabot security updates | **Enable** | Creates PRs; never auto-merged |
+| Grouped security updates | **Enable** | Fewer PRs |
+| Dependabot version updates | Leave as is | Configured later by PR via `.github/dependabot.yml` |
+| Secret scanning (Secret Protection) | **Enabled** | Free for public repos; confirm it is on |
+| Push protection | **Enabled** | Confirm it is on |
+| Code scanning (CodeQL) | **Defer** | Enable "Default setup" after the first code PR is merged (Stage 1); it needs analyzable content |
+
+### A.4 Part 7.1: Branch ruleset `main-protection`
+
+Repository → **Settings** → **Rules** → **Rulesets**. Create both rulesets in **both** repositories.
+
+#### 7.1 Branch ruleset `main-protection`
+
+**New ruleset** → **New branch ruleset**.
+
+| Field | Value |
+|---|---|
+| Ruleset name | `main-protection` |
+| Enforcement status | **Active** |
+| Bypass list | **Empty** (no bypass, including you) |
+| Target branches | **Include default branch** |
+| Restrict deletions | **On** |
+| Require linear history | **On** |
+| Require a pull request before merging | **On** |
+| → Required approvals | **1** |
+| → Dismiss stale pull request approvals when new commits are pushed | **On** |
+| → Require review from Code Owners | Off |
+| → Require approval of the most recent reviewable push | **On** |
+| → Require conversation resolution before merging | **On** |
+| → Allowed merge methods | **Squash** only |
+| Require status checks to pass | **Leave off for now.** Checks can be selected only after they have run once. Add `pr-contract` and `quality-gate` at the end of Stage 1 (a reminder is in the Stage 1 hand-off). |
+| Block force pushes | **On** |
+
+**Break-glass:** if you must change `main` without a machine-account PR, temporarily set the ruleset to **Disabled**, make the change, and re-enable it. Record the reason in an issue. Do not add yourself to the bypass list permanently.
+
+### A.5 Part 8: Environments for `ai-lab-infrastructure` (defer to Stage 4)
+
+Do not create them yet. ADR-002 workflows and Spike S2 come first. They are listed here for completeness.
+
+| Environment | Deployment branches | Required reviewers | Prevent self-review | Allow admins to bypass |
+|---|---|---|---|---|
+| `oci-plan` | Selected branches: `main` | None | — | **Off** |
+| `oci-apply` | Selected branches: `main` | **`<you>` only** | **Off** (you merge and approve) | **Off** |
+
+### A.6 Part 9, step 1 and 3: collaborator invitation
+
+1. **Personal profile:** in each repository, go to **Settings** → **Collaborators** → **Add people** → `<bot>` → **Add**. Personal-account repositories have a single collaborator permission level, push access, so there is no role to choose.
+2. Accept the invitation in the machine-account profile (Part 9 above).
+3. **Personal profile:** confirm both repositories list `<bot>` as an active collaborator.
+
+### A.7 Part 13: the verification steps the script covers
+
+```bash
+# V3  Rulesets visible and active
+gh api "repos/<you>/ai-lab-infrastructure/rulesets" --jq '.[].name'   # expect: main-protection, release-tags
+```
+
+| # | Check | Expected |
+|---|---|---|
+| V7 | Both repos → Settings → General → Pull Requests | Squash only; auto-merge off |
+| V8 | Both repos → Settings → Rules → Rulesets | Two active rulesets; `main-protection` bypass list empty |
+| V9 | Both repos → Settings → Advanced Security | Items in Part 6 enabled |
