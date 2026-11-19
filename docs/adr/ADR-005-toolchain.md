@@ -7,6 +7,7 @@
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-2 (issue #2) |
 | Amended by | ADR-011 decision 10 and CR-18 design section 5 (Accepted, 2026-11-18): adds the `operator` profile (decision 10 below). In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
+| Amended by (scope) | CR-39 (Proposed, design PR #40): decision 1 below applies to this platform's hosts only; the software template's CI manifest is separate (see decision 1). Takes effect when the CR-39 design PR is merged |
 | Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3); `operator` profile (CR-18) |
 | Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), ADR-011 (operator tier), baseline sections 6 and 7 |
 
@@ -24,7 +25,7 @@
 
 ## 2. Decision
 
-1. **One manifest.** `toolchain/manifest.toml` is the single source of truth for tools, versions, install sources, per-architecture URLs and SHA-256 checksums, profile membership, and smoke tests.
+1. **One manifest.** `toolchain/manifest.toml` is the single source of truth for tools, versions, install sources, per-architecture URLs and SHA-256 checksums, profile membership, and smoke tests. *Scope (CR-39 amendment): ADR-005's manifest is the single source for this platform's hosts (`builder`, `lab`, `operator`). The software template's CI manifest is owned by the template, uses the same schema and rules (exact versions, both architectures, SHA-256), and is not a host profile.*
 2. **Format: TOML.** It is parsed with the Python standard library (`tomllib`) on both target operating systems and allows comments.
 3. **Three install sources.**
    - `download`: release artifact, exact version, SHA-256 mandatory for `amd64` and `arm64`, signature verified in addition where upstream publishes one.

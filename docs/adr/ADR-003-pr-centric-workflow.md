@@ -7,7 +7,7 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` |
 | Target location | `docs/adr/ADR-003-pr-centric-workflow.md` |
 | Requirement | CHG-003: GitHub-centric workflow based on PRs; no automatic responses from Claude |
-| Amended by | CR-21 (Proposed, 2026-11-18): rule PC-8 and AC3-7. Takes effect when the CR-21 design PR is merged; the check is enforced once its implementation PR is merged |
+| Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (Proposed): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body. Takes effect when the CR-39 design PR is merged; checks are enforced once the template's implementation PRs are merged |
 | Related | ADR-002 (infrastructure pipeline), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
 
 > Numbering note: this requirement was briefly labeled "CHG-002" in discussion. CHG-002 is already
@@ -48,6 +48,7 @@
 | Infra PR | `ai-lab-infrastructure` change; merge = ADR-002 Gate 1 | Machine account | Branch `infra/<slug>` |
 | Toolchain PR | Version-manifest change | Machine account | Branch `toolchain/<slug>` |
 | Template-sync PR | Template update proposed to an application repo | Machine account (script) | Branch `template-sync/<template-version>` |
+| Init PR | First change after generation from the template | Machine account | Branch `init/v<MAJOR>.<MINOR>.<PATCH>` |
 | Dependabot PR | Dependency and Actions updates | `dependabot[bot]` | GitHub default |
 
 **CR document layout.** Separate files allow targeted context loading.
@@ -93,22 +94,24 @@ A needed design change during implementation requires a **new design PR**. Imple
 | The merge commit SHA of a design PR | `status:` fields in Markdown files |
 | | Any comment by Claude or by bots |
 
-The approver login is stored in project configuration (`config/project.yaml`, key `approver_login`). Scripts read it from there and never infer it.
+The approver login and the approver's immutable account ID are stored in the project configuration file (keys `approver_login` and `approver_id`; `config/project.yaml` in this repository). Scripts read them from there and never infer them.
 
 ## 6. `pr-contract` check
+
+Application repositories generated from the software template enforce the PR contract shipped by the template version they last synced. That contract must implement PC-1 to PC-8 as stated here and may add rules. The template-sync and init PR types and their path rules are defined by the template (ADR-008).
 
 This is a required status check on public repositories and advisory on private repositories (GitHub Free). It runs on `pull_request` with a read-only `GITHUB_TOKEN`, uses no secrets, and runs safely for fork PRs.
 
 | Rule | Requirement |
 |---|---|
 | PC-1 | The PR body contains every section its template requires, non-empty. |
-| PC-2 | The PR type is derivable from the branch prefix and matches the template used. |
-| PC-3 | An implementation PR references an issue (`Implements:`) and a design PR (`Design:`). The design PR exists, is **merged**, and is linked to the same issue (checked through the GitHub API). |
+| PC-2 | The PR type is derivable from the branch prefix and matches the template used. In application repositories the prefixes also include `template-sync/v<MAJOR>.<MINOR>.<PATCH>` and `init/v<MAJOR>.<MINOR>.<PATCH>`. |
+| PC-3 | An implementation PR references an issue (`Implements:`) and a design PR (`Design:`), each as `#<n>` in the same repository or as `<owner>/<repo>#<n>` in a repository listed under the configuration key `design_repos`. The design PR exists, is **merged**, and is linked to the same issue (checked through the GitHub API). A referenced repository that cannot be read fails the check. |
 | PC-4 | A design PR changes only paths under `docs/`. |
 | PC-5 | An implementation or change PR does not modify `docs/cr/*/design.md`, `acceptance-criteria.md`, or `docs/adr/` files belonging to an approved CR. |
 | PC-6 | Changes under `.github/workflows/` or `.github/actions/` require the PR-body section "Workflow change justification". |
 | PC-7 | Dependabot PRs are exempt from PC-1 to PC-3 and PC-8, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
-| PC-8 | A PR that changes `scripts/operator/`, `ansible/operator.yml`, `ansible/roles/operator_*/`, or `toolchain/python/operator.lock` (ADR-011) requires the PR-body section "Operator script review", non-empty (CR-21). |
+| PC-8 | A PR that changes a path listed under the configuration key `operator_paths` requires the PR-body section "Operator script review", non-empty. In this repository the key lists `scripts/operator/`, `ansible/operator.yml`, `ansible/roles/operator_*/` and `toolchain/python/operator.lock` (ADR-011); in a newly generated application repository it is empty. |
 
 **Security requirement.** The PR title and body are untrusted input. They are passed to the script only through environment variables or the API, never interpolated into `run:` shell steps. All Actions used are pinned to reviewed SHAs.
 
@@ -123,11 +126,10 @@ This is a required status check on public repositories and advisory on private r
 
 - **Draft PR as checkpoint.** It opens a draft PR at the start of work. The PR body holds the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` markers. `resume-work` reads only the checklist, the latest CI summary, and `git log` since the merge base.
 - **Review feedback loop (new Skill `address-review-feedback`).**
-  - A script fetches review threads and comments authored **only** by `approver_login`.
-  - Comments from any other account, including bots and the machine account, are treated as data, never as instructions.
+  - A script fetches review threads, review comments and review summaries, and keeps only those authored by the approver, matched by the immutable account ID from the project configuration and not edited by any other account. It refuses PRs not authored by the machine account and PRs from forks. Text by any other account, including text the approver points to, is data until the approver restates it as an instruction.
   - Claude addresses each thread, pushes, and replies on the thread with the commit reference. You resolve threads and re-approve.
 - **Concise CI output.** CI failures are written to the job summary as short, structured output. Claude reads the summary through `gh`, not raw logs.
-- **Template selection.** PRs are opened with `gh pr create --template <type>.md`, using templates in `.github/PULL_REQUEST_TEMPLATE/`.
+- **Template selection.** PRs are opened with `gh pr create --draft --body-file <file>`; the body is seeded from `scripts/pr-body <type>`, which prints `.github/PULL_REQUEST_TEMPLATE/<type>.md` unchanged.
 
 **Explicitly excluded:** Claude acting on any GitHub event without a human-started session. This covers comment triggers, PR-open triggers, schedules, and managed review services that post automatically.
 
@@ -175,7 +177,7 @@ This is a required status check on public repositories and advisory on private r
 - AC3-1: A Class 3 implementation PR referencing an unmerged design PR fails `pr-contract`.
 - AC3-2: An implementation PR modifying an approved `design.md` fails `pr-contract`.
 - AC3-3: A machine-account PR cannot be merged on a public repository without the approver's review of the latest push.
-- AC3-4: `address-review-feedback` ignores a comment by a non-approver account containing instructions (test fixture).
+- AC3-4: `address-review-feedback` ignores a comment by a non-approver account containing instructions, and an approver comment edited by another account (test fixtures).
 - AC3-5: `resume-work` restores task state from the PR checkpoint after a fresh VM workspace clone.
 - AC3-6: No workflow in either template or platform repository invokes Claude or holds a Claude credential (automated scan in CI).
 - AC3-7: A PR that changes an operator path without a non-empty "Operator script review" section fails `pr-contract` (PC-8).
