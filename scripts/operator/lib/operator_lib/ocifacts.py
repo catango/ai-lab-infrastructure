@@ -62,6 +62,8 @@ RESOURCE_KEYS = ("instances_total", "instances_a1", "instances_micro", "instance
                  "block_volumes", "boot_volumes", "block_storage_gb_total", "volume_backups", "public_ip_ephemeral", "public_ip_reserved",
                  "public_ip_reserved_assigned", "public_ip_reserved_unassigned", "alarms", "alarms_enabled", "absence_alarms", "topics",
                  "subscriptions", "subscriptions_active", "subscriptions_pending", "subscriptions_email")
+# The response headers oci-cli 3.96 prints next to (or instead of) `data` (cli_util.DISPLAY_HEADERS).
+EMPTY_ANSWER_KEYS = frozenset({"etag", "opc-next-page", "opc-work-request-id", "opc-total-items", "opc-next-cursor"})
 _DENIED = re.compile(r'"status":\s*(?:401|403|404)|NotAuthorized|NotAuthenticated|Forbidden', re.IGNORECASE)
 _GONE = frozenset({"TERMINATED", "TERMINATING", "DELETED", "DELETING"})
 TENANCY_PREFIX = "ocid1.tenancy."
@@ -151,11 +153,17 @@ class Client:
                 return Reply("denied")
             self.failed += 1
             return Reply("failed")
+        if result.truncated:
+            self.failed += 1
+            return Reply("failed")
         try:
-            body = json.loads(result.stdout)
+            body = json.loads(result.stdout) if result.stdout.strip() else {}
         except ValueError:
             body = None
-        if result.truncated or not isinstance(body, dict) or "data" not in body:
+        # oci-cli leaves the `data` key out of an empty list and prints nothing when no header is shown: that is an empty answer.
+        if isinstance(body, dict) and "data" not in body and set(body) <= EMPTY_ANSWER_KEYS:
+            body = {**body, "data": []}
+        if not isinstance(body, dict) or "data" not in body:
             self.failed += 1
             return Reply("failed")
         return Reply("ok", body["data"], more=bool(body.get("opc-next-page")))

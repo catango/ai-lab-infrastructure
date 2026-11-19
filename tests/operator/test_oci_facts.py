@@ -244,6 +244,71 @@ class Apply(Base):
         self.assertEqual(self.values()["a1_memory_gb_in_instances"], "12")
 
 
+class EmptyLists(Base):
+    """oci-cli prints nothing for an empty list (found in the first Cloud Shell run, where a tenancy without resources looked unreadable)."""
+
+    def empty_tenancy(self):
+        responses = oci.default_responses()
+        responses["compartments"] = oci.entry(["iam", "compartment", "list"], [oci.compartment(oci.TENANCY, None, "canary-root")])
+        for key in [k for k in responses if k not in ("version", "compartments", "domains") and not k.startswith(("value-", "avail-"))]:
+            responses[key] = oci.entry(responses[key]["match"])
+        return responses
+
+    def test_the_stub_prints_an_empty_list_like_the_real_cli(self):
+        self.assertEqual(oci.entry(["x"]), {"match": ["x"], "raw": ""})
+        self.assertEqual(oci.entry(["x"], []), {"match": ["x"], "raw": ""})
+
+    def test_a_tenancy_without_resources_is_readable_and_counts_zero(self):
+        self.stub.set(self.empty_tenancy())
+        self.assertEqual(self.apply(), exitcodes.OK)
+        found = self.values()
+        self.assertEqual((found["compartments_total"], found["compartments_readable"], found["compartments_unreadable"]), ("1", "1", "0"))
+        for key in ("instances_total", "instances_a1", "block_volumes", "boot_volumes", "block_storage_gb_total", "volume_backups", "public_ip_ephemeral",
+                    "public_ip_reserved", "alarms", "alarms_enabled", "absence_alarms", "instances_with_absence_alarm", "instances_without_absence_alarm",
+                    "topics", "subscriptions", "subscriptions_email"):
+            self.assertEqual(found[key], "0", key)
+        self.assertEqual((found["calls_failed"], found["calls_denied"]), ("0", "0"))
+        self.assertEqual(found["block_storage_over_free_allowance"], "no")
+
+    def test_one_empty_listing_among_full_ones_counts_zero(self):
+        responses = oci.default_responses()
+        responses["topics"] = oci.entry(["ons", "topic", "list", oci.LAB])
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual((self.values()["topics"], self.values()["calls_failed"]), ("0", "0"))
+        self.assertEqual(self.values()["subscriptions"], "2")
+
+    def test_an_empty_listing_with_only_a_total_header_counts_zero(self):
+        responses = oci.default_responses()
+        responses["topics"] = {"match": ["ons", "topic", "list", oci.LAB], "out": {"opc-total-items": "0"}}
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual((self.values()["topics"], self.values()["calls_failed"]), ("0", "0"))
+
+    def test_an_empty_page_that_names_another_page_is_unknown(self):
+        responses = oci.default_responses()
+        responses["topics"] = {"match": ["ons", "topic", "list", oci.LAB], "out": {"opc-next-page": "token"}}
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual(self.values()["topics"], "unknown")
+
+    def test_an_object_that_is_neither_data_nor_headers_is_a_failed_call(self):
+        responses = oci.default_responses()
+        responses["topics"] = {"match": ["ons", "topic", "list", oci.LAB], "out": {"unexpected": True}}
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual((self.values()["topics"], self.values()["calls_failed"]), ("unknown", "1"))
+
+    def test_empty_output_where_one_object_is_expected_stays_unknown(self):
+        responses = oci.default_responses()
+        for key in [k for k in responses if k.startswith("avail-standard-a1-core-count")]:
+            responses[key] = oci.entry(responses[key]["match"])
+        self.stub.set(responses)
+        self.apply()
+        self.assertEqual(self.values()["a1_ocpu_used"], "unknown")
+        self.assertEqual(self.values()["a1_over_free_allowance"], "unknown")
+
+
 class Unknowns(Base):
     def test_a_denied_limits_call_makes_only_those_facts_unknown(self):
         responses = oci.default_responses()
