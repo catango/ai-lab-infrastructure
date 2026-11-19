@@ -60,18 +60,20 @@ The step summary that `$GITHUB_STEP_SUMMARY` receives is not in the check-runs A
 
 ### 4.1 Values
 
-The CR-39 placeholders are `CLAUDE.md` 120 lines, a rule 40, a `SKILL.md` 60. **Proposed: confirm the lines, add bytes.** About 85 B per line is the measured density of this repository's instruction text, so the byte limit equals the line limit for normal prose and bites only on long lines.
+The CR-39 placeholders are `CLAUDE.md` 120 lines, a rule 40, a `SKILL.md` 60. The lines are confirmed and bytes are added (Q1). The byte limits are set to bind before the line limits for prose at the measured density (94 B per line in this repository's `CLAUDE.md`; a 120-line `CLAUDE.md` would be about 11 KiB). This is intended: bytes track cost, lines bound layout.
 
-| Class | Paths | Lines | Bytes | Basis |
-|---|---|---|---|---|
-| `claude-md` | `CLAUDE.md` | 120 | 10 KiB | About twice this repository's file (58 lines); room for the precedence sentence and the discussion-prompt rule |
-| `platform` | `docs/PLATFORM.md` | 80 | 6 KiB | The ADR-001 and ADR-011 specifics as rules, not text copied from the ADRs |
-| `project` | `docs/PROJECT.md` | 80 | 6 KiB | Seeded small and grown by the project; the limit forces links to `docs/` instead of inline text |
-| `rule` | `.claude/rules/*.md` | 40 | 3 KiB | The six rules of CR-39 design section 5 are five to fifteen bullets each |
-| `skill` | `.claude/skills/*/SKILL.md` | 60 | 4 KiB | Design section 6 lists six parts of a `SKILL.md`; about 25 to 35 lines, twice that as headroom |
-| `skill-description` | `description` in each `SKILL.md` frontmatter | | 300 characters | Descriptions are loaded for every Skill in every session (V-1); a trigger sentence needs about 150 |
-| `docs-index` | `docs/README.md` | 80 | 8 KiB | This repository's index is 65 lines and 6.4 KB |
-| `cr-readme` | `docs/cr/CR-*/README.md` | 50 | 4 KiB | Read first on every CR; CR-39's is 28 lines, CR-18's 45 |
+"Basis" says whether the value rests on a measurement of this repository (`measured`) or on an estimate for the template, which does not exist yet (`estimate`).
+
+| Class | Paths | Lines | Bytes | Basis | Rationale |
+|---|---|---|---|---|---|
+| `claude-md` | `CLAUDE.md` | 120 | 10 KiB | measured | About twice this repository's file (58 lines); room for the precedence sentence and the discussion-prompt rule |
+| `platform` | `docs/PLATFORM.md` | 80 | 6 KiB | estimate | The ADR-001 and ADR-011 specifics as rules, not text copied from the ADRs |
+| `project` | `docs/PROJECT.md` | 80 | 6 KiB | estimate | Seeded small and grown by the project; the limit forces links to `docs/` instead of inline text |
+| `rule` | `.claude/rules/*.md` | 40 | 3 KiB | estimate | The six rules of CR-39 design section 5 are five to fifteen bullets each |
+| `skill` | `.claude/skills/*/SKILL.md` | 60 | 4 KiB | estimate | Design section 6 lists six parts of a `SKILL.md`; about 25 to 35 lines, twice that as headroom |
+| `skill-description` | `description` in each `SKILL.md` frontmatter | | 300 characters | estimate | Descriptions are loaded for every Skill in every session (V-1); a trigger sentence needs about 150 |
+| `docs-index` | `docs/README.md` | 80 | 8 KiB | measured | This repository's index is 65 lines and 6.4 KB |
+| `cr-readme` | `docs/cr/CR-*/README.md` | 50 | 4 KiB | measured | Read first on every CR; CR-39's is 28 lines, CR-18's 45 |
 
 **ADR files and the other CR files are reported by `metrics static`, not gated** (TM-7, Q4). The reading rule is by outline and range.
 
@@ -318,27 +320,13 @@ Applied only if the approver decides yes in Q12 or Q13. Wording is mine.
 
 **ADR-008** (Q13). Add the header row `| Amended by | ADR-010 (Proposed, CR-45): budgets and loading order, checkpoint format, metrics; closes D10-1 and D10-2 of design section 11. Takes effect when the CR-45 design PR is merged |`. Append to decision 7: "Each `SKILL.md` has the headings `Reads (in order)`, `Does not read`, and `Report`, and stays within the size budgets of ADR-010." Append to section 4 (Consequences): "ADR-010 adds `scripts/metrics`, the gate checks `output-budget` and `skill-layout`, an extended `size-budget`, and the values of `.template/budgets.toml`. They follow the template's implementation PRs."
 
-## 13. Questions for the approver
+## 13. Decisions of the approver (architecture discussion, 2026-11-19)
 
-Each has my recommendation; the first option is the one I applied in the draft.
+Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording is condensed; each decision is applied in the section named.
 
-| # | Question | Recommendation and why |
+| # | Decision | Applied in |
 |---|---|---|
-| Q1 | **D10-1.** Confirm the CR-39 line limits (120, 40, 60) and add the byte limits and the other classes of section 4.1? | Yes: keep the lines (about twice the measured sizes), add bytes (a long line passes a line limit). The numbers are a judgement; section 3 gives the measurements behind them |
-| Q2 | Aggregate limit of the always-loaded set: 20 KiB (about 5,000 tokens)? | Yes; the estimate is 15 to 17 KiB. A tighter 16 KiB would leave no headroom for `docs/PROJECT.md` to grow |
-| Q3 | `.template/budgets.toml` stays owned, and a project raises a budget through `overrides.toml`? | Yes: a raise shows up in review, which is the point. The alternative, a seeded file, lets budgets drift unseen |
-| Q4 | Gate only the instruction files, the docs index, and the CR `README.md`; report, not gate, ADR files and the other CR files? | Yes (TM-7). A cap on designs pushes content into more files. The control is outline reading, checked by M-8 |
-| Q5 | **D10-2.** Accept the checkpoint format of section 7.1 (20 items, 120 characters, 2 KiB, criterion IDs, `blocked:` note) validated by `pr-checkpoint`, with no new `pr-contract` rule? | Yes. A `pr-contract` rule would make an over-long checkpoint a PR failure, which seems too strict for a working list |
-| Q6 | Read CI results through annotations (at most 10, one per failed check), with a filtered 60-line log tail as fallback, because the step summary is not in the API? | Yes. Alternatives: an uploaded artifact (adds an Action and ADR-009's pin rules) or a PR comment from a workflow (needs write permission). Neither is needed if V-3 holds |
-| Q7 | Add the numbers 200 / 200 / 40 to the owned `CLAUDE.md` text, and to this repository's `CLAUDE.md` in a change PR after ADR-010 is accepted? | Yes to both; they are instructions, so I do not claim they are enforced |
-| Q8 | `review-threads` pages at 5 threads and never truncates approver text? | Yes. A larger page costs more per round; an instruction cut short costs a wrong fix |
-| Q9 | `scripts/metrics` as an owned template script run on request, not a ninth Skill; snapshots committed under `docs/metrics/`? | Yes. A Skill would add its description to every session |
-| Q10 | Static baseline at the Stage 5 exit, full baseline at Stage 7? | Yes. Stage 7 waits for OCI; the static part does not |
-| Q11 | Regression thresholds of section 10.4 as placeholders, re-confirmed in the baseline PR? | Yes; I have no data, so I would not defend any of the numbers now |
-| Q12 | Amend ADR-003 section 7 as drafted in section 12 (the CI summary channel is a correction)? | Yes. The current text describes something the API does not provide |
-| Q13 | Amend ADR-008 as drafted in section 12? | Yes; otherwise the Skill headings and the new checks have no accepted home |
-| Q14 | Tier C: the user's own figures, optional; recorded in a snapshot as per-PR numbers only, or kept locally? Fields as in section 10.3? | Default local; committed only if you choose, as per-PR numbers with no date. Field names are mine, because I could not see what Claude Desktop shows (V-4) |
-| Q15 | Name the new gate checks `output-budget` and `skill-layout` (separate from `size-budget`), and coordinate them with ADR-009's catalogue? | Yes: one concern per check, as in the existing catalogue. If ADR-009 prefers fewer, they fold into `size-budget` with no change of behaviour |
+| Q1 | Values accepted. The byte limits bind before the line limits for prose at the measured density (94 B per line; a 120-line `CLAUDE.md` is about 11 KiB); this is intended. The table gets a "Basis" column: `measured` for `claude-md`, `docs-index`, `cr-readme`, `estimate` for the rest (the former prose column is now "Rationale") | TM-2, section 4.1 |
 
 ## 14. Still open
 
