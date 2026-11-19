@@ -35,7 +35,7 @@ I read of ADR-009 only the `README.md` of its CR (`docs/cr/CR-43/`). Its design 
 | TM-13 | Context-discipline numbers in the owned `CLAUDE.md`: one `##` section or a range of at most 100 lines and 8 KiB; a file over 200 lines or over 8 KiB is not read whole (outline first); command output over 40 lines is summarised or cut (Q7) | A number is followed more reliably than "targeted"; it is an instruction, not a control |
 | TM-14 | Metrics in **three tiers** (section 10): A from repository files and script fixtures, B from PR data read-only, C the user's own usage figures. `scripts/metrics` has `static`, `prs`, `snapshot`, and `compare`. Snapshots are committed numbers-only files. No Skill loads them (Q9) | Tiers A and B are proxies; only tier C holds token counts |
 | TM-15 | **Baseline:** static baseline at the Stage 5 exit; full baseline at Stage 7. **Regression:** a budget overrun fails the gate; a drift against the baseline is reported by `metrics compare` with thresholds in `budgets.toml` and fails nothing (Q10, Q11) | Baseline Stage 7 says "metrics baseline recorded" without saying what it holds |
-| TM-16 | Tier C is **optional and user-supplied**: the user types numbers from Claude Desktop into a snapshot, or keeps them locally. No script and no Claude Code session reads Claude Desktop, a transcript, or a credential (Q14) | Constraint of this CR |
+| TM-16 | Tier C is **optional**. By default nothing of tier C is committed. When the approver chooses to commit figures, the approver types them in a session they start, and `metrics snapshot --usage <pr>:<key>=<int>[,...]` (repeatable) writes `[usage.<pr>]`: integers only, keys from the fixed list, no file input. Figures kept elsewhere are the approver's own notes outside any host; `compare` cannot read them. Committed figures are public and permanent. No script and no Claude Code session reads Claude Desktop, a transcript, or a credential (Q14) | Constraint of this CR |
 | TM-17 | No collection: nothing runs on a schedule or an event, and summary lines are not stored | ADR-003 decision 7; the constraint of this CR |
 
 ## 3. What the measurements say
@@ -267,7 +267,7 @@ Owned template script, run **only on the user's request** in a session the user 
 |---|---|---|
 | `metrics static` | Tier A for the working tree; prints a compact table | None |
 | `metrics prs --last <n>` or `--prs <list>` | Tier B for merged PRs; counts, medians, and rates; says "indicative" for a median over fewer than 5 PRs or a rate over fewer than 10 (`min_prs`) | `gh api` GET only (`forbidden-api` applies) |
-| `metrics snapshot --label <l> [--dir <path>]` | Writes `<dir>/<l>.toml` (default `docs/metrics/`) from the two above plus the optional `[usage.<pr>]` table (section 10.3); refuses to overwrite | As above |
+| `metrics snapshot --label <l> [--dir <path>] [--usage <pr>:<key>=<int>[,...]]...` | Writes `<dir>/<l>.toml` (default `docs/metrics/`) from the two above. Each `--usage` (repeatable) writes `[usage.<pr>]`: integers only, keys from the fixed list of section 10.3, no file input. Refuses to overwrite | As above |
 | `metrics compare <a> <b>` | Prints each value that crosses a `[regression]` threshold; exit 1 if any, 0 if none | None |
 
 It has `--fixture` for offline tests, calls `gh api` with argument arrays, reads no path outside the repository, and prints **no login, name, email, or token**: approver identity is matched by account ID and only counts are printed.
@@ -300,12 +300,14 @@ commits = 12
 checkpoint_items = 9
 pr_body_bytes = 2300
 
-[usage.123]                            # optional, typed by the user (TM-16)
+[usage.123]                            # optional, written only by --usage (TM-16); field names are provisional (V-4)
 sessions = 2
 input_tokens = 0
 output_tokens = 0
 cache_read_tokens = 0
 ```
+
+**Tier C.** By default nothing of tier C is committed. When the approver chooses to commit figures, the approver types them in a session they start, and `metrics snapshot --usage <pr>:<key>=<int>[,...]` (repeatable) writes `[usage.<pr>]`: integers only, keys from the fixed list, no file input. Figures kept elsewhere are the approver's own notes outside any host; `compare` cannot read them. Committed figures are public and permanent. The field names stay provisional until V-4 is answered.
 
 Numbers above are placeholders to show the shape, not measurements. **Readers:** the approver at a metrics review and when a budget change is proposed; Claude Code only when the user asks in the session to run `metrics compare` or to read a snapshot. No Skill loads the snapshot directory, and the `docs/README.md` of a project that keeps snapshots` lists the directory as "not read by default".
 
@@ -377,6 +379,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | Q11 | Accepted as placeholders. `min_prs` is 10 for rates (first-pass rate) and 5 for medians. Thresholds change by a template release, or in a project by a per-key entry (Q3) | section 10.4, `[regression]` in section 4.3, section 10.2, M-12, ADR-010 decision 11 |
 | Q12 | Accepted, changed wording. ADR-003 section 7: *Concise CI output* replaced as quoted in the review (job summary for the approver; Claude Code reads CI results through the API in the bounded form of ADR-010, never raw logs); the checkpoint bullet and the header row as drafted. PR #40 and PR #42 are both merged (2026-11-19), so the CR-39 entry in ADR-003's `Amended by` row now reads "(design PR #40 merged, 2026-11-19) ... checks are enforced once the template's implementation PRs are merged" and ADR-008's Status is **Accepted** (2026-11-19, by the merge of the CR-39 design PR #40 by the approver). Reported in the PR body | section 12, ADR-003 (header row, section 7), ADR-008 (Status), `docs/README.md` |
 | Q13 | Accepted, minimal. ADR-008: header row `Amended by` as drafted; decision 2 gets the per-key raise sentence; decision 7 gets "Each `SKILL.md` follows the layout and size budgets of ADR-010" (the headings are not listed in ADR-008); section 4 gets the consequences sentence as drafted | section 12, ADR-008 (header row, decisions 2 and 7, section 4) |
+| Q14 | Accepted, changed. By default nothing of tier C is committed. When the approver chooses to commit figures, the approver types them in a session they start, and `metrics snapshot --usage <pr>:<key>=<int>[,...]` (repeatable) writes `[usage.<pr>]`: integers only, keys from the fixed list, no file input. Figures kept elsewhere are the approver's own notes outside any host; `compare` cannot read them. Committed figures are public and permanent. Field names stay provisional. V-4 extended: also whether Claude Code shows context or token usage within a session. M-14 updated | TM-16, sections 10.2, 10.3, 14 (V-4), M-14, ADR-010 decision 10 |
 
 ## 14. Still open
 
@@ -385,7 +388,7 @@ Recorded from the approver's review on PR #46 (reviewed at `8ee0da0`). Wording i
 | **V-1.** How Claude Code loads `CLAUDE.md` imports, rules with and without `paths`, and Skills (description at start, body on use). My understanding, **not verified against current documentation in this session**: descriptions are loaded at start and the body on invocation; rules with `paths` load when matching files are read. The loading order and the always-loaded set rest on it | Claude Code, in implementation PR 1 | Before the budgets are set in the template |
 | **V-2.** Whether Claude Code has its own limit on Skill descriptions or on `CLAUDE.md` size that is lower than the budgets here | Claude Code | PR 1 |
 | **V-3.** That check-run annotations of a workflow command are readable through `gh api` for the machine account, and their per-step limit. In this session I confirmed only that the check-run summary is empty and the log holds the gate lines; the latest run had no annotations to read | Claude Code | PR 2 |
-| **V-4.** Which usage figures Claude Desktop shows and in which unit | The user | When the user supplies tier C, if ever |
+| **V-4.** Which usage figures Claude Desktop shows and in which unit, and also whether Claude Code shows context or token usage within a session | The user | When the user supplies tier C, if ever |
 | The tier B definitions (`review_rounds` as an approver review submission in any state other than approved, followed by at least one push; `pushes_after_ready` from the `ready_for_review` event) need the GitHub fields checked | Claude Code | PR 4 |
 | Whether `ai-lab-infrastructure` applies the same budgets and `size-budget` to its own files | Approver (a later CR, with adoption of the template's generic code) | After Stage 5 |
 | Stage 5 entry needs ADR-008, ADR-009, and ADR-010 approved. This CR delivers ADR-010 only | Approver | Before the template's implementation PR 1 |

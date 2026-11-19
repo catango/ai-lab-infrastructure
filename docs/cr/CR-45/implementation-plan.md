@@ -29,7 +29,7 @@ These PRs add to the template content of CR-39 and so follow its PRs. The CR-39 
 | Before PR 1 | Approve ADR-008, ADR-009, and ADR-010 (Stage 5 entry) |
 | After ADR-010 is accepted | Review the change PR that adds the context-discipline numbers to this repository's `CLAUDE.md` (Q7); Claude Code proposes it after ADR-010 is accepted |
 | PR 2 | Nothing. If the annotation channel does not work (V-3), the filtered log through `pr-checkpoint show` becomes the primary channel without a new design PR; the result is recorded in the PR |
-| Optional, at Stage 7 | Supply usage figures from Claude Desktop for tier C, as per-PR numbers, or keep them locally (Q14) |
+| Optional, at Stage 7 | Commit usage figures for tier C only if you choose to: type them in a session you start with `metrics snapshot --usage <pr>:<key>=<int>`; otherwise keep your own notes outside any host (Q14) |
 | Stage 7 | Ask for `metrics snapshot --label baseline` in a session you start, review the baseline PR, and re-confirm the soft thresholds (M-16 (b)) |
 
 ## 4. What this plan does not do
