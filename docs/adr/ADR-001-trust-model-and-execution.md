@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Accepted** (2026-11-17), including D14, D15, D16 |
 | Revision | 3 (2026-11-17): D17 added (GitHub access per surface; no MCP in v1), accepted on merge of the seed PR. Revision 2: GitHub organization (D14) dropped; one shared machine-account token |
-| Amended by | ADR-011 decision 7 (Accepted, 2026-11-18): the operator tier. Adds zones Z6 and Z7, amends B3, the OCI credentials row, and the personal-account row of section 4, and adds credential rows. Decision 5, B1, AC1-3, and RR-8 keep their wording and are read with the amendment: **no OCI credentials and no T2 or T3 on Z1 or Z2; operator machines may hold the credentials defined in ADR-011.** In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
+| Amended by | ADR-011 decision 7 (Accepted, 2026-11-18): the operator tier. Adds zones Z6 and Z7, amends B3, the OCI credentials row, and the personal-account row of section 4, and adds credential rows. Decision 5, B1, AC1-3, and RR-8 keep their wording and are read with the amendment: **no OCI credentials and no T2 or T3 on Z1 or Z2; operator machines may hold the credentials defined in ADR-011.** In effect since ADR-011 was accepted (2026-11-18, merge of PR #19). CR-43 (design PR #44): B1 note, section 5 deny rules, RR-10. Takes effect when the CR-43 design PR is merged |
 | Target location | `ai-lab-infrastructure/docs/adr/ADR-001-trust-model-and-execution.md` |
 | Related | CHG-001, CHG-003, ADR-002, ADR-003, D8/D13 (machine account), D11 (MCP policy), D14 (repository ownership), D17 (GitHub access per surface) |
 
@@ -73,7 +73,7 @@
 | Z7 | Lab operator VM (ADR-011) | Lab OCI VM (Always Free micro), separate from the lab VM, disposable, operated by the approver | Operator clone at a release tag; operator profile; read-only instance principal; during runs only: T3 in the script process; SSH key to the lab VM |
 
 **Trust boundaries that must hold:**
-- **B1.** The AI-operated zones Z1 and Z2 cannot approve or merge in Z3, and cannot modify Z4. Both properties are enforced, not procedural: Write role plus rulesets on public repos, and no OCI credentials.
+- **B1.** The AI-operated zones Z1 and Z2 cannot approve or merge in Z3, and cannot modify Z4. Both properties are enforced, not procedural: Write role plus rulesets on public repos, and no OCI credentials. Amended by CR-43: on a public repository the code-owner rule makes approval by the approver enforced. The ruleset does not restrict which write user merges an approved PR; for the machine account that is blocked by the section 5 deny rules and the template's `forbidden-api` only, and a push after approval dismisses the approval.
 - **B2.** *Dropped in revision 2.* Host-to-host repository isolation is not provided (accepted risk RR-9).
 - **B3.** Only you, in Z0 via the browser, can approve, merge, apply infrastructure, change repository settings, or change IAM. Amended by ADR-011: the operator machines Z6 and Z7 act only when you run a reviewed script from a release tag. Repository settings change from a host only through a `github-setup` apply run on Z6 with a token T2 that you create and revoke, and infrastructure never changes from an operator machine.
 
@@ -136,6 +136,7 @@ Target: workspace fully usable within 15 minutes of a reset. Data loss is bounde
 | Rule | Purpose |
 |---|---|
 | Deny `gh pr merge`, `gh pr review --approve`, `gh api` calls to merge or review endpoints | B1; defense in depth behind GitHub rulesets |
+| Deny `gh api` calls that set commit statuses or check runs, change the state of code-scanning, secret-scanning, or Dependabot alerts, or create push-protection bypasses | B1; a write user can do each of them |
 | Deny `git push` to `main` / `master` and force-pushes | Rulesets also enforce this on public repos; on private repos this is the only control |
 | Deny `terraform apply`, `tofu apply`, and mutating `oci` CLI verbs | B1 for Z4 |
 | Deny `gh repo create`, `gh repo edit`, `gh repo delete`, and repository-settings API calls | Repository creation and settings stay with you (Section 20 of the master prompt) |
@@ -143,6 +144,8 @@ Target: workspace fully usable within 15 minutes of a reset. Data loss is bounde
 | Deny reading `~/.config/gh/` and commands that print credentials (`gh auth token`, `env`, `printenv`) | AC1-8: token T1 never enters Claude's context |
 | Disable bypass-permissions mode | Keeps approval prompts for consequential commands |
 | Ask before network-fetch and install commands outside the toolchain manifest | Supply chain |
+
+The deny rules and the template's `forbidden-api` cover the endpoint classes of ADR-009 decision 9.
 
 **Instruction-trust rule (in each repository's CLAUDE.md, per ADR-003):**
 - Instructions come only from you in the session, or from review comments by `approver_login`.
@@ -177,7 +180,7 @@ Target: workspace fully usable within 15 minutes of a reset. Data loss is bounde
 |---|---|---|
 | RR-8 | Workspace guardrails may be lower assurance than managed settings | Rulesets on public repos; no OCI credentials on the workspace |
 | RR-9 | **Accepted.** Compromise of either host exposes the shared token, which can push branches and open PRs on all collaborator repositories, including `ai-lab-infrastructure`. | Rulesets on public repos block merges without your approval. ADR-002's `oci-apply` environment needs your approval. PC-6 flags workflow changes. Token expiry is 90 days. Revocation cuts both hosts immediately. |
-| RR-10 | On any future **private** repository (GitHub Free, no rulesets), a compromised host could push directly to `main`. | Keep repositories public by default (Q5). If a private repo is needed, record a per-repo accepted-risk note and keep its deploy paths manual. |
+| RR-10 | On any **private** repository on GitHub Free, rulesets and enforced branch protection, secret scanning, push protection, and code scanning are not available. A compromised host could push directly to `main`, and a committed secret would not be detected by GitHub. | Keep repositories public by default. If a private repository is needed, record a per-repository accepted-risk note, keep its deploy paths manual, rely on the gate's `public-repo-hygiene` and `forbidden-api`, and have the approver confirm `pr-contract`, `quality-gate`, and the evidence lines before each merge. |
 
 ## 9. Open items
 
