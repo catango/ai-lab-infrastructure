@@ -8,6 +8,7 @@
 | Change request | CR-2 (issue #2) |
 | Amended by | ADR-011 decision 10 and CR-18 design section 5 (Accepted, 2026-11-18): adds the `operator` profile (decision 10 below). In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
 | Amended by (scope) | CR-39 (Proposed, design PR #40): decision 1 below applies to this platform's hosts only; the software template's CI manifest is separate (see decision 1). Takes effect when the CR-39 design PR is merged |
+| Amended by (context) | CR-43 (design PR #44): ARM64 runners on private repositories. Takes effect when the CR-43 design PR is merged |
 | Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3); `operator` profile (CR-18) |
 | Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), ADR-011 (operator tier), baseline sections 6 and 7 |
 
@@ -21,7 +22,7 @@
 - D15 requires one toolchain codebase with `builder` (workspace, Debian 13, x86-64) and `lab` (lab VM, Ubuntu 24.04, ARM64) profiles.
 - The platform repository is public, the home directory of the workspace is ephemeral (D16), and the workspace must be rebuilt by script within 15 minutes.
 - The supply-chain rule is: pin versions, verify checksums or signatures, never `curl | sh`, and provide both architectures for every download.
-- ARM64 behavior can be tested only on ARM64 hosts. GitHub provides `ubuntu-24.04-arm` runners for public repositories.
+- ARM64 behavior can be tested only on ARM64 hosts. GitHub provides `ubuntu-24.04-arm` runners for public repositories. GitHub also documents `ubuntu-24.04-arm` as a standard runner for private repositories that uses the account's included minutes and is then charged (read 2026-11-19; not verified by a run). This platform does not use it (ADR-009).
 
 ## 2. Decision
 
