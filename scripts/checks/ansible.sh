@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: ansible-playbook
 # order: 91
+# class: platform
 # ansible-playbook --syntax-check for every top-level playbook in ansible/ (builder.yml and lab.yml).
 # Nothing is executed on any host; the temporary and home directories are outside the repository.
 set -euo pipefail

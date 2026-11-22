@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 50
+# class: generic
 # No workflow or local action references Claude, Anthropic, or a Claude credential (AC3-6).
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

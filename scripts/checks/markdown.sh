@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: pymarkdown
 # order: 80
+# class: generic
 # pymarkdownlnt over every Markdown file. Disabled rules (the merged ADRs, CR documents, and PR
 # templates violate them by design): md003 heading style, md013 line length, md022 blank lines around
 # headings (the templates put a comment directly under a heading), md028, md029, md032 blank lines

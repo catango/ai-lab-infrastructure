@@ -366,7 +366,7 @@ test_dispatcher() {
 
   # robustness: a crashing check is a failure; output cannot forge workflow commands
   repo=$(new_repo)
-  printf '#!/usr/bin/env bash\n# tool: none\n# order: 999\nset -euo pipefail\nexit 5\n' >"$repo/scripts/checks/zz-crash.sh"
+  printf '#!/usr/bin/env bash\n# tool: none\n# order: 999\n# class: project\nset -euo pipefail\nexit 5\n' >"$repo/scripts/checks/zz-crash.sh"
   chmod 755 "$repo/scripts/checks/zz-crash.sh"
   commit_all "$repo"
   gate "$repo" --only zz-crash

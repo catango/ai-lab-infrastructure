@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 30
+# class: generic
 # No resource identifiers, IPv4 addresses, emails, key fingerprints, private keys, or tokens.
 # Findings give the path, line, and kind only; the matched text is never printed.
 set -euo pipefail

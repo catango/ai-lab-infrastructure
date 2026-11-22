@@ -12,14 +12,17 @@ usage() {
 Usage: scripts/quality-gate.sh [--list] [--only ID[,ID...]] [--skip ID[,ID...]]
                                [--base REF] [--strict] [--verbose]
 
-  --list       print check IDs and the tool each needs
+  --list       print check IDs, the tool each needs, and its class
   --only/--skip  select checks (comma-separated, repeatable)
   --base REF   only files changed since the merge base with REF (default: all tracked files)
   --strict     a missing tool is an error (exit 3); CI always passes this
   --verbose    print every finding instead of the first 20 per check
 
-Exit codes: 0 all selected checks passed, 1 a check failed, 2 usage error,
-            3 --strict and a required tool is missing.
+Every check has a "# class:" header (generic, template, platform, or project) in its first 12 lines;
+a missing or unknown class fails the gate (exit 1) before anything runs, also with --list.
+
+Exit codes: 0 all selected checks passed, 1 a check failed or a check has no valid class,
+            2 usage error, 3 --strict and a required tool is missing.
 USAGE
 }
 
@@ -58,20 +61,38 @@ done
 header() { awk -v k="$2" 'NR<=12 && $1=="#" && $2==k":" {print $3; exit}' "$1"; }
 
 # Discover checks, ordered by their "# order:" header.
-IDS=() TOOLS=()
-while read -r _ id tool; do
+IDS=() TOOLS=() CLASSES=()
+while read -r _ id tool class; do
   IDS+=("$id")
   TOOLS+=("$tool")
+  CLASSES+=("$class")
 done < <(
   for f in "$CHECK_DIR"/*.sh; do
     [[ -e $f ]] || continue
     id=$(basename "$f" .sh)
-    printf '%s %s %s\n' "$(header "$f" order || true)" "$id" "$(header "$f" tool || true)"
-  done | awk '{ printf "%s %s %s\n", ($1 == "" ? 999 : $1), $2, ($3 == "" ? "none" : $3) }' | LC_ALL=C sort -k1,1n -k2,2
+    printf '%s %s %s %s\n' "$(header "$f" order || true)" "$id" "$(header "$f" tool || true)" "$(header "$f" class || true)"
+  done | awk '{ printf "%s %s %s %s\n", ($1 == "" ? 999 : $1), $2, ($3 == "" ? "none" : $3), ($4 == "" ? "-" : $4) }' | LC_ALL=C sort -k1,1n -k2,2
 )
 
+# Design CR-43 section 10: the class of every check is one of four. A check without one fails the gate.
+BAD_CLASS=0
+for i in "${!IDS[@]}"; do
+  case ${CLASSES[$i]} in
+    generic | template | platform | project) ;;
+    -)
+      printf 'quality-gate: %s: has no "# class:" header in its first 12 lines (generic, template, platform, or project)\n' "${IDS[$i]}" >&2
+      BAD_CLASS=1
+      ;;
+    *)
+      printf 'quality-gate: %s: unknown class "%s" (expected generic, template, platform, or project)\n' "${IDS[$i]}" "${CLASSES[$i]}" | LC_ALL=C sed -e 's/[[:cntrl:]]//g' -e 's/::/: :/g' >&2
+      BAD_CLASS=1
+      ;;
+  esac
+done
+if [[ $BAD_CLASS -eq 1 ]]; then exit 1; fi
+
 if [[ $LIST -eq 1 ]]; then
-  for i in "${!IDS[@]}"; do printf '%-26s %s\n' "${IDS[$i]}" "${TOOLS[$i]}"; done
+  for i in "${!IDS[@]}"; do printf '%-26s %-18s %s\n' "${IDS[$i]}" "${TOOLS[$i]}" "${CLASSES[$i]}"; done
   exit 0
 fi
 

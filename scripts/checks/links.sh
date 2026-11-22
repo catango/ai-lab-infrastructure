@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 60
+# class: generic
 # Relative Markdown links resolve to existing files or directories inside the repository.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

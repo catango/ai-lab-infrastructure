@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 40
+# class: generic
 # Workflow policy (design 5.3; C-1, C-2, C-6, C-7). The scan itself is workflow-policy.awk.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

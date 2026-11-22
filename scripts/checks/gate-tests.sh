@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 100
+# class: generic
 # Runs the shell test suites tests/*/run.sh (the gate's own fixture tests, the workspace restore tests)
 # that are part of the file list.
 set -euo pipefail
