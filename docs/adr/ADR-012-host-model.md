@@ -32,7 +32,7 @@
    | Z6 | Operator machine: the operator user and the operator admin | Human-provided, long-lived, separate from every AI lab, operated by the approver | Per-project operator scripts at release tags (root-owned); per-project output directories; during runs only: T2, T3, and production credentials in the script process |
    | Z8 | The lab host (jump host and hypervisor) | Outside the platform; full control of the AI lab | Whatever the AI lab holds while it runs, including T1 and the inference credential (RR-P5) |
 
-   Z0 (Windows client), Z3 (GitHub), and Z5 (Anthropic) are as in ADR-001. Z2, Z4, and Z7 do not exist.
+   Z0 (Windows client), Z3 (GitHub), and Z5 (Anthropic) are as in ADR-001. No other zones exist.
 2. **Credential placement** (PA-13). The AI lab holds T1 and project-scoped non-production credentials recorded in the project's PROJECT.md (decision 11). Production and infrastructure-changing credentials, T2, and T3 exist only on the operator machine, used by reviewed scripts from a release tag, prompted or short-lived. No credential of the personal account is on the AI lab. The lab admin and the operator admin hold no credentials.
 3. **Accounts and keys, enforced on the servers** (PA-14). Four accounts (AI user, lab admin, operator user, operator admin), each with its own key; no key is shared between accounts on a machine (checked). The lab admin, the operator user, and the operator admin use `sk-ssh-ed25519` keys with verify-required if the Windows client supports them, otherwise passphrase-protected file keys. The AI user's key has a passphrase if Claude Desktop can use one, otherwise none (RR-P6). The lab setup PR records which applies.
 4. **Lab contract** LC-1 to LC-15 (section 4; PA-15).

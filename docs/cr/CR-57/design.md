@@ -217,9 +217,12 @@ Points where the review is silent or its decisions meet. None is guessed; each s
 | O-8 | `scripts/operator/setup` (tag check, `ansible-core`, runs the Ubuntu profile) is not named; PA-20 puts the operator configuration in the operator profile. Step 4 retargets or replaces it | Plan step 4 |
 | O-9 | `facts --privileged` and sudo in `setup` (ADR-011 decisions 10, 12) conflict with OC-8 and OC-9 (no sudo; no root-only facts script). Step 4 removes both | Plan step 4 |
 | O-10 | Whether a project other than this repository gets `github-setup` and a desired-state file under PA-42 is not stated | ADR-012, plan step 4 |
-| O-11 | The exact set of generic files excluded from the PA-A1 search is proposed in the acceptance criteria and finalised by step 1's inventory; the approver confirms it | PA-A1 |
+| O-11 | The exact set of generic files excluded from the PA-A1 search is proposed in the acceptance criteria and finalised by step 1's inventory; the approver confirms it. In particular the review does not say whether the OCI and Terraform deny rules of `operator_contract.py`, which the template shares (I-9), stay as generic rules or go | PA-A1 |
 | O-12 | Recorded inconsistencies named by the review without detail: ADR-009's status line (Proposed) against the index (Accepted, merge of PR 44); the content of CR-43 design section 12 against `docs/operations/github-setup.md`. Neither is edited here | ADR-009, CR-43 |
 | O-13 | The template repository holds no preset or owned CLAUDE.md yet (PA-41) | Section 10 |
+| O-14 | The review leaves PA-A3, PA-A4, PA-A9, and PA-A10 unchanged, but their text cites identifiers that its decisions replace: HC-1 to HC-6 (now LC and OC), the rule PA-3 (now PA-19), "no operator line" in `CLAUDE.md` (PA-A4) and "no operator content" in the preset (PA-A9) although Q1 keeps `scripts/operator/` and ADR-008 puts the operator specifics in the preset, and "deny rules unchanged" (PA-A10) although PA-19 adds entries. The wording is kept as given; the approver says how to read them | Acceptance criteria |
+| O-15 | PA-A7 says "one gate profile", while PA-24 and PA-31 name two Ansible profiles (lab, operator). Whether the operator profile takes tools from the same manifest membership is not stated | Plan step 6, ADR-005 |
+| O-16 | PA-A16 requires the lab and operator setup paths to work from main "after each removal PR", but step 1 precedes the lab profile (step 2). Read here as: the existing `builder-profile` and `operator-profile` jobs at step 1, the PA-28 job from step 2 | Acceptance criteria |
 
 ## 12. Not verified
 

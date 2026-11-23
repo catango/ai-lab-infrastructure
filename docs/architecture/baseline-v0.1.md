@@ -1,8 +1,10 @@
 # AI Engineering Platform: Architecture Baseline v0.1
 
+> **Superseded by [baseline v0.2](baseline-v0.2.md)** (CR-57, Proposed; takes effect when the CR-57 design PR is merged). This file is kept as history so that existing links survive. Its OCI components, decisions D2 to D7, D12, and CHG-002, ADR-004, ADR-006, ADR-007, and Stages 2 to 4 are superseded or withdrawn; read v0.2 for the current component map, decision index, and build sequence.
+
 | Field | Value |
 |---|---|
-| Status | **Proposed**. Approved by your review and merge of the seed PR in `ai-lab-infrastructure` (ADR-003 approval rule) |
+| Status | **Proposed**. Approved by your review and merge of the seed PR in `ai-lab-infrastructure` (ADR-003 approval rule). Superseded by baseline v0.2 (CR-57, Proposed) |
 | Date | 2026-11-17 |
 | Approval mode | P1 = Option 1: baseline approval, then incremental design PRs per component |
 | Target location | `ai-lab-infrastructure/docs/architecture/baseline-v0.1.md` |
