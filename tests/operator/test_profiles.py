@@ -36,10 +36,6 @@ class Profiles(unittest.TestCase):
             self.assertEqual(entry["arch"], "x86-64")
             self.assertTrue(entry["os"].startswith("ubuntu-24.04"))
 
-    def test_the_repository_file_gives_the_operator_limits_job_its_limits(self):
-        limits = profiles.strictest(profiles.load_profiles(helpers.PROFILES))
-        self.assertEqual((limits["memory_mb"], limits["cpu_threads"]), (1024, 1))
-
     def test_strictest_takes_the_smallest_limits(self):
         strictest = profiles.strictest(load(GOOD))
         self.assertEqual((strictest["memory_mb"], strictest["cpu_threads"]), (1024, 1))

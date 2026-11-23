@@ -67,6 +67,6 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 section 7 and were ne
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
 | [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |
 | [workspace/](../workspace/) | `restore.sh`, `verify.sh`, repositories, user-level Claude Code configuration | Active |
-| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, and CI test limits of the operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture, OS, and the CI test limits of the `operator-limits` job (its measured memory, CPU, and disk are not in the file yet) |
+| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, memory, CPU, disk, and bandwidth of the operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture and OS only (its measured memory, CPU, and disk are not in the file yet) |
 | [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `toolchain-arm64`, `builder-profile`) and `pr-contract.yml` | Active |
 | [.github/dependabot.yml](../.github/dependabot.yml) | Weekly version updates for the pinned Actions and the Python lock | Active |

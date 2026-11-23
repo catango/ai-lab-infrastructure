@@ -15,7 +15,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CI = ROOT / ".github" / "workflows" / "ci.yml"
-EXPECTED_NEEDS = ["gate", "operator-profile", "operator-limits", "toolchain", "builder-profile"]
+EXPECTED_NEEDS = ["gate", "operator-profile", "toolchain", "builder-profile"]
 
 
 def jobs(text):
