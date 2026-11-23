@@ -7,7 +7,7 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` (this record) |
 | Change request | CR-39 (issue #39) |
 | Amended by | CR-43 (design PR #44 merged, 2026-11-20): decisions 1, 2, 3, 6, 9, and 10. ADR-010 (Proposed, CR-45): budgets and loading order, checkpoint format, metrics; closes D10-1 and D10-2 of design section 11. Takes effect when the CR-45 design PR is merged |
-| Amended by (cross-build) | CR-55 (Proposed, design PR for issue #55): decisions 8, 9, and 14 (cross-build script and check, the matrix job `cross-build-<target>`, the configuration key `cross_builds`). Takes effect when the CR-55 design PR is merged |
+| Amended by (cross-build) | CR-55 (Proposed, design PR for issue #55): decisions 8 and 9 (the seeded cross-build script and check; the matrix job of an architecture with no runner also cross-builds). Takes effect when the CR-55 design PR is merged |
 | Scope | The structure of the template, what is generated into an application repository, `CLAUDE.md`, rules, Skills (including `address-review-feedback`), the CR and ADR templates, template-sync and the init PR, the template's own quality gate and CI, architectures, public and private repositories, the generic operator contract, and the Stage 5 exit. Not ADR-009 (security matrix, Actions hardening) and not ADR-010 (token optimisation, metrics) |
 | Related | ADR-001 (guardrails, instruction trust, RR-10), ADR-003 (work item model, `pr-contract`, Skill impact; amended by this CR), ADR-005 (toolchain; scope amended by this CR), ADR-011 (decision 17, operator contract), ADR-009 and ADR-010 (reserved; dependencies in design section 11) |
 

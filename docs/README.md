@@ -34,7 +34,7 @@ ADR-004, ADR-006, and ADR-007 are listed in baseline section 7 and are written a
 | [CR-39](cr/CR-39/README.md) | Software template design (ADR-008): structure, `CLAUDE.md`, rules, Skills, template-sync, template gate and CI, Stage 5 dry run | Design in review with the approver's decisions Q1 to Q14 applied. Also amends ADR-003 and ADR-005 |
 | [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009): required checks, Actions hardening, GitHub Free feature matrix, fork PRs, evidence line, rulesets, check catalogue, rule sharing | Design merged (PR #44, 2026-11-20); also amended ADR-001, ADR-003, ADR-005, and ADR-008. Nothing is implemented |
 | [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010): budgets, loading order, checkpoint format, CI output, review-loop cost, metrics tiers, baseline and regression | Design in review with the approver's decisions Q1 to Q15 applied. Also amends ADR-003 and ADR-008. Nothing is implemented |
-| [CR-55](cr/CR-55/README.md) | Cross-platform architectures and cross-builds design: amd64 and arm64 targets, build-only cross-compilers without emulation, native tests on the runner of each architecture | Design proposal for the architecture discussion. Also amends ADR-005, ADR-008, and ADR-009 (Proposed header entries; text after the approver's review). Nothing is implemented |
+| [CR-55](cr/CR-55/README.md) | Cross-platform architectures and cross-builds design: native build and test first on hosted runners, build-only cross-compilation as the fallback, no emulation | Design proposal for the architecture discussion. Also amends ADR-008 and ADR-009 (Proposed header entries; text after the approver's review). Nothing is implemented |
 
 ## Operations
 

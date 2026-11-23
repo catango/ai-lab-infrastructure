@@ -9,7 +9,6 @@
 | Amended by | ADR-011 decision 10 and CR-18 design section 5 (Accepted, 2026-11-18): adds the `operator` profile (decision 10 below). In effect since ADR-011 was accepted (2026-11-18, merge of PR #19) |
 | Amended by (scope) | CR-39 (Proposed, design PR #40): decision 1 below applies to this platform's hosts only; the software template's CI manifest is separate (see decision 1). Takes effect when the CR-39 design PR is merged |
 | Amended by (context) | CR-43 (design PR #44): ARM64 runners on private repositories. Takes effect when the CR-43 design PR is merged |
-| Amended by (cross-build) | CR-55 (Proposed, design PR for issue #55): schema field `targets`, the cross-smoke at L2, and a context sentence on cross-building. Takes effect when the CR-55 design PR is merged |
 | Scope | `builder` profile in full (Stage 1); `lab` profile structure only (completed in Stage 3); `operator` profile (CR-18) |
 | Related | ADR-001 (D15 one toolchain, two profiles; D16 restore; section 5 guardrails), ADR-003 (PC rules), ADR-011 (operator tier), baseline sections 6 and 7 |
 
