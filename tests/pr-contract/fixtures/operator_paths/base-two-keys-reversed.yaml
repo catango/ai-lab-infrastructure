@@ -1,0 +1,13 @@
+# Base commit: both new keys and architectures, in a different order than the repository file, with comments between them.
+operator_endpoints:
+  - api.github.com   # the GitHub API
+  - example.org
+
+# a comment line at column zero inside the gap
+architectures:
+  - name: amd64
+    runner: ubuntu-24.04
+    runner_private: ubuntu-24.04
+operator_paths:
+- scripts/operator/
+- ansible/roles/operator_*/

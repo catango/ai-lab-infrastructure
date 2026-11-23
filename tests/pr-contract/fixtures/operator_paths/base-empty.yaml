@@ -1,0 +1,4 @@
+# Base commit: an explicit empty value, so PC-8 is inactive (a newly generated application repository).
+schema_version: 1
+operator_paths: []
+operator_endpoints: []

@@ -1,0 +1,3 @@
+# Base commit: the key is absent, so PC-8 fails closed.
+schema_version: 1
+architectures: []

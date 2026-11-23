@@ -1,0 +1,11 @@
+# Base commit: the operator set is configured (the paths of today, the lab profile, and the shared SSH hardening role).
+schema_version: 1
+operator_paths:
+  - scripts/operator/
+  - ansible/operator.yml
+  - ansible/roles/operator_*/
+  - toolchain/python/operator.lock
+  - ansible/lab.yml
+  - ansible/roles/ssh_hardening/
+operator_endpoints:
+  - api.github.com
