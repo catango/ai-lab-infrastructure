@@ -6,7 +6,7 @@ on:
     branches: [main]
 permissions: {}
 jobs:
-  quality-gate:
+  gate:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     permissions:
@@ -35,5 +35,13 @@ jobs:
     name: toolchain-${{ matrix.arch }}
     runs-on: [ubuntu-24.04]
     timeout-minutes: 5
+    steps:
+      - run: echo ok
+  quality-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [gate, second]
+    if: always()
+    permissions: {}
     steps:
       - run: echo ok

@@ -574,6 +574,24 @@ test_workflow_policy() {
   base=$(head_commit "$repo")
   gate "$repo" --only workflow-policy --base "$base"
   rc_is "SC-20 a base without a configuration file means the defaults (this workflow passes)" 0
+
+  # S-23, S-2: a job of ci.yml that the aggregate quality-gate does not need fails, and the finding names the job
+  repo=$(policy_repo "")
+  cp "$WP_FX/fail-wp16-aggregate-misses-a-job/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  commit_all "$repo" head
+  gate "$repo" --only workflow-policy
+  rc_is "S-23 a job missing from the needs of the aggregate fails" 1
+  out_has "S-23 the missing job is named" "the job operator-limits of ci.yml is not in the needs of the aggregate quality-gate"
+  out_lacks "S-23 the job that is needed is not reported" "the job gate of ci.yml"
+  cp "$WP_FX/pass-aggregate/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  commit_all "$repo" head
+  gate "$repo" --only workflow-policy
+  rc_is "S-23 an aggregate that needs every other job passes" 0
+  cp "$WP_FX/fail-wp16-aggregate-no-always/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  commit_all "$repo" head
+  gate "$repo" --only workflow-policy
+  rc_is "S-2 an aggregate without if: always() fails" 1
+  out_has "S-2 the missing if: always() is reported" "the aggregate quality-gate has no if: always()"
 }
 
 # ---------------------------------------------------------------- main

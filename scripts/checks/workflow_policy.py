@@ -8,6 +8,10 @@ The shell turns each workflow into JSON with `yq -o=json` and calls this file in
   scan "<labels>" PATH JSON [PATH JSON]...
                                       the rules WP-10 to WP-13, WP-16, and the `cache:` input of WP-14 on the parsed files.
 
+WP-16 also keeps the required names honest (design section 3, S-2, S-23): in ci.yml the aggregate `quality-gate` needs every
+other job of the file and runs `if: always()` when there is one, and no required job has a job-level `if:` or a
+`continue-on-error`.
+
 Findings are "path:line: WP-n: message". A finding never repeats a value from the workflow, only the rule. Line numbers are
 found by looking for the key in the source text of the job and fall back to the line of the job, then to line 1.
 """
@@ -268,6 +272,68 @@ def check_required(defs, scanned, findings):
         if expected_path in scanned and not inside:
             findings.append((expected_path, 1, "WP-16", f"the required check name {name} is not defined by a job of this file"))
 
+JOB_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _is_always(value):
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    match = re.fullmatch(r"\$\{\{(.*)\}\}", text, re.S)
+    return (match.group(1) if match else text).strip() == "always()"
+
+
+def _needs(job):
+    needs = job.get("needs")
+    if isinstance(needs, str):
+        return {needs}
+    return {item for item in needs if isinstance(item, str)} if isinstance(needs, list) else set()
+
+
+def _job_text(job_id):
+    return f"the job {job_id}" if JOB_ID.fullmatch(job_id) else "a job"
+
+
+def check_required_jobs(path, source, jobs, findings):
+    """WP-16 (S-2, S-23) for the file that defines a required name: no skip, no tolerated failure, a complete aggregate."""
+    expected = {WORKFLOWS + file: name for name, file in REQUIRED.items()}
+    name = expected.get(path)
+    if name is None:
+        return
+    required = [
+        job_id for job_id, job in jobs.items()
+        if isinstance(job, dict) and (job.get("name") if isinstance(job.get("name"), str) else job_id) == name
+    ]
+    aggregate = required[0] if name == "quality-gate" and required else None
+    others = [job_id for job_id in jobs if job_id != aggregate] if aggregate else []
+    for job_id in (required[:1] if aggregate is None else [aggregate] + others):
+        job = jobs[job_id]
+        if not isinstance(job, dict):
+            continue
+        coe = job.get("continue-on-error")
+        if "continue-on-error" in job and not is_false(coe):
+            findings.append((path, source.find(job_id, r"^\s*continue-on-error:"), "WP-16",
+                             f"{_job_text(job_id)} has continue-on-error; a required job and a job the aggregate needs must fail the check"))
+        if job_id != aggregate and "if" in job:
+            findings.append((path, source.find(job_id, r"^\s*if:"), "WP-16",
+                             f"{_job_text(job_id)} has a job-level if:; a required job and a job the aggregate needs always run"))
+    if aggregate is None:
+        return
+    job = jobs[aggregate]
+    if not isinstance(job, dict):
+        return
+    if "if" in job and not _is_always(job.get("if")):
+        findings.append((path, source.find(aggregate, r"^\s*if:"), "WP-16",
+                         "the aggregate quality-gate has an if: other than always(); it would be skipped when a needed job fails"))
+    if others and "if" not in job:
+        findings.append((path, source.job_line(aggregate), "WP-16",
+                         "the aggregate quality-gate has no if: always(); it would be skipped when a needed job fails"))
+    needed = _needs(job)
+    for job_id in others:
+        if job_id not in needed:
+            findings.append((path, source.find(aggregate, r"^\s*needs:"), "WP-16",
+                             f"{_job_text(job_id)} of ci.yml is not in the needs of the aggregate quality-gate"))
+
 
 def scan_file(path, data, source, labels, defs, findings):
     if not isinstance(data, dict):
@@ -295,6 +361,7 @@ def scan_file(path, data, source, labels, defs, findings):
         check_images(path, source, job_id, job, findings)
         check_runs_on(path, source, job_id, job, labels, findings)
         required_name_findings(path, source, job_id, job, defs, findings)
+    check_required_jobs(path, source, jobs, findings)
 
 
 def scan(labels, pairs):
