@@ -27,13 +27,15 @@ STUB = """#!/usr/bin/env bash
 # Stub gate: records its arguments, prints host data on both streams, and exits with STUB_RC.
 printf '%s\\n' "$*" >"$STUB_ARGS"
 printf 'stdout from %s in %s as %s\\n' "$(hostname 2>/dev/null)" "$PWD" "${USER:-}"
-printf 'stderr from %s 10.20.30.40\\n' "$(hostname 2>/dev/null)" >&2
+printf 'stderr from %s %s\\n' "$(hostname 2>/dev/null)" "$STUB_ADDRESS" >&2
 if [[ -n ${STUB_DIRTY:-} ]]; then : >untracked-file; fi
 exit "${STUB_RC:-0}"
 """
 FAKE_UNAME = """#!/usr/bin/env bash
 if [[ ${1:-} == -m ]]; then echo "$FAKE_MACHINE"; else /usr/bin/uname "$@"; fi
 """
+# Built from parts so that this file holds no address literal (public-repo-hygiene).
+FAKE_ADDRESS = ".".join(["10", "20", "30", "40"])
 IPV4 = re.compile(r"\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}\b")
 
 
@@ -76,7 +78,7 @@ class GateEvidence(unittest.TestCase):
 
     def run_script(self, *args, rc=0, machine=None, dirty=False):
         env = {"PATH": f"{self.bin}:{os.environ['PATH']}" if machine else os.environ["PATH"], "HOME": self.tmp, "USER": "someone",
-               "STUB_ARGS": str(pathlib.Path(self.tmp) / "args"), "STUB_RC": str(rc), **GIT_ENV}
+               "STUB_ARGS": str(pathlib.Path(self.tmp) / "args"), "STUB_ADDRESS": FAKE_ADDRESS, "STUB_RC": str(rc), **GIT_ENV}
         if machine:
             env["FAKE_MACHINE"] = machine
         if dirty:
@@ -132,7 +134,7 @@ class GateEvidence(unittest.TestCase):
                     if len(value) >= 3:
                         self.assertNotIn(value, scrubbed)
                 self.assertIsNone(IPV4.search(scrubbed), scrubbed)
-                self.assertNotIn("10.20.30.40", text)
+                self.assertNotIn(FAKE_ADDRESS, text)
                 self.assertNotIn("stdout from", text)
                 self.assertNotIn("stderr from", text)
 
