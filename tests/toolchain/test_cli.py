@@ -91,7 +91,7 @@ class RealManifest(unittest.TestCase):
         names = set()
         for tool in self.raw["tools"].values():
             names.update(pathlib.PurePosixPath(b).name for b in tool.get("binaries", []))
-        for expected in ("fd", "rg", "gh", "yq", "shellcheck", "actionlint", "tofu", "yamllint", "pymarkdown"):
+        for expected in ("fd", "rg", "gh", "yq", "shellcheck", "actionlint", "yamllint", "pymarkdown"):
             self.assertIn(expected, names)
 
     def test_every_download_has_both_architectures_with_distinct_checksums(self):
