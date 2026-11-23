@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Platform operator VM: active. Lab operator VM, SSH templates, break-glass: **not written yet** (PR 7b; the OCI work is postponed) |
+| Status | Platform operator VM: active. Break-glass: **not written yet** |
 | Implements | ADR-011 (operator tier), CR-18 design sections 3, 5.7, 6 |
 | Performed by | The approver, as the operator user, in a plain SSH terminal. Claude Code never runs, reaches, or probes these machines |
 
@@ -23,14 +23,14 @@ addresses, account names, hostnames, keys, tokens, or OCIDs. The scripts sanitis
 
 ## 1. The machines
 
-| Aspect | Platform operator VM (Z6) | Lab operator VM (Z7) |
-|---|---|---|
-| What it is | A remote machine provided to the approver | A lab OCI VM, separate from the lab VM |
-| Architecture and OS | x86-64, Ubuntu 24.04 | x86-64, Ubuntu 24.04 |
-| Credentials it may hold | T2 and T3, only in a script process during a run | Instance principal (read-only) and T3 |
-| Runbook | Section 3 | Section 8 (PR 7b) |
+| Aspect | Platform operator VM (Z6) |
+|---|---|
+| What it is | A remote machine provided to the approver |
+| Architecture and OS | x86-64, Ubuntu 24.04 |
+| Credentials it may hold | T2 and T3, only in a script process during a run |
+| Runbook | Section 3 |
 
-The size of each machine is recorded without identifiers in `scripts/operator/machine-profiles.toml`. Tests and CI limits use it.
+The machine is recorded without identifiers in `scripts/operator/machine-profiles.toml`. Tests and CI limits use it.
 
 ## 2. Separation rules
 
@@ -162,7 +162,7 @@ used to collect facts.
 
 | Token | Used by | Type and permissions | Expiry | Machine |
 |---|---|---|---|---|
-| **T3** (read-only) | `facts --scope github --use-token`, `github-setup` dry run | Fine-grained token of the personal account, the two repositories only. Administration read, Environments read, Metadata read | 1 day | Either operator machine |
+| **T3** (read-only) | `facts --scope github --use-token`, `github-setup` dry run | Fine-grained token of the personal account, the two repositories only. Administration read, Environments read, Metadata read | 1 day | The operator machine |
 | **T2** (write) | `github-setup --apply` only | Fine-grained token of the personal account, the two repositories only. Administration and Environments read and write, Metadata read. No Contents, Pull requests, Workflows, or Secrets write | 1 day | Platform operator VM only |
 
 ### 4.1 Steps for a run
@@ -188,19 +188,7 @@ scripts/operator/github-setup --owner <owner> --collaborator <bot> --apply     #
 A second `github-setup --apply` must report no change. The R3 tag ruleset (`release-tags`) and everything under "Stays manual"
 in [github-setup.md](github-setup.md) remain manual.
 
-## 5. Facts outside the operator machines
-
-`facts --scope oci` runs in Cloud Shell under the approver's session until the lab operator VM exists:
-
-```bash
-scripts/operator/facts --scope oci --oci-auth instance_obo_user            # dry run: prints the exact commands first
-scripts/operator/facts --scope oci --oci-auth instance_obo_user --apply
-```
-
-It uses `list`, `get`, and `inspect` calls only and handles no OCI credential. It replaces the Gate 0 OCI audit commands; see
-[gate-0-audit.md](gate-0-audit.md).
-
-## 6. Rollback
+## 5. Rollback
 
 The manual runbooks stay valid throughout. To roll back the operator tier:
 
@@ -208,13 +196,12 @@ The manual runbooks stay valid throughout. To roll back the operator tier:
 2. Delete the operator scripts and the profile through a PR (and revert the ADR-011, ADR-001, and ADR-005 amendments in design
    PRs).
 3. Retire the operator users on the machines.
-4. Use the appendices of [gate-0-audit.md](gate-0-audit.md) and [github-setup.md](github-setup.md): they keep every manual step the
-   scripts replaced, so no capability is lost.
+4. Use the appendix of [github-setup.md](github-setup.md): it keeps every manual step the script replaced, so no capability is lost.
 
 Rolling back a single machine's `setup` is by the provider's snapshot or rebuild. The profile keeps the original SSH and
 firewall configuration under `/var/lib/operator` for a manual restore.
 
-## 7. Failure and recovery
+## 6. Failure and recovery
 
 | Symptom | Do |
 |---|---|
@@ -224,18 +211,7 @@ firewall configuration under `/var/lib/operator` for a manual restore.
 | A step fails halfway | Repeat the same command; every apply is idempotent |
 | A token may have leaked | Revoke it in the browser, remove the history entry, tell Claude Code only that it happened |
 
-## 8. Lab operator VM
+## 7. Break-glass runbook
 
-> **Not written yet.** PR 7b (`operator-finish`) adds this section after the lab VM exists (the OCI work is postponed by the approver).
-> Planned content: bootstrap by cloud-init running `setup --apply`, the first `facts` runs (host and OCI scope), U-1 for this
-> machine, and the instance principal.
-
-## 9. `ssh` config templates for both OCI VMs
-
-> **Not written yet (PR 7b).** One template entry per OCI VM, placeholders only: `Host` alias, `HostName`, `User`, a dedicated
-> `IdentityFile` per VM, `ProxyJump` where needed, `HostKeyAlias`, `StrictHostKeyChecking yes`, `ForwardAgent no`.
-
-## 10. Break-glass runbook
-
-> **Not written yet (PR 7b).** Rebuild through the lab stack after an egress change, an NSG error, a host-side fault, or a lost key,
+> **Not written yet.** Rebuild through the lab stack after an egress change, an NSG error, a host-side fault, or a lost key,
 > with the host-key check from the console output afterwards (design section 5.9).

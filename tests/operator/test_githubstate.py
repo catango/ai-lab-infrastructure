@@ -23,7 +23,7 @@ class RepositoryFile(unittest.TestCase):
         desired = githubstate.load_desired(DESIRED)
         self.assertEqual(set(desired["repositories"]), {"ai-lab-infrastructure", "ai-software-template"})
         self.assertEqual({r["name"] for r in desired["rulesets"]}, {"main-protection", "release-tags"})
-        self.assertEqual(desired["environments"], ["oci-plan", "oci-apply"])
+        self.assertEqual(desired["environments"], [])
 
     def test_it_holds_no_login_address_or_token(self):
         import re
@@ -52,7 +52,7 @@ class RepositoryFile(unittest.TestCase):
             "security cannot be switched off": self.text.replace("vulnerability_alerts = true", "vulnerability_alerts = false"),
             "bad enforcement": self.text.replace('enforcement = "active"', 'enforcement = "maybe"', 1),
             "bad repository name": self.text.replace("[repositories.ai-lab-infrastructure]", "[repositories.\"a b\"]"),
-            "environment not deferred": self.text.replace("deferred = true", "deferred = false", 1),
+            "environment not deferred": self.text + '\n[[environments]]\nname = "example"\ndeferred = false\n',
             "not toml": "this is [not toml",
         }
         for label, text in bad.items():

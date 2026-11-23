@@ -42,10 +42,9 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 section 7 and were ne
 
 | Document | Purpose | Status |
 |---|---|---|
-| [Operator machines](operations/operator.md) | Runbook for the operator machines: platform operator VM, tokens T2 and T3, rollback | Platform operator VM sections active. Lab operator VM, `ssh` templates, and break-glass sections not written (PR 7b, OCI postponed) |
+| [Operator machines](operations/operator.md) | Runbook for the operator machine: platform operator VM, tokens T2 and T3, rollback | Platform operator VM sections active. Break-glass section not written |
 | [GitHub setup](operations/github-setup.md) | Stage 0 runbook: accounts, repositories, rulesets, token; the scripted parts point at `github-setup`, the manual steps they replaced are in Appendix A | Executed (Stage 0 complete); shortened by CR-18 |
 | [Workspace restore](operations/workspace-restore.md) | Runbook: rebuild the workspace after a home reset, token T1, verification, reset test | Active |
-| [Gate 0 audit](operations/gate-0-audit.md) | Pre-architecture audit checklist for the OCI tenancy; the OCI part is `facts --scope oci`, the manual steps it replaced are in Appendix A | Ready for execution; shortened by CR-18 |
 
 ## Configuration and workflow files
 
@@ -68,6 +67,6 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 section 7 and were ne
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
 | [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |
 | [workspace/](../workspace/) | `restore.sh`, `verify.sh`, repositories, user-level Claude Code configuration | Active |
-| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, memory, CPU, disk, and bandwidth per operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture and OS only (its measured memory, CPU, and disk are not in the file yet); the lab operator VM entry holds design inputs and waits for the VM (OCI postponed) |
+| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, and CI test limits of the operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture, OS, and the CI test limits of the `operator-limits` job (its measured memory, CPU, and disk are not in the file yet) |
 | [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `toolchain-arm64`, `builder-profile`) and `pr-contract.yml` | Active |
 | [.github/dependabot.yml](../.github/dependabot.yml) | Weekly version updates for the pinned Actions and the Python lock | Active |

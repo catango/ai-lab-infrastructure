@@ -253,7 +253,7 @@ Deviations from this runbook: ________
 ## Appendix A: Manual steps replaced by `github-setup`
 
 These are the original manual steps. They stay valid. Use them for anything the script cannot set, when the script is unavailable,
-and to roll back the script (see [operator.md](operator.md), section 6). Part numbers are the original ones.
+and to roll back the script (see [operator.md](operator.md), section 5). Part numbers are the original ones.
 
 ### A.1 Part 4: General repository settings (5 min per repo)
 

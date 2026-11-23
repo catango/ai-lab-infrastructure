@@ -2,7 +2,7 @@
 # Read by scripts/operator/github-setup. No logins and no identifiers: the owner and the collaborator are given on the command
 # line. A key that github-setup does not manage is never touched. Dependabot grouped updates, discussions, sponsorships, LFS in
 # archives, and the chat integration have no documented REST setting here and stay manual.
-# Environments are declared but deferred to Stage 4 (ADR-002): github-setup lists them and changes nothing.
+# No environment is declared: github-setup accepts only deferred entries here, lists them, and never changes an environment.
 schema_version = 1
 
 [repositories.ai-lab-infrastructure]
@@ -103,12 +103,3 @@ type = "deletion"
 
 [[rulesets.rules]]
 type = "non_fast_forward"
-
-# Part 8: Stage 4. Declared only.
-[[environments]]
-name = "oci-plan"
-deferred = true
-
-[[environments]]
-name = "oci-apply"
-deferred = true
