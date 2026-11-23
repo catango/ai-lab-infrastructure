@@ -13,11 +13,11 @@ Open only the document and section relevant to the task. Decision status is trac
 
 | Document | Purpose | Status |
 |---|---|---|
-| [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, workspace restore, guardrails | Accepted; amended by ADR-011 (zones Z6 and Z7, credential rows) |
-| [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2 |
+| [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, workspace restore, guardrails | Accepted; amended by ADR-011 (zones Z6 and Z7, credential rows); amended by CR-57 (Proposed): AI hosts, no OCI or operator zones |
+| [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2; superseded by CR-57 (Proposed) |
 | [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted; rule PC-8 (CR-21) in force; amended by CR-39 (Proposed): application-repository contract, init PR, qualified references |
-| [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile); scope amended by CR-39 (Proposed): the template's CI manifest is not a host profile |
-| [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: two dedicated machines (platform operator VM, lab operator VM) for credentialed and extended-permission scripts; amends ADR-001 credential placement | Accepted (2026-11-18, merge of the CR-18 design PR) |
+| [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile); scope amended by CR-39 (Proposed): the template's CI manifest is not a host profile; amended by CR-57 (Proposed): one gate profile |
+| [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: two dedicated machines (platform operator VM, lab operator VM) for credentialed and extended-permission scripts; amends ADR-001 credential placement | Accepted (2026-11-18, merge of the CR-18 design PR); superseded by CR-57 (Proposed) |
 | [ADR-008](adr/ADR-008-software-template.md) | Software template: structure, `CLAUDE.md`, rules, Skills, CR and ADR templates, template-sync, template gate and CI | Accepted (2026-11-19, merge of the CR-39 design PR #40) |
 | [ADR-009](adr/ADR-009-security-and-ci-baseline.md) | Security and CI baseline: required checks, Actions hardening, repository security features on GitHub Free, fork PRs, evidence line, printed rulesets, gate-check catalogue | Accepted (2026-11-20, merge of the CR-43 design PR #44); amended ADR-001, ADR-003, ADR-005, and ADR-008 |
 | [ADR-010](adr/ADR-010-token-optimisation-and-metrics.md) | Token optimisation and metrics: size budgets and loading order, checkpoint format, concise CI output, review-loop cost, metrics tiers, baseline and regression | Proposed (CR-45 design PR #46, decisions Q1 to Q15 applied, in review; amends ADR-003 section 7 and ADR-008) |
@@ -34,6 +34,7 @@ ADR-004, ADR-006, and ADR-007 are listed in baseline section 7 and are written a
 | [CR-39](cr/CR-39/README.md) | Software template design (ADR-008): structure, `CLAUDE.md`, rules, Skills, template-sync, template gate and CI, Stage 5 dry run | Design in review with the approver's decisions Q1 to Q14 applied. Also amends ADR-003 and ADR-005 |
 | [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009): required checks, Actions hardening, GitHub Free feature matrix, fork PRs, evidence line, rulesets, check catalogue, rule sharing | Design merged (PR #44, 2026-11-20); also amended ADR-001, ADR-003, ADR-005, and ADR-008. Nothing is implemented |
 | [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010): budgets, loading order, checkpoint format, CI output, review-loop cost, metrics tiers, baseline and regression | Design in review with the approver's decisions Q1 to Q15 applied. Also amends ADR-003 and ADR-008. Nothing is implemented |
+| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: preconfigured AI and integrated GitHub workflows, any SSH host through Claude Desktop sessions, OCI and lab setup discarded | Design proposal for the architecture discussion. Supersedes ADR-002 and ADR-011, amends ADR-001 and ADR-005 (Proposed header entries; text after the approver's review). Nothing is implemented |
 
 ## Operations
 

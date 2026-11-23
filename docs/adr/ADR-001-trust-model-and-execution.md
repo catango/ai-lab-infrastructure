@@ -5,6 +5,7 @@
 | Status | **Accepted** (2026-11-17), including D14, D15, D16 |
 | Revision | 3 (2026-11-17): D17 added (GitHub access per surface; no MCP in v1), accepted on merge of the seed PR. Revision 2: GitHub organization (D14) dropped; one shared machine-account token |
 | Amended by | ADR-011 decision 7 (Accepted, 2026-11-18): the operator tier. Adds zones Z6 and Z7, amends B3, the OCI credentials row, and the personal-account row of section 4, and adds credential rows. Decision 5, B1, AC1-3, and RR-8 keep their wording and are read with the amendment: **no OCI credentials and no T2 or T3 on Z1 or Z2; operator machines may hold the credentials defined in ADR-011.** In effect since ADR-011 was accepted (2026-11-18, merge of PR #19). CR-43 (design PR #44): B1 note, section 5 deny rules, RR-10. Takes effect when the CR-43 design PR is merged |
+| Amended by (CR-57) | CR-57 (Proposed, design PR for issue #57): decisions 1, 5, and 7, zones Z2, Z4, Z6, Z7, the OCI and operator credential rows, section 4a, and the OCI deny rows of section 5; adds the rule that Claude Code opens no onward SSH. Decisions 2, 3, 4, 6, 8 and RR-8 to RR-10 keep their text. Takes effect when the CR-57 design PR is merged |
 | Target location | `ai-lab-infrastructure/docs/adr/ADR-001-trust-model-and-execution.md` |
 | Related | CHG-001, CHG-003, ADR-002, ADR-003, D8/D13 (machine account), D11 (MCP policy), D14 (repository ownership), D17 (GitHub access per surface) |
 

@@ -6,6 +6,7 @@
 | Date | 2026-11-18 |
 | Repository | `ai-lab-infrastructure` |
 | Change request | CR-18 (issue #18) |
+| Superseded by | CR-57 (Proposed, design PR for issue #57): superseded in full, with CR-18 withdrawn. Takes effect when the CR-57 design PR is merged |
 | Scope | The two operator machines (the platform operator VM and the lab operator VM), the rules for the scripts and the operator profile they run, the credential placement that follows, and the requirements the lab stack must meet. Not the scripts themselves, and not the OCI baseline: ADR-004 and CR-16 build the lab operator VM, its alarms, and the rebuilds in a new design PR |
 | Related | ADR-001 (decision 5, section 4 credential matrix, B1, B3; amended by this ADR), ADR-002 (infrastructure changes), ADR-003 (a new rule PC-8 is proposed in a separate design PR), ADR-005 (operator profile; amended), CR-16, ADR-004, ADR-006, ADR-007, ADR-008 (proposed or reserved) |
 
