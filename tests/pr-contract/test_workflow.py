@@ -1,4 +1,8 @@
-"""P-10: the workflow passes only --repo and --pr, from a base checkout, with least privilege."""
+"""P-10: the workflow passes only --repo and --pr, from a base checkout, with least privilege.
+
+CR-43 S-7 and S-21: no secret, read scopes only, `pull_request` only, no bootstrap skip, and the policy checks run from the base
+checkout against a read-only head checkout with no persisted credentials (the commands themselves: test_policy_commands.py).
+"""
 import re
 import unittest
 
@@ -45,8 +49,31 @@ class Workflow(unittest.TestCase):
             if inside:
                 self.assertNotIn("${{", line)
 
-    def test_bootstrap_skip_is_explicit(self):
-        self.assertIn("skipped: bootstrap", self.text)
+    def test_there_is_no_bootstrap_skip(self):
+        for banned in ("bootstrap", "skipped", "[[ ! -f scripts/pr-contract"):
+            self.assertNotIn(banned, self.text)
+        self.assertEqual(self.text.count("exit 0"), 0)
+
+    def test_trigger_is_pull_request_only_and_there_is_one_job(self):
+        self.assertEqual(re.findall(r"(?m)^on:\n((?:  .*\n)+)", self.text)[0].count("pull_request"), 1)
+        self.assertEqual(re.findall(r"(?m)^  ([a-z-]+):\n    runs-on", self.text), ["pr-contract"])
+        self.assertNotRegex(self.text, r"(?m)^    (if|continue-on-error):")
+
+    def test_two_checkouts_base_for_the_checkers_and_head_in_its_own_directory(self):
+        checkouts = re.findall(r"(?ms)- uses: actions/checkout@\S+ # v\S+\n        with:\n(.*?)(?=\n\n|\n      - name:|\Z)", self.text)
+        self.assertEqual(len(checkouts), 2, checkouts)
+        base, head = checkouts
+        self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", base)
+        self.assertNotIn("path:", base)
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", head)
+        self.assertIn("path: head", head)
+        for block in checkouts:
+            self.assertIn("persist-credentials: false", block)
+
+    def test_the_policy_inputs_come_from_the_base_commit(self):
+        self.assertIn("GATE_BASE_REF: ${{ github.event.pull_request.base.sha }}", self.text)
+        for check in ("workflow-policy", "no-claude-in-workflows", "operator-contract"):
+            self.assertIn(check, self.text)
 
     def test_timeout_and_concurrency(self):
         self.assertIn("timeout-minutes:", self.text)
