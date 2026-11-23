@@ -21,8 +21,8 @@ no-claude-in-workflows	generic	present
 toolchain	generic	present
 ansible	platform	present
 operator-contract	platform	present
-dependabot-config	generic	planned
-codeowners	template	planned
+dependabot-config	generic	present
+codeowners	template	present
 claude-md	template	template
 deny-list	template	template
 cr-layout	template	template

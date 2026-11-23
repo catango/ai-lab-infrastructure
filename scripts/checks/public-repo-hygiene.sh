@@ -4,6 +4,8 @@
 # class: generic
 # No resource identifiers, IPv4 addresses, emails, key fingerprints, private keys, or tokens.
 # Findings give the path, line, and kind only; the matched text is never printed.
+# One account handle is accepted anywhere it is meant to be public: the single seeded CODEOWNERS line `* @<login>` (CR-43 Q12).
+# In a CODEOWNERS file every other line that contains an @ (a second owner, a team, a path rule) is a finding.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/gate-lib.sh"
@@ -61,10 +63,23 @@ is_allowed() {
   esac
 }
 
+# scan_codeowners FILE: report each line with an @ that is not exactly `* @<login>` (the line is never printed).
+scan_codeowners() {
+  local f=$1 n=0 line
+  while IFS= read -r line || [[ -n $line ]]; do
+    n=$((n + 1))
+    [[ $line == *@* ]] || continue
+    if [[ $line =~ ^\*\ @[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]]; then continue; fi
+    printf '%s:%s: possible account handle other than the single CODEOWNERS line\n' "$f" "$n"
+    found=1
+  done <"$f"
+}
+
 while IFS= read -r f; do
   [[ -n $f && -f $f ]] || continue
   gate_is_text "$f" || continue
   applicable=1
+  if [[ ${f##*/} == CODEOWNERS ]]; then scan_codeowners "$f"; fi
   scan "$f" 'OCI resource identifier' "$RE_OCID"
   scan "$f" 'IPv4 address' "$RE_IPV4" ipv4
   scan "$f" 'email address' "$RE_EMAIL" email
