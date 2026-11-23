@@ -13,7 +13,7 @@ SPEC = importlib.util.spec_from_file_location("lock_from_wheels", helpers.ROOT /
 lock = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(lock)
 MANY = "manylinux_2_17_x86_64.manylinux2014_x86_64"
-WHEELS = {"oci_cli-1.2.3-py3-none-any.whl": b"one", "click-8.1.0-py3-none-any.whl": b"two",
+WHEELS = {"example_cli-1.2.3-py3-none-any.whl": b"one", "click-8.1.0-py3-none-any.whl": b"two",
           f"cryptography-44.0.0-cp39-abi3-{MANY}.whl": b"three", f"cffi-1.17.1-cp312-cp312-{MANY}.whl": b"four"}
 
 
@@ -31,22 +31,22 @@ class LockFromWheels(unittest.TestCase):
 
     def test_the_lock_lists_the_top_level_pin_first_with_the_right_hashes(self):
         self.put(WHEELS)
-        text = lock.build(self.dir, "# comment\noci-cli==1.2.3\n")
-        self.assertIn("oci-cli==1.2.3 \\\n    --hash=sha256:" + hashlib.sha256(b"one").hexdigest(), text)
-        self.assertLess(text.index("oci-cli=="), text.index("cffi=="))
+        text = lock.build(self.dir, "# comment\nexample-cli==1.2.3\n")
+        self.assertIn("example-cli==1.2.3 \\\n    --hash=sha256:" + hashlib.sha256(b"one").hexdigest(), text)
+        self.assertLess(text.index("example-cli=="), text.index("cffi=="))
         self.assertEqual([line.split("==")[0] for line in text.splitlines() if "==" in line and not line.startswith("#")],
-                         ["oci-cli", "cffi", "click", "cryptography"])
+                         ["example-cli", "cffi", "click", "cryptography"])
 
     def test_the_text_passes_the_manifest_lock_check(self):
         self.put(WHEELS)
         path = self.dir.parent / (self.dir.name + ".lock")
-        path.write_text(lock.build(self.dir, "oci-cli==1.2.3\n"))
+        path.write_text(lock.build(self.dir, "example-cli==1.2.3\n"))
         try:
             self.assertEqual(manifest.check_lock(path), [])
         finally:
             os.unlink(path)
 
-    def refused(self, wheels, requirements="oci-cli==1.2.3\n"):
+    def refused(self, wheels, requirements="example-cli==1.2.3\n"):
         self.put(wheels)
         with self.assertRaises(lock.LockError):
             lock.build(self.dir, requirements)
@@ -56,28 +56,28 @@ class LockFromWheels(unittest.TestCase):
                      "x-1.0-cp312-cp312-win_amd64.whl", "x-1.0-cp312-cp312-macosx_11_0_arm64.whl"):
             for old in self.dir.iterdir():
                 old.unlink()
-            self.refused({**{"oci_cli-1.2.3-py3-none-any.whl": b"one"}, name: b"x"})
+            self.refused({**{"example_cli-1.2.3-py3-none-any.whl": b"one"}, name: b"x"})
 
     def test_a_missing_or_different_top_level_pin_is_refused(self):
         self.refused({"click-8.1.0-py3-none-any.whl": b"two"})
         for old in self.dir.iterdir():
             old.unlink()
-        self.refused({"oci_cli-1.2.4-py3-none-any.whl": b"one"})
+        self.refused({"example_cli-1.2.4-py3-none-any.whl": b"one"})
 
     def test_a_source_archive_or_other_file_is_refused(self):
-        self.refused({"oci_cli-1.2.3-py3-none-any.whl": b"one", "x-1.0.tar.gz": b"x"})
+        self.refused({"example_cli-1.2.3-py3-none-any.whl": b"one", "x-1.0.tar.gz": b"x"})
 
     def test_a_requirement_that_is_not_an_exact_pin_is_refused(self):
-        self.refused({"oci_cli-1.2.3-py3-none-any.whl": b"one"}, "oci-cli>=1.2\n")
+        self.refused({"example_cli-1.2.3-py3-none-any.whl": b"one"}, "example-cli>=1.2\n")
 
     def test_two_wheels_of_one_project_are_refused(self):
-        self.refused({"oci_cli-1.2.3-py3-none-any.whl": b"one", "oci-cli-1.2.3-py3-none-any.whl": b"two"})
+        self.refused({"example_cli-1.2.3-py3-none-any.whl": b"one", "example-cli-1.2.3-py3-none-any.whl": b"two"})
 
     def test_it_writes_to_standard_output_only(self):
         import io
         from contextlib import redirect_stderr, redirect_stdout
         self.put(WHEELS)
-        (self.dir.parent / "in.txt").write_text("oci-cli==1.2.3\n")
+        (self.dir.parent / "in.txt").write_text("example-cli==1.2.3\n")
         out, err = io.StringIO(), io.StringIO()
         before = sorted(os.listdir(self.dir))
         try:

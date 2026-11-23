@@ -330,7 +330,6 @@ class PC8FromConfig(unittest.TestCase):
     def test_the_hardcoded_sets_are_gone(self):
         self.assertFalse(hasattr(rules, "OPERATOR_PREFIXES"))
         self.assertFalse(hasattr(rules, "OPERATOR_PATHS"))
-        self.assertIn("toolchain/python/operator.lock", rules.MANIFEST_PATHS)  # PR 1 edits this one, not this PR
 
     def test_configured_paths_are_active_and_the_old_set_is_not(self):
         cfg = {"operator_paths": ["tools/ops/", "deploy/run.yml"]}
@@ -478,9 +477,10 @@ class PC7(unittest.TestCase):
                  fc("sub/requirements-dev.txt"), fc("package-lock.json"), fc("go.sum")]
         self.assertEqual(evaluate(bot_pr(), files=files), [])
 
-    def test_operator_lock_file_passes_and_is_exempt_from_pc8(self):
+    def test_the_removed_operator_lock_is_not_a_manifest_path(self):
+        self.assertEqual(rules.MANIFEST_PATHS, frozenset({"toolchain/python/builder.lock"}))
         files = [fc("toolchain/python/operator.lock", patch="@@ -1 +1 @@\n-a\n+b\n")]
-        self.assertEqual(evaluate(bot_pr(), files=files), [])
+        self.assertIn("PC-7", ids(evaluate(bot_pr(), files=files)))
 
     def test_other_operator_paths_still_fail_pc7(self):
         for path in ("scripts/operator/setup", "ansible/operator.yml", "ansible/roles/operator_x/tasks/main.yml"):

@@ -28,7 +28,7 @@ MANIFEST_NAMES = frozenset({
     "Pipfile", "Pipfile.lock", "pyproject.toml", "poetry.lock", "uv.lock", "go.mod", "go.sum", "Cargo.toml",
     "Cargo.lock", "Gemfile", "Gemfile.lock", "composer.json", "composer.lock", ".terraform.lock.hcl",
 })
-MANIFEST_PATHS = frozenset({"toolchain/python/builder.lock", "toolchain/python/operator.lock"})
+MANIFEST_PATHS = frozenset({"toolchain/python/builder.lock"})
 _REQUIREMENTS = re.compile(r"requirements[A-Za-z0-9_.-]*\.txt")
 _USES_LINE = re.compile(r"\s*(?:-\s+)?uses:\s+\S+(?:\s+#.*)?")
 MAX_PATCH_LINE = 500
