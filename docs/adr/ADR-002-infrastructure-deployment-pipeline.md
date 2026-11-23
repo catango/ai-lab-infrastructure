@@ -6,7 +6,7 @@
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` (target location: `docs/adr/ADR-002-infrastructure-deployment-pipeline.md`) |
 | Supersedes | Earlier baseline items D2 (OpenTofu on Windows) and D12 (Cloud Shell as primary control plane) |
-| Superseded by | CR-57 (Proposed, design PR for issue #57): superseded in full, because the platform no longer provisions infrastructure. Takes effect when the CR-57 design PR is merged |
+| Superseded by | CR-57 (Proposed, design PR 58 for issue #57; approver's decisions of 2026-11-23, PA-9): superseded, because the platform no longer provisions infrastructure (the host model is [ADR-012](ADR-012-host-model.md)). Takes effect when the CR-57 design PR is merged. Baseline decisions D2 and D12 and CHG-002 (this record's conditional waiver) are marked superseded in baseline v0.2 |
 | Related | CHG-001 (no developer tools on Windows, MCP allowed, GitHub via plugin), CHG-002 (conditional waiver, see Section 7), D6, D8/D13, ADR-001 (pending) |
 
 > This ADR records an architecture decision. It does **not** authorize creating OCI resources,
