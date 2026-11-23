@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  quality-gate:
+  # The full quality gate on the head (renamed from quality-gate: that name is now the aggregate below).
+  gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -254,3 +255,44 @@ jobs:
             cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
             echo '~~~~'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The one required check of this workflow (ADR-009 decision 1, design section 3). It needs every other job, always runs, and
+  # fails unless each needed job is `success`: a skipped job reports success to the ruleset, so `skipped` and `cancelled` fail
+  # here too. A matrix job counts once (its combined result). It checks out nothing and runs no repository code.
+  quality-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [gate, operator-profile, operator-limits, toolchain, builder-profile]
+    if: always()
+    permissions: {}
+    steps:
+      - name: Fail unless every needed job succeeded
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 -I - <<'PY'
+          import json
+          import os
+          import sys
+
+          try:
+              needs = json.loads(os.environ["NEEDS"])
+          except (KeyError, ValueError):
+              needs = None
+          if not isinstance(needs, dict) or not needs:
+              print("quality-gate: the needs context is empty or unreadable")
+              sys.exit(1)
+          rows = sorted((name, str(job.get("result", "")) if isinstance(job, dict) else "") for name, job in needs.items())
+          lines = [f"{name}: {result or 'unknown'}" for name, result in rows]
+          print("\n".join(lines))
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as handle:
+                  handle.write("### quality-gate\n\n| Job | Result |\n|---|---|\n")
+                  handle.write("".join(f"| {name} | {result or 'unknown'} |\n" for name, result in rows))
+          bad = [name for name, result in rows if result != "success"]
+          if bad:
+              print("quality-gate: not successful: " + ", ".join(bad))
+              sys.exit(1)
+          PY
