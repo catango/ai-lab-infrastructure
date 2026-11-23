@@ -345,7 +345,11 @@ test_dispatcher() {
   repo=$(new_repo)
   good_script "$repo" good.sh
   printf '# T\n\n[a](good.sh)\n' >"$repo/README.md"
-  mkdir -p "$repo/.github/workflows"
+  mkdir -p "$repo/.github/workflows" "$repo/config"
+  # the baseline files that dependabot-config and codeowners require of every repository (CR-43)
+  printf 'version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n' >"$repo/.github/dependabot.yml"
+  printf 'github:\n  approver_login: "example-approver"\n' >"$repo/config/project.yaml"
+  printf '* @example-approver\n' >"$repo/.github/CODEOWNERS"
   printf 'name: x\non: push\npermissions: {}\njobs:\n  quality-gate:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: echo hi\n' >"$repo/.github/workflows/ci.yml"
   commit_all "$repo"
   RC=0
