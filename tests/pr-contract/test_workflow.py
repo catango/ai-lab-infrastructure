@@ -72,7 +72,7 @@ class Workflow(unittest.TestCase):
 
     def test_the_policy_inputs_come_from_the_base_commit(self):
         self.assertIn("GATE_BASE_REF: ${{ github.event.pull_request.base.sha }}", self.text)
-        for check in ("workflow-policy", 'no-cl""aude-in-workflows', "operator-contract"):
+        for check in ("workflow-policy", 'no-cl""aude-in-workflows', "operator-contract", "dependabot-config"):
             self.assertIn(check, self.text)
 
     def test_timeout_and_concurrency(self):
