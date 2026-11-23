@@ -1,10 +1,11 @@
-"""Rules PC-1 to PC-8 (ADR-003 section 6, design 6.2; PC-8 from CR-21). Messages are fixed text plus sanitized paths."""
+"""Rules PC-1 to PC-9 (ADR-003 section 6, design 6.2; PC-8 from CR-21, PC-9 from CR-43). Messages are fixed text plus sanitized paths."""
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
-from . import markdown
+from . import config, markdown
 from .api import MAX_FILES
-from .errors import InputError, LimitExceeded, NotFound
+from .errors import ApiError, ConfigError, InputError, LimitExceeded, NotFound
 from .sanitize import clean
 
 PATH_CAP = 10
@@ -32,6 +33,15 @@ MANIFEST_PATHS = frozenset({"toolchain/python/builder.lock", "toolchain/python/o
 _REQUIREMENTS = re.compile(r"requirements[A-Za-z0-9_.-]*\.txt")
 _USES_LINE = re.compile(r"\s*(?:-\s+)?uses:\s+\S+(?:\s+#.*)?")
 MAX_PATCH_LINE = 500
+
+# PC-9 (design section 7): one line per architecture without a runner, in the section "Architecture evidence".
+EVIDENCE_SECTION = "Architecture evidence"
+GATE_COMMAND = "./scripts/quality-gate.sh --strict"
+_HEX40 = re.compile(r"[0-9a-f]{40}")
+EVIDENCE = re.compile(
+    r"evidence: (?P<arch>[a-z0-9_]{1,32}) \| (?P<machine>[A-Za-z0-9_.-]{1,32}) \| "
+    r"(?P<os>[a-z0-9._-]{1,32} [A-Za-z0-9._+~-]{1,32}) \| (?P<sha>[0-9a-f]{40}) \| (?P<state>clean|dirty) \| "
+    r"(?P<command>[^|\n]{1,100}) \| exit (?P<code>[0-9]{1,3}) \| (?P<time>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)")
 
 
 @dataclass(frozen=True)
@@ -121,6 +131,8 @@ def evaluate(pr, client, templates_dir):
             violations.extend(check_design_reference(parsed, branch_number))
         if kind == "implementation":
             violations.extend(check_implementation(pr, parsed, branch_number, client))
+        if kind in ("implementation", "change"):
+            violations.extend(check_evidence(pr, parsed, client))
 
     if files is not None:
         if kind == "design":
@@ -201,6 +213,71 @@ def check_design_pr(pr, issue, design, client):
         refs = markdown.references(markdown.parse(body).sections.get("Change request", ""))
     if issue not in refs:
         out.append(Violation("PC-3", f"design PR #{design} does not reference #{issue} in its Change request section"))
+    return out
+
+
+def evidence_lines(section):
+    """(valid matches, count of malformed) for the lines of a section that start with `evidence:`."""
+    good, bad = [], 0
+    for line in section.split("\n"):
+        line = line.strip()
+        if not line.startswith("evidence:"):
+            continue
+        match = EVIDENCE.fullmatch(line)
+        if match and _valid_time(match.group("time")):
+            good.append(match)
+        else:
+            bad += 1
+    return good, bad
+
+
+def _valid_time(text):
+    try:
+        datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return True
+
+
+def check_evidence(pr, parsed, client):
+    """PC-9. Which architectures need a line comes from the configuration of the BASE commit and the repository's private flag;
+    the head of the PR is never consulted for policy (SC-20)."""
+    try:
+        candidates = [a for a in config.architectures(client.base_config(pr.base_sha)) if not (a.runner and a.runner_private)]
+    except ConfigError:
+        return [Violation("PC-9", "architectures in the base configuration is invalid")]
+    if not candidates:
+        return []
+    private = client.repo_private()
+    required = [a.name for a in candidates if not a.runner_for(private)]
+    if not required:
+        return []
+    if not _HEX40.fullmatch(pr.head_sha):
+        raise ApiError("malformed response")
+    lines, malformed = evidence_lines(parsed.sections.get(EVIDENCE_SECTION, ""))
+    out = []
+    out.extend(Violation("PC-9", "malformed evidence line") for _ in range(min(malformed, PATH_CAP)))
+    for arch in required:
+        mine = [m for m in lines if m.group("arch") == arch]
+        if not mine:
+            out.append(Violation("PC-9", f"no evidence line for architecture {arch}"))
+        elif len(mine) > 1:
+            out.append(Violation("PC-9", f"more than one evidence line for architecture {arch}"))
+        else:
+            out.extend(check_line(arch, mine[0], pr.head_sha))
+    return out
+
+
+def check_line(arch, match, head_sha):
+    out = []
+    if match.group("sha") != head_sha:
+        out.append(Violation("PC-9", f"evidence for {arch}: SHA is not the head of the PR"))
+    if match.group("state") != "clean":
+        out.append(Violation("PC-9", f"evidence for {arch}: working tree is not clean"))
+    if match.group("command") != GATE_COMMAND:
+        out.append(Violation("PC-9", f"evidence for {arch}: command is not the quality gate"))
+    if int(match.group("code")) != 0:
+        out.append(Violation("PC-9", f"evidence for {arch}: exit status is not 0"))
     return out
 
 

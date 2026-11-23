@@ -17,6 +17,14 @@ def _nested(data, key, inner, kind):
     return _need(obj, inner, kind)
 
 
+def _optional(data, key, inner):
+    """A string inside an object, or "" when it is absent (older recorded fixtures); a wrong type is malformed."""
+    value = _need(data, key, dict).get(inner, "")
+    if not isinstance(value, str):
+        raise ApiError("malformed response")
+    return value
+
+
 @dataclass(frozen=True)
 class PullRequest:
     number: int
@@ -29,6 +37,8 @@ class PullRequest:
     head_ref: str
     base_ref: str
     changed_files: int = 0
+    head_sha: str = ""
+    base_sha: str = ""
 
     @classmethod
     def from_api(cls, data):
@@ -51,6 +61,8 @@ class PullRequest:
             head_ref=_nested(data, "head", "ref", str),
             base_ref=_nested(data, "base", "ref", str),
             changed_files=changed,
+            head_sha=_optional(data, "head", "sha"),
+            base_sha=_optional(data, "base", "sha"),
         )
 
 

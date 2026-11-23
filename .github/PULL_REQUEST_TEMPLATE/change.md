@@ -14,6 +14,10 @@
 ## Validation
 <!-- Linters and checks run, and what could not be run. -->
 
+## Architecture evidence
+<!-- PC-9: for each architecture in `architectures` (config/project.yaml of the base commit) that has no runner for this repository, paste the one line that `scripts/gate-evidence <arch>` prints on a host of that architecture, at the current head of this PR (edit the body after every push). Format: evidence: <arch> | <machine> | <os> | <40-hex SHA> | clean | <gate command> | exit 0 | <UTC time> -->
+<!-- When every architecture has a runner, write "n/a: every architecture has a runner". -->
+
 ## Checkpoint
 <!-- checkpoint:start -->
 - [ ] Change implemented

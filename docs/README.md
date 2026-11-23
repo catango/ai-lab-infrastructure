@@ -49,7 +49,7 @@ ADR-004, ADR-006, and ADR-007 are listed in baseline section 7 and are written a
 | File | Purpose | Status |
 |---|---|---|
 | [CLAUDE.md](../CLAUDE.md) | Instructions for Claude Code in this repository | Active |
-| [config/project.yaml](../config/project.yaml) | Approver and machine account logins read by scripts | Active |
+| [config/project.yaml](../config/project.yaml) | Approver and machine account logins, and the `architectures` with their runner labels (read from the base commit by rule PC-9), read by scripts | Active |
 | [.claude/settings.json](../.claude/settings.json) | Claude Code project guardrails (ADR-001 section 5) | Active |
 | [.github/PULL_REQUEST_TEMPLATE/](../.github/PULL_REQUEST_TEMPLATE/) | PR templates per type (ADR-003 rule PC-1) | Active |
 | [.github/ISSUE_TEMPLATE/cr.md](../.github/ISSUE_TEMPLATE/cr.md) | Change request intake | Active |
@@ -59,7 +59,8 @@ ADR-004, ADR-006, and ADR-007 are listed in baseline section 7 and are written a
 | Path | Purpose | Status |
 |---|---|---|
 | [scripts/quality-gate.sh](../scripts/quality-gate.sh) | Quality gate: the checks in `scripts/checks/` (same entry point locally and in CI) | Active |
-| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-8 (run from the base checkout in CI); PR body skeleton from a template | Active |
+| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-9 (run from the base checkout in CI); PR body skeleton from a template | Active |
+| [scripts/gate-evidence](../scripts/gate-evidence) | Runs the quality gate on a host and prints the one evidence line for an architecture with no runner (rule PC-9) | Active |
 | [scripts/toolchain](../scripts/toolchain) | Install engine for the toolchain manifest: `check`, `list`, `install`, `verify` | Active |
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
 | [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |

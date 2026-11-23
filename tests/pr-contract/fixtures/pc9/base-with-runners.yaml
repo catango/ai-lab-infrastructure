@@ -1,0 +1,9 @@
+# Base commit: both architectures have a runner for a public repository; none for a private one (arm64).
+schema_version: 1
+architectures:
+  - name: amd64
+    runner: ubuntu-24.04
+    runner_private: ubuntu-24.04
+  - name: arm64
+    runner: ubuntu-24.04-arm
+    runner_private: ""

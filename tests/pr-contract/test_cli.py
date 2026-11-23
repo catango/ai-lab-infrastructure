@@ -12,6 +12,7 @@ import helpers
 from pr_contract import cli
 
 RECORDED = helpers.FIXTURES / "recorded"
+RECORDED_TEMPLATES = helpers.FIXTURES / "recorded-templates"  # the templates of the time the PRs were recorded
 
 
 def run(argv, env=None, client=None):
@@ -22,7 +23,7 @@ def run(argv, env=None, client=None):
 
 
 def offline(pr, fixtures=RECORDED, extra=()):
-    return run(["--repo", "o/r", "--pr", str(pr), "--fixtures", str(fixtures), "--templates", str(helpers.TEMPLATES), *extra])
+    return run(["--repo", "o/r", "--pr", str(pr), "--fixtures", str(fixtures), "--templates", str(RECORDED_TEMPLATES), *extra])
 
 
 class Recorded(unittest.TestCase):
@@ -106,7 +107,7 @@ class Summary(unittest.TestCase):
     def test_pass_summary(self):
         with tempfile.NamedTemporaryFile("w+", suffix=".md") as handle:
             code, _, _ = offline(5, extra=())
-            code, _, _ = run(["--repo", "o/r", "--pr", "5", "--fixtures", str(RECORDED), "--templates", str(helpers.TEMPLATES)],
+            code, _, _ = run(["--repo", "o/r", "--pr", "5", "--fixtures", str(RECORDED), "--templates", str(RECORDED_TEMPLATES)],
                              env={"GITHUB_STEP_SUMMARY": handle.name})
             text = open(handle.name).read()
         self.assertEqual(code, 0)

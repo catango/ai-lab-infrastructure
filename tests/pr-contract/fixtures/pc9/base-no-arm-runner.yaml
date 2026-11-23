@@ -1,0 +1,9 @@
+# Base commit: arm64 has no runner, so a change or implementation PR needs a line for it.
+schema_version: 1
+architectures:
+  - name: amd64
+    runner: ubuntu-24.04
+    runner_private: ubuntu-24.04
+  - name: arm64
+    runner: ""
+    runner_private: ""
