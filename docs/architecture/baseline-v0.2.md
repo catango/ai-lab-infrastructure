@@ -36,7 +36,7 @@
 | PR workflow and `pr-contract` | All repositories | PR as unit of work, approval, and audit trail | ADR-003 | Designed |
 | Software template | `ai-software-template` | CLAUDE.md, rules, Skills, CR and ADR templates, workflows, quality gate | ADR-008 | Designed (implementation pending) |
 | Security and CI baseline | All repositories | Public-repo security features, Actions hardening, quality gates | ADR-009 | Designed |
-| Token optimisation and metrics | Template and Skills | Context loading, checkpoints, measurable metrics | ADR-010 | Proposed (CR-45) |
+| Token optimisation and metrics | Template and Skills | Context loading, checkpoints, measurable metrics | ADR-010 | Accepted (CR-45 design PR #46 merged 2026-11-20) |
 | GitHub configuration | Your account, machine account, repositories | Identities, settings, rulesets, token, chat GitHub Integration | ADR-001, ADR-003 | **Done** (Stage 0) |
 | Anthropic | Claude Enterprise | Chat; inference for Claude Code sessions | ADR-001 | External |
 
@@ -99,6 +99,6 @@ Stages 2 to 4 of baseline v0.1 (OCI seed, lab VM, pipeline) are dropped with ADR
 | ADR-005 | Toolchain | Accepted; amended by CR-57 |
 | ADR-008 | Software template | Accepted |
 | ADR-009 | Security and CI baseline | Accepted (its status line still reads Proposed; the follow-up design PR R-1 corrects it, `docs/cr/CR-57/design.md` O-12) |
-| ADR-010 | Token optimisation and metrics | Proposed (CR-45) |
+| ADR-010 | Token optimisation and metrics | Accepted (CR-45 design PR #46 merged 2026-11-20) |
 | ADR-011 | Rules for operator scripts | Accepted; amended by CR-57 |
 | ADR-012 | Host model | Proposed (CR-57) |

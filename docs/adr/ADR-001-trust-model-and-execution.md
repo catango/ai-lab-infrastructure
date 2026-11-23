@@ -194,5 +194,5 @@ Historical record of the decisions of revisions 1 to 3; the alternatives of CR-5
 - AC1-4: *Removed by CR-57.*
 - AC1-5: Managed or project settings deny the commands in Section 5 (scripted test on each AI lab).
 - AC1-6: The machine account cannot change repository settings or rulesets (Write role; negative test), evidenced by facts on the operator machine.
-- AC1-7: From VM handover, lab setup, token step, and lab check take 15 minutes or less, excluding the time to type T1 (PA-6). A first timing is recorded at the first real lab setup; the timed rebuild is a separate Stage 7 exit item of baseline v0.2, not part of the metrics baseline.
+- AC1-7: From VM handover, lab setup, token step, and lab check take 15 minutes or less, excluding the time to type T1 (PA-6). A first timing is taken at the first real lab setup from a tag that contains the token step and the lab check (CR-57 plan PR 3) and is recorded in plan PR 4; the timed rebuild is a separate Stage 7 exit item of baseline v0.2, not part of the metrics baseline.
 - AC1-8: A Claude Code session never receives token T1 in its context. The token step reads it from stdin outside any Claude session.
