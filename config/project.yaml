@@ -22,3 +22,21 @@ architectures:
   - name: arm64
     runner: ubuntu-24.04-arm
     runner_private: ""
+# Operator paths of rule PC-8 (ADR-003 PC-8, ADR-011, CR-57). A PR that changes (adds, edits, deletes, or renames away from or
+# to) one of these needs the PR-body section "Operator script review". Read from the BASE commit by pr-contract, so a PR cannot
+# change what judges it (SC-20); a missing or malformed key fails closed, an explicit `[]` makes PC-8 inactive (a newly
+# generated application repository). An entry is an exact path, a directory prefix when it ends with `/`, or a prefix when it
+# ends with `*/` (the star is dropped: `ansible/roles/operator_*/` is the prefix `ansible/roles/operator_`). Case-sensitive.
+# The set is the operator scripts, the operator profile, the lab profile, and the SSH hardening role both profiles share.
+operator_paths:
+  - scripts/operator/
+  - ansible/operator.yml
+  - ansible/roles/operator_*/
+  - toolchain/python/operator.lock
+  - ansible/lab.yml
+  - ansible/roles/ssh_hardening/
+# Hosts an operator script may call (ADR-009 decision 14, ADR-011 decision 11, CR-57 PA-22, C-6). Read from the BASE commit by
+# the operator code check that PR 4 of CR-57 adds, so it is on the base commit before that check reads it; the check fails
+# closed when the key is missing while `operator_paths` is not empty. One plain host name per line; no scheme, port, or path.
+operator_endpoints:
+  - api.github.com

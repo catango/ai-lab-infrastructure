@@ -1,4 +1,5 @@
 # Base commit: arm64 has no runner, so a change or implementation PR needs a line for it.
+operator_paths: []   # PC-8 inactive: these fixtures test PC-9 only
 schema_version: 1
 architectures:
   - name: amd64

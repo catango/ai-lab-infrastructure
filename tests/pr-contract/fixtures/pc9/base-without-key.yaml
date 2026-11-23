@@ -1,3 +1,4 @@
+operator_paths: []   # PC-8 inactive: these fixtures test PC-9 only
 schema_version: 1
 github:
   approver_login: "example-approver"

@@ -80,9 +80,9 @@ class Applicability(unittest.TestCase):
                 self.assertEqual(pc9(evaluate(pr_with("n/a: every architecture has a runner"), client)), [])
 
     def test_design_and_dependabot_prs_are_exempt(self):
-        client = MemClient(config=NO_RUNNER)
         design = make_pr("design")
-        self.assertEqual(pc9(evaluate(design, client)), [])
+        self.assertEqual(pc9(evaluate(design, MemClient(config=NO_RUNNER))), [])
+        client = MemClient(config=NO_RUNNER)  # a fresh client: PC-8 now reads the base configuration for a design PR, not for dependabot
         dependabot = make_pr("change", author="dependabot[bot]", head_ref="dependabot/pip/x", body="")
         client.files[dependabot.number] = [fc("requirements.txt")]
         self.assertEqual(rules.evaluate(dependabot, client, helpers.TEMPLATES), [])
