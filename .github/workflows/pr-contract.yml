@@ -33,7 +33,7 @@ jobs:
           path: head
           persist-credentials: false
 
-      # yq for workflow-policy, from the checksum-verified toolchain of the base commit.
+      # yq for workflow-policy and dependabot-config, from the checksum-verified toolchain of the base commit.
       - name: Install yq
         shell: bash
         run: |
@@ -71,7 +71,7 @@ jobs:
           chmod -R a-w head
           failed=0
           # The id of the check that forbids the product name in workflow text is written in two parts, so that this file passes it.
-          for id in workflow-policy "no-cl""aude-in-workflows" operator-contract; do
+          for id in workflow-policy "no-cl""aude-in-workflows" operator-contract dependabot-config; do
             checker="$base/scripts/checks/$id.sh"
             if [[ ! -f $checker ]]; then
               echo "pr-contract: the checker $id is missing on the base commit"
