@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Accepted, conditional on Spike S2** |
+| Status | **Superseded by CR-57 when the CR-57 design PR merges** (Proposed until then; until the merge: Accepted, conditional on Spike S2) |
 | Date | 2026-11-17 |
 | Repository | `ai-lab-infrastructure` (target location: `docs/adr/ADR-002-infrastructure-deployment-pipeline.md`) |
 | Supersedes | Earlier baseline items D2 (OpenTofu on Windows) and D12 (Cloud Shell as primary control plane) |

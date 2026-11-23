@@ -88,7 +88,7 @@ Host credentials (the four account keys, "the admins hold no credentials", produ
 | GitHub Integration authorization (chat) | Z5 | Machine account; read-only sync of public repository files | Revoke in the machine account's Settings → Applications |
 | Personal GitHub account | Z0 browser only | Owner; approver | Passkey or 2FA; never placed on a host. The fine-grained tokens T2 and T3 of this account (rows below) are the only derived credentials, and they exist on the operator machine only |
 | GitHub token **T2** (repository configuration) | Prompt only on Z6, kept inside the `github-setup` process; never stored, never in a child process, argv, or on disk | Personal account, fine-grained, limited to the repositories of the project the run serves (for this platform: the platform and template repositories): Administration and Environments read and write, Metadata read; no Contents, Pull requests, Workflows, or Secrets write. Used for `github-setup` apply runs only | 1-day expiry; created per run; revoked in the browser after each run |
-| GitHub token **T3** (read-only fact collection and `github-setup` dry runs) | Prompt only on Z6, kept inside the script process | Personal account, fine-grained, limited to the same repositories: Administration read, Environments read, Metadata read | 1-day expiry; created per run; revoked after each run |
+| GitHub token **T3** (read-only fact collection and `github-setup` dry runs) | Prompt only on Z6, kept inside the script process | Personal account, fine-grained, limited to the same repositories: Administration read, Environments read, Metadata read. One exception (ADR-012 decision 12): the allowlist audit uses a read-only T3 that selects all repositories of the personal account | 1-day expiry; created per run; revoked after each run |
 | `ssh` config entries | Z0 `~/.ssh/config`: addresses and host key aliases; never in the repository | Access to the AI lab and the operator machine | Edited by you after a rebuild or a changed host key |
 
 T1 is never placed on the operator machine. After an AI lab is rebuilt, T1 is entered again by you through the token step (ADR-012 decision 6), as it is after any discard (D16).
@@ -194,5 +194,5 @@ Historical record of the decisions of revisions 1 to 3; the alternatives of CR-5
 - AC1-4: *Removed by CR-57.*
 - AC1-5: Managed or project settings deny the commands in Section 5 (scripted test on each AI lab).
 - AC1-6: The machine account cannot change repository settings or rulesets (Write role; negative test), evidenced by facts on the operator machine.
-- AC1-7: From VM handover, lab setup, token step, and lab check take 15 minutes or less, excluding the time to type T1 (PA-6).
+- AC1-7: From VM handover, lab setup, token step, and lab check take 15 minutes or less, excluding the time to type T1 (PA-6). A first timing is recorded at the first real lab setup; the timed rebuild is a separate Stage 7 exit item of baseline v0.2, not part of the metrics baseline.
 - AC1-8: A Claude Code session never receives token T1 in its context. The token step reads it from stdin outside any Claude session.

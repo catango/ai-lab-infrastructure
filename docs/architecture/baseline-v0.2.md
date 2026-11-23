@@ -81,10 +81,10 @@ Each stage starts only when its entry criteria are met. Work inside a stage foll
 |---|---|---|---|
 | 0. GitHub foundation (**done**) | Accounts, repos, settings, rulesets, token, chat GitHub Integration | Baseline v0.1 approved | `GITHUB-SETUP.md` verification passed |
 | 1. Platform foundation (CR-2) | `CLAUDE.md`, quality gate, `pr-contract`, CI skeleton | Stage 0 done | Implemented in six PRs (CR-2); its restore part is replaced by CR-57 |
-| CR-57 implementation | The ten steps of `docs/cr/CR-57/implementation-plan.md`, in strict order, then the repository rename (the approver's, Q3) | CR-57 design merged | Plan checklist complete; amd64-only gate green; lab setup on a fresh VM ends with a working lab |
+| CR-57 implementation | Steps 0 to 10 of `docs/cr/CR-57/implementation-plan.md`, in strict order, then the repository rename (the approver's, Q3) | CR-57 design merged | Plan checklist complete; amd64-only gate green; lab setup on a fresh VM ends with a working lab |
 | 5. Software template | Template structure, Skills, CR lifecycle, workflows; the real run with this platform's preset | ADR-008, ADR-009, ADR-010 approved; CR-57 implemented; repository renamed | Template validated by a dry run and one real run (ADR-008 decision 12) |
 | 6. First project on its own lab VM | A real small project end to end on its own AI lab | Stage 5 done; an AI lab provided | Full Class 3 CR completed under ADR-003 |
-| 7. Timed rebuild test and metrics | A timed rebuild of an AI lab (AC1-7) and the metrics baseline (ADR-010) | Stage 6 done | Documented timed rebuild; metrics baseline recorded |
+| 7. Timed rebuild test and metrics | A timed rebuild of an AI lab (AC1-7) and the metrics baseline (ADR-010) | Stage 6 done | Two separate items: a documented timed rebuild (AC1-7), and the metrics baseline recorded |
 
 Stages 2 to 4 of baseline v0.1 (OCI seed, lab VM, pipeline) are dropped with ADR-002, ADR-004, ADR-006, and ADR-007.
 
@@ -98,7 +98,7 @@ Stages 2 to 4 of baseline v0.1 (OCI seed, lab VM, pipeline) are dropped with ADR
 | ADR-004, ADR-006, ADR-007 | OCI baseline, `labctl`, backup and disaster recovery | Withdrawn (PA-38) |
 | ADR-005 | Toolchain | Accepted; amended by CR-57 |
 | ADR-008 | Software template | Accepted |
-| ADR-009 | Security and CI baseline | Accepted (see the status-line inconsistency in `docs/cr/CR-57/design.md` O-12) |
+| ADR-009 | Security and CI baseline | Accepted (its status line still reads Proposed; the follow-up design PR R-1 corrects it, `docs/cr/CR-57/design.md` O-12) |
 | ADR-010 | Token optimisation and metrics | Proposed (CR-45) |
 | ADR-011 | Rules for operator scripts | Accepted; amended by CR-57 |
 | ADR-012 | Host model | Proposed (CR-57) |

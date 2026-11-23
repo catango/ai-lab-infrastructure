@@ -50,7 +50,8 @@ Later, in the implementation PRs (see the plan): the `operator_paths` configurat
 - Reviews the design and the ADR text; posts the architecture discussion's handoff as a review on this PR.
 - After the merge: closes issue #16, PR #17, issue #18, and the open CR-18 PRs by comment (Q6); renames the repository after the implementation PRs (Q3); starts the template CR for PA-25.
 - Provides the AI lab VMs, the operator machine, and the keys (G-13, G-14); the platform checks their number and separation, not their owner.
-- Creates release tags (none while a removal is in progress, PA-26; open point O-3).
+- Creates release tags at a PR boundary whose PA-A16 run is green, never between plan PR 5 and PR 6; the operator machine moves to a new tag only at or after PR 4 (PA-26 as narrowed by O-3).
+- After the merges: tells a session to open the follow-up design PR R-1 (ADR-003 and ADR-009 text, which this PR leaves unedited) and, after the rename, the rename change PR.
 
 ## 5. Dependencies and assumptions
 
