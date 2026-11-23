@@ -18,9 +18,9 @@ The platform becomes two things: preconfigured AI (Claude Code settings, rules, 
 |---|---|
 | [impact-analysis.md](impact-analysis.md) | What changes, security impact, cost, rollback |
 | [design.md](design.md) | Givens, decisions PA-1 to PA-46, amendments, answers to Q1 to Q6, risks, interactions (PA-41), open points |
-| [acceptance-criteria.md](acceptance-criteria.md) | Criteria PA-A1 to PA-A32 (four removed) with command or fixture, and the PR that verifies each |
+| [acceptance-criteria.md](acceptance-criteria.md) | Criteria PA-A1 to PA-A33 (four removed; PA-A33 is new) with command or fixture, and the PR that verifies each |
 | [implementation-plan.md](implementation-plan.md) | PRs 0 to 10 in strict order, criteria by PR, user-only steps, revert order, interim status |
 
 ## Notes
 
-Revised from the approver's review of 2026-11-23T18:27:31Z on design PR 58, which replaces the first draft's default answers. Read for the revision: ADR-001, ADR-002, ADR-005, ADR-011, baseline v0.1, ADR-010, ADR-003 (PC-8, sections 4 and 7), ADR-008 (decisions 5, 6, 8, 9, 11, 12, 14), ADR-009 (decisions 7, 11, 12, 14), the CR-43 design (SC-13, SC-20), and the file inventory of `main` at `85360e8`. The template repository (README and licence only) and CR-18's design body were not read beyond what the records cite.
+Revised from the approver's review of 2026-11-23T18:27:31Z on design PR 58, which replaces the first draft's default answers, and from the approver's rounds 2 to 4 of the same day. Read for the revision: ADR-001, ADR-002, ADR-005, ADR-011, baseline v0.1, ADR-010, ADR-003 (PC-8, sections 4 and 7), ADR-008 (decisions 5, 6, 8, 9, 11, 12, 14), ADR-009 (decisions 7, 11, 12, 14), the CR-43 design (SC-13, SC-20), and the file inventory of `main` at `85360e8`. The template repository (README and licence only) and CR-18's design body were not read beyond what the records cite.
