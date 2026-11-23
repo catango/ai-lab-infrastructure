@@ -8,7 +8,8 @@
 | Target location | `docs/adr/ADR-003-pr-centric-workflow.md` |
 | Requirement | CHG-003: GitHub-centric workflow based on PRs; no automatic responses from Claude |
 | Amended by | CR-21 (design PR #22 and implementation PR #24 merged, 2026-11-18): rule PC-8 and AC3-7; in force and enforced. CR-39 (design PR #40 merged, 2026-11-19): application-repository contract, PC-2 prefixes, PC-3 cross-repository references, PC-8 paths from configuration, section 5 configuration file, section 7 review identity and PR body; checks are enforced once the template's implementation PRs are merged. CR-43 (design PR #44 merged, 2026-11-20): section 6 required checks, rule PC-9, the PC-7 exemption, and AC3-8; PC-9 is enforced once implemented. CR-45 (Proposed): section 7, the reference to the checkpoint format and the CI summary channel. Takes effect when the CR-45 design PR is merged |
-| Related | ADR-002 (infrastructure pipeline), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
+| Amended by (CR-57, follow-up R-1) | Proposed, takes effect when R-1 is merged. PC-8 refers to the value of the `operator_paths` key instead of listing this repository's paths. The OCI VM wording of sections 1, 4 (step 6), 7, and 9 now names the AI lab (ADR-012). The ADR-002 citations in the "Infra PR" row, RR-5, and the Related row are corrected, since CR-57 supersedes ADR-002. No decision or rule changes |
+| Related | ADR-002 (infrastructure pipeline; superseded by CR-57), D8/D13 (machine account), ADR-001, D17 (GitHub access per surface) |
 
 > Numbering note: this requirement was briefly labeled "CHG-002" in discussion. CHG-002 is already
 > assigned to the conditional static-key waiver in ADR-002, so this requirement is **CHG-003**.
@@ -24,7 +25,7 @@
 - GitHub Free enforces rulesets (required reviews, required checks, linear history) on **public** repositories only.
 - Claude Code pushes as a machine account. Only your personal account may approve and merge (D8/D13).
 - PR conversations are stored in GitHub, not in Git. They are hard to load selectively into AI context and do not travel with the code.
-- Event-driven Claude (for example `@claude` via the Claude Code GitHub Action) would need a long-lived subscription credential stored in GitHub secrets. It would also run unattended on GitHub runners rather than the OCI VM. This conflicts with the Enterprise credential, execution-location, and human-control requirements.
+- Event-driven Claude (for example `@claude` via the Claude Code GitHub Action) would need a long-lived subscription credential stored in GitHub secrets. It would also run unattended on GitHub runners rather than the AI lab where Claude Code runs (ADR-012). This conflicts with the Enterprise credential, execution-location, and human-control requirements.
 
 ## 2. Decision
 
@@ -45,7 +46,7 @@
 | Design PR | Design artifacts and ADRs for one CR | Machine account | Branch `design/CR-<n>-<slug>` |
 | Implementation PR | Code, tests, docs for an approved design | Machine account | Branch `impl/CR-<n>-<slug>` |
 | Change PR | Class 1 or 2 change | Machine account | Branch `change/<issue-or-short-id>-<slug>` |
-| Infra PR | `ai-lab-infrastructure` change; merge = ADR-002 Gate 1 | Machine account | Branch `infra/<slug>` |
+| Infra PR | `ai-lab-infrastructure` change; the merge is the approver's approval (section 5) | Machine account | Branch `infra/<slug>` |
 | Toolchain PR | Version-manifest change | Machine account | Branch `toolchain/<slug>` |
 | Template-sync PR | Template update proposed to an application repo | Machine account (script) | Branch `template-sync/<template-version>` |
 | Init PR | First change after generation from the template | Machine account | Branch `init/v<MAJOR>.<MINOR>.<PATCH>` |
@@ -79,7 +80,7 @@ Classification is proposed by Claude and confirmed by you in the PR or issue. Wh
 3. Architecture discussion takes place in Claude Enterprise, grounded in the repository files through the read-only GitHub Integration (sync the design branch first). You hand the resulting decisions to Claude Code, which commits them to the CR files and posts a discussion summary as a PR comment.
 4. Mark the PR ready for review. You review and approve, then merge. **This is design approval.**
 5. Claude Code opens a **draft implementation PR** that declares `Implements: #<issue>` and `Design: #<design PR>`, and adds the plan checklist to the PR body.
-6. Claude Code implements on the OCI VM, updating the checklist as it goes. The local quality gate runs before each push, and CI runs on every push.
+6. Claude Code implements on the AI lab (ADR-012), updating the checklist as it goes. The local quality gate runs before each push, and CI runs on every push.
 7. Mark the PR ready for review. You review. Feedback goes through the review loop (Section 7). You re-approve after the last push, then merge. **This is implementation approval.**
 8. The final implementation PR uses `Closes #<issue>`. Traceability runs: issue → design merge commit → implementation merge commit(s).
 
@@ -111,7 +112,7 @@ The checks `pr-contract` and `quality-gate` are required status checks on public
 | PC-5 | An implementation or change PR does not modify `docs/cr/*/design.md`, `acceptance-criteria.md`, or `docs/adr/` files belonging to an approved CR. |
 | PC-6 | Changes under `.github/workflows/` or `.github/actions/` require the PR-body section "Workflow change justification". |
 | PC-7 | Dependabot PRs are exempt from PC-1 to PC-3, PC-8, and PC-9, and may change only dependency manifests, lockfiles, and workflow `uses:` pins. |
-| PC-8 | A PR that changes a path listed under the configuration key `operator_paths` requires the PR-body section "Operator script review", non-empty. In this repository the key lists `scripts/operator/`, `ansible/operator.yml`, `ansible/roles/operator_*/` and `toolchain/python/operator.lock` (ADR-011); in a newly generated application repository it is empty. |
+| PC-8 | A PR that changes a path listed under the configuration key `operator_paths` requires the PR-body section "Operator script review", non-empty. The paths are the value of that key in `config/project.yaml` (ADR-011, ADR-012); in a newly generated application repository it is empty. |
 | PC-9 | A change or implementation PR on a repository that has no hosted runner for an architecture listed under the configuration key `architectures` (read from the base commit) contains, in the section "Architecture evidence", one line `evidence: <arch> \| <machine> \| <os> \| <40-hex SHA> \| clean \| <gate command> \| exit 0 \| <UTC time>` per such architecture, with the SHA equal to the PR's current head. Design and Dependabot PRs are exempt. The line is informational; the approver accepts it per PR. |
 
 **Security requirement.** The PR title and body are untrusted input. They are passed to the script only through environment variables or the API, never interpolated into `run:` shell steps. All Actions used are pinned to reviewed SHAs.
@@ -123,7 +124,7 @@ The checks `pr-contract` and `quality-gate` are required status checks on public
 - Cannot write to GitHub. Decisions reach the repository through Claude Code.
 - Issues, PR conversations, and CI results are not synced. When needed, Claude Code summarizes them in the session, or you paste the relevant excerpt.
 
-**Claude Code (Desktop SSH session on the OCI VM, `git` and `gh` as the machine account):**
+**Claude Code (Desktop SSH session on the AI lab, `git` and `gh` as the machine account):**
 
 - **Draft PR as checkpoint.** It opens a draft PR at the start of work. The PR body holds the plan checklist between `<!-- checkpoint:start -->` and `<!-- checkpoint:end -->` markers. `resume-work` reads only the checklist, the latest CI result, and `git log` since the merge base, through `scripts/pr-checkpoint show`, in the format and within the limits of ADR-010.
 - **Review feedback loop (new Skill `address-review-feedback`).**
@@ -150,18 +151,18 @@ The checks `pr-contract` and `quality-gate` are required status checks on public
 **Positive:**
 - One place for state, approval, and traceability.
 - Approvals are enforced by GitHub on public repositories.
-- Checkpoints survive VM loss.
+- Checkpoints survive AI lab loss.
 - Context is loaded by reference, not by re-reading the repository.
 - No Claude credential in GitHub and no unattended AI execution.
 
 **Negative:**
 - Every change requires your hands-on PR review. There is no AI work between sessions.
 - Private repositories get advisory enforcement only.
-- The workflow depends on GitHub availability. A local branch and the VM workspace remain usable offline, but approval waits for GitHub.
+- The workflow depends on GitHub availability. A local branch and the AI lab workspace remain usable offline, but approval waits for GitHub.
 
 **Residual risks:**
 - **RR-4.** The machine account can edit PR bodies and labels. Mitigation: they are never authoritative (Section 5).
-- **RR-5.** Compromise of the approver account defeats approvals. Mitigation: passkey or 2FA, plus the ADR-002 OCI-side guards for infrastructure.
+- **RR-5.** Compromise of the approver account defeats approvals. Mitigation: passkey or 2FA, plus the operator machine's release-tag and prompted-credential rules (ADR-011, ADR-012) for credentialed scripts.
 - **RR-6.** Prompt injection through issue, PR, or repository text read by Claude. Mitigation: approver-only instruction rule, chat access read-only (D17), and a CLAUDE.md rule that GitHub content is data.
 
 ## 10. Verification items
