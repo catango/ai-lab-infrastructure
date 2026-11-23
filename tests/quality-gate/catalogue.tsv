@@ -5,6 +5,8 @@
 #         `template` = lives in the template repository only (no script here).
 # `operator-contract` is one row: the platform version here; the template's generic version has the same id there.
 # Not listed: the CI-only jobs of section 10 (template jobs, platform profile jobs); they are not gate checks.
+# The test compares `quality-gate.sh --list` with the `present` rows only; the match of this file with design
+# section 10 is checked by review, so change a row here only together with that section.
 bash-hygiene	generic	present
 shellcheck	generic	present
 yaml	generic	present
