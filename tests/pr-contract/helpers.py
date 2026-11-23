@@ -50,12 +50,22 @@ def body(kind, *, omit=(), empty=(), comment_only=(), sections=None, top="", mar
 
 
 IMPL_TOP = "Implements: #2\nDesign: #3\n"
+HEAD_SHA = "a1" * 20
+BASE_SHA = "b2" * 20
+GATE_COMMAND = "./scripts/quality-gate.sh --strict"
+
+
+def evidence_line(arch="arm64", machine="aarch64", os_name="ubuntu 24.04", sha=HEAD_SHA, state="clean",
+                  command=GATE_COMMAND, code="0", time="2026-11-23T10:15:00Z"):
+    """One evidence line of design section 7, every field replaceable."""
+    return f"evidence: {arch} | {machine} | {os_name} | {sha} | {state} | {command} | exit {code} | {time}"
 
 
 def make_pr(kind="implementation", **over):
     base = dict(
         number=10, title="A title", body="", state="open", draft=True, merged=False,
         author="example-author", head_ref="impl/CR-2-thing", base_ref="main", changed_files=1,
+        head_sha=HEAD_SHA, base_sha=BASE_SHA,
     )
     if kind == "design":
         base.update(head_ref="design/CR-2-thing", body=body("design"))
@@ -78,7 +88,7 @@ def fc(path, status="modified", previous=None, patch=None):
 class MemClient:
     """In-memory stand-in for the GitHub client: PRs, files, and issue kinds by number."""
 
-    def __init__(self, prs=None, files=None, issues=None, fail=None):
+    def __init__(self, prs=None, files=None, issues=None, fail=None, config=None, private=False):
         design = make_pr("design", number=3, state="closed", draft=False, merged=True)
         self.prs = {3: design}
         self.prs.update(prs or {})
@@ -86,6 +96,8 @@ class MemClient:
         self.issues = {2: "issue"}
         self.issues.update(issues or {})
         self.fail = fail
+        self.config = config
+        self.private = private
         self.calls = []
 
     def _check(self, name, number):
@@ -109,6 +121,16 @@ class MemClient:
             raise NotFound(f"issue {number}")
         return self.issues[number]
 
+    def repo_private(self):
+        self._check("repo_private", None)
+        return self.private
+
+    def base_config(self, sha):
+        """The parsed configuration of the base commit, or None when the file does not exist there."""
+        self._check("base_config", sha)
+        return self.config
+
 
 __all__ = ["ApiError", "NotFound", "ROOT", "TEMPLATES", "FIXTURES", "TYPES", "headings", "body",
-           "make_pr", "fc", "MemClient", "IMPL_TOP", "template_lines"]
+           "make_pr", "fc", "MemClient", "IMPL_TOP", "template_lines", "HEAD_SHA", "BASE_SHA", "GATE_COMMAND",
+           "evidence_line"]

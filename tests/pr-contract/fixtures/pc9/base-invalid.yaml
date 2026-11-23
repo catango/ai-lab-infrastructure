@@ -1,0 +1,3 @@
+architectures:
+  - name: arm64
+    runner: [not, a, string]
