@@ -1,7 +1,7 @@
 <!-- PR type: implementation. Branch: impl/CR-<n>-<slug>. Rule PC-1 (ADR-003) requires every section below, non-empty. -->
 <!-- Do not edit approved design.md, acceptance-criteria.md, or ADRs here (PC-5). Propose a new design PR instead. -->
 <!-- If .github/workflows/ or .github/actions/ change, add a section "Workflow change justification" (PC-6). -->
-<!-- If operator code changes (scripts/operator/, ansible/operator.yml, ansible/roles/operator_*, toolchain/python/operator.lock), add a section "Operator script review" (PC-8): credentials, commands, modes, calls, output, resources, release tag. No identifiers, addresses, or names. -->
+<!-- If a path listed under the key `operator_paths` of config/project.yaml changes (the operator scripts and profiles; the value on the base commit counts), add a section "Operator script review" (PC-8): credentials, commands, modes, calls, output, resources, release tag. No identifiers, addresses, or names. -->
 
 Implements: #<issue>
 Design: #<merged design PR>

@@ -85,10 +85,25 @@ def fc(path, status="modified", previous=None, patch=None):
     return FileChange(path=path, status=status, previous=previous, patch=patch)
 
 
-class MemClient:
-    """In-memory stand-in for the GitHub client: PRs, files, and issue kinds by number."""
+# The operator paths of this repository before CR-57 PR 0, as the configuration lists them (the base of the old behaviour).
+OPERATOR_PATHS_TODAY = ["scripts/operator/", "ansible/operator.yml", "ansible/roles/operator_*/", "toolchain/python/operator.lock"]
+DEFAULT_CONFIG = object()  # MemClient(config=DEFAULT_CONFIG): a base configuration that lists the operator paths of today
 
-    def __init__(self, prs=None, files=None, issues=None, fail=None, config=None, private=False):
+
+def operator_config(paths=None, **more):
+    """A parsed base configuration with an `operator_paths` value (default: the paths of today)."""
+    out = {"operator_paths": list(OPERATOR_PATHS_TODAY) if paths is None else paths}
+    out.update(more)
+    return out
+
+
+class MemClient:
+    """In-memory stand-in for the GitHub client: PRs, files, and issue kinds by number.
+
+    `config` is the parsed base configuration: a dict, None (the file does not exist at the base), or an exception instance
+    that base_config raises (an unreadable file). The default lists the operator paths of today, so PC-8 is active."""
+
+    def __init__(self, prs=None, files=None, issues=None, fail=None, config=DEFAULT_CONFIG, private=False):
         design = make_pr("design", number=3, state="closed", draft=False, merged=True)
         self.prs = {3: design}
         self.prs.update(prs or {})
@@ -96,7 +111,7 @@ class MemClient:
         self.issues = {2: "issue"}
         self.issues.update(issues or {})
         self.fail = fail
-        self.config = config
+        self.config = operator_config() if config is DEFAULT_CONFIG else config
         self.private = private
         self.calls = []
 
@@ -128,9 +143,11 @@ class MemClient:
     def base_config(self, sha):
         """The parsed configuration of the base commit, or None when the file does not exist there."""
         self._check("base_config", sha)
+        if isinstance(self.config, Exception):
+            raise self.config
         return self.config
 
 
 __all__ = ["ApiError", "NotFound", "ROOT", "TEMPLATES", "FIXTURES", "TYPES", "headings", "body",
            "make_pr", "fc", "MemClient", "IMPL_TOP", "template_lines", "HEAD_SHA", "BASE_SHA", "GATE_COMMAND",
-           "evidence_line"]
+           "evidence_line", "OPERATOR_PATHS_TODAY", "DEFAULT_CONFIG", "operator_config"]

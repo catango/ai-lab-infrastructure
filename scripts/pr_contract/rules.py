@@ -20,9 +20,8 @@ PROTECTED = re.compile(r"docs/cr/[^/]+/(design|acceptance-criteria)\.md")
 WORKFLOW_PREFIXES = (".github/workflows/", ".github/actions/")
 JUSTIFICATION = "Workflow change justification"
 OPERATOR_REVIEW = "Operator script review"
-# The operator set of PC-8 (CR-21 design section 1): matched by exact path or directory prefix, case-sensitive.
-OPERATOR_PREFIXES = ("scripts/operator/", "ansible/roles/operator_")
-OPERATOR_PATHS = frozenset({"ansible/operator.yml", "toolchain/python/operator.lock"})
+# The operator set of PC-8 is the key `operator_paths` of config/project.yaml on the BASE commit (ADR-003 PC-8, CR-57 PR 0).
+OPERATOR_KEY_MESSAGE = "operator_paths missing or invalid in the base configuration"
 
 MANIFEST_NAMES = frozenset({
     "package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "requirements.txt",
@@ -78,8 +77,38 @@ def template_headings(kind, templates_dir):
     return list(markdown.parse(text).sections)
 
 
-def is_operator_path(path):
-    return path in OPERATOR_PATHS or path.startswith(OPERATOR_PREFIXES)
+class BaseConfig:
+    """The parsed configuration of the base commit, read at most once per evaluation: PC-8 and PC-9 take their policy from it.
+    An unreadable file (ConfigError) is remembered and raised for each rule, so each fails closed; an ApiError is not caught."""
+
+    def __init__(self, client, sha):
+        self._client, self._sha, self._done, self._value = client, sha, False, None
+
+    def get(self):
+        if not self._done:
+            try:
+                self._value = self._client.base_config(self._sha)
+            except ConfigError as error:
+                self._value = error
+            self._done = True
+        if isinstance(self._value, ConfigError):
+            raise self._value
+        return self._value
+
+
+def check_operator_paths(files, parsed, base):
+    """PC-8: a path under `operator_paths` needs the non-empty section. Deleted paths and both sides of a rename count. A missing
+    or malformed key is a violation (we cannot tell what is an operator path); an explicit empty value makes the rule inactive."""
+    try:
+        entries = config.operator_paths(base.get())
+    except ConfigError:
+        return [Violation("PC-8", OPERATOR_KEY_MESSAGE)]
+    if not any(config.is_operator_path(path, entries) for path in touched(files)):
+        return []
+    review = parsed.sections.get(OPERATOR_REVIEW, "") if parsed is not None else ""
+    if markdown.has_content(review):
+        return []
+    return [Violation("PC-8", f"operator change without a non-empty '{OPERATOR_REVIEW}' section")]
 
 
 def touched(files):
@@ -98,6 +127,7 @@ def capped(rule, template, paths):
 
 def evaluate(pr, client, templates_dir):
     dependabot = is_dependabot(pr)
+    base = BaseConfig(client, pr.base_sha)
     kind, branch_number = (None, None) if dependabot else derive_type(pr.head_ref)
     violations = []
 
@@ -132,7 +162,7 @@ def evaluate(pr, client, templates_dir):
         if kind == "implementation":
             violations.extend(check_implementation(pr, parsed, branch_number, client))
         if kind in ("implementation", "change"):
-            violations.extend(check_evidence(pr, parsed, client))
+            violations.extend(check_evidence(pr, parsed, client, base))
 
     if files is not None:
         if kind == "design":
@@ -144,10 +174,7 @@ def evaluate(pr, client, templates_dir):
             justification = parsed.sections.get(JUSTIFICATION, "") if parsed is not None else ""
             if not markdown.has_content(justification):
                 violations.append(Violation("PC-6", f"workflow change without a non-empty '{JUSTIFICATION}' section"))
-        if any(is_operator_path(p) for p in touched(files)):
-            review = parsed.sections.get(OPERATOR_REVIEW, "") if parsed is not None else ""
-            if not markdown.has_content(review):
-                violations.append(Violation("PC-8", f"operator change without a non-empty '{OPERATOR_REVIEW}' section"))
+        violations.extend(check_operator_paths(files, parsed, base))
     return violations
 
 
@@ -239,11 +266,12 @@ def _valid_time(text):
     return True
 
 
-def check_evidence(pr, parsed, client):
+def check_evidence(pr, parsed, client, base=None):
     """PC-9. Which architectures need a line comes from the configuration of the BASE commit and the repository's private flag;
     the head of the PR is never consulted for policy (SC-20)."""
+    base = base or BaseConfig(client, pr.base_sha)
     try:
-        candidates = [a for a in config.architectures(client.base_config(pr.base_sha)) if not (a.runner and a.runner_private)]
+        candidates = [a for a in config.architectures(base.get()) if not (a.runner and a.runner_private)]
     except ConfigError:
         return [Violation("PC-9", "architectures in the base configuration is invalid")]
     if not candidates:

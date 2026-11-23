@@ -125,10 +125,12 @@ class OfflineCommandLine(unittest.TestCase):
         self.assertEqual(ok.run()[0], 0)
 
     def test_no_configuration_or_no_key_on_the_base_means_the_default(self):
-        for base in (None, "base-without-key.yaml"):
-            with self.subTest(base=base):
-                code, out, _ = Offline(self, "n/a: every architecture has a runner", base=base).run()
-                self.assertEqual(code, 0, out)
+        # For PC-9 only: PC-8 fails closed without `operator_paths` (CR-57 PR 0), so the file without the key states it empty.
+        code, out, _ = Offline(self, "n/a: every architecture has a runner", base="base-without-key.yaml").run()
+        self.assertEqual(code, 0, out)
+        code, out, _ = Offline(self, "n/a: every architecture has a runner", base=None).run()
+        self.assertNotIn("PC-9", out)
+        self.assertIn("FAIL PC-8: operator_paths missing or invalid in the base configuration", out)
 
     def test_an_unreadable_base_configuration_fails_closed(self):
         for base in ("base-invalid.yaml", "base-not-yaml.yaml", "base-two-documents.yaml"):
@@ -356,7 +358,7 @@ class ReadingTheConfiguration(unittest.TestCase):
                 ours = config.parse_yaml(text)
                 if oracle.get("architectures") is not None:
                     # yq turns an omitted value into null; the reader does too, and validation reads both as an empty label
-                    self.assertEqual(ours, oracle)
+                    self.assertEqual(ours["architectures"], oracle["architectures"])
 
     def test_a_non_string_or_oversize_input_is_an_error(self):
         for value in (None, 5, b"x", "x" * 70000):

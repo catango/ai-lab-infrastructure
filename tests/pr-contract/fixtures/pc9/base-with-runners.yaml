@@ -1,4 +1,5 @@
 # Base commit: both architectures have a runner for a public repository; none for a private one (arm64).
+operator_paths: []   # PC-8 inactive: these fixtures test PC-9 only
 schema_version: 1
 architectures:
   - name: amd64

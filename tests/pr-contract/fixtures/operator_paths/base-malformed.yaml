@@ -1,0 +1,3 @@
+# Base commit: the key is a flow list, outside the supported form, so PC-8 fails closed.
+schema_version: 1
+operator_paths: [scripts/operator/, ansible/operator.yml]

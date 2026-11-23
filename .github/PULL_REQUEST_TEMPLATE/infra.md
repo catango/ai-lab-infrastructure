@@ -1,7 +1,7 @@
 <!-- PR type: infra. Branch: infra/<slug>. Merge of this PR is ADR-002 Gate 1. Rule PC-1 (ADR-003) requires every section below, non-empty. -->
 <!-- No OCIDs, IP addresses, or credentials in this PR. Use variables and placeholders. -->
 <!-- If .github/workflows/ or .github/actions/ change, add a section "Workflow change justification" (PC-6). -->
-<!-- If operator code changes (scripts/operator/, ansible/operator.yml, ansible/roles/operator_*, toolchain/python/operator.lock), add a section "Operator script review" (PC-8): credentials, commands, modes, calls, output, resources, release tag. No identifiers, addresses, or names. -->
+<!-- If a path listed under the key `operator_paths` of config/project.yaml changes (the operator scripts and profiles; the value on the base commit counts), add a section "Operator script review" (PC-8): credentials, commands, modes, calls, output, resources, release tag. No identifiers, addresses, or names. -->
 
 ## Summary
 <!-- What infrastructure changes and why. -->

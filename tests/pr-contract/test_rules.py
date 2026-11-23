@@ -2,8 +2,10 @@ import unittest
 
 import helpers
 from helpers import MemClient, body, fc, make_pr
-from pr_contract import rules
-from pr_contract.errors import ApiError, LimitExceeded
+from pr_contract import config, rules
+from pr_contract.errors import ApiError, ConfigError, LimitExceeded
+
+REPO_CONFIG = config.parse_yaml((helpers.ROOT / "config" / "project.yaml").read_text())
 
 
 def evaluate(pr, client=None, files=None):
@@ -236,6 +238,10 @@ class PC8(unittest.TestCase):
                   "ansible/operator.yaml", "ansible/roles/operator/tasks/main.yml", "ansible/roles/builder_x/tasks/main.yml",
                   "ansible/builder.yml", "toolchain/python/builder.lock", "docs/operations/operator.md")
 
+    def judge(self, pr, files=None):
+        """The old behaviour, now read from this repository's own configuration at `config/project.yaml`."""
+        return evaluate(pr, MemClient(config=REPO_CONFIG), files=files)
+
     def pr(self, kind="implementation", **kw):
         top = helpers.IMPL_TOP if kind == "implementation" else ""
         return make_pr(kind, body=body(kind, top=top, **kw))
@@ -243,49 +249,49 @@ class PC8(unittest.TestCase):
     def test_operator_change_without_the_section_fails(self):
         for path in self.PATHS:
             with self.subTest(path=path):
-                violations = evaluate(self.pr(), files=[fc(path)])
+                violations = self.judge(self.pr(), files=[fc(path)])
                 self.assertIn("PC-8", ids(violations), text(violations))
 
     def test_every_pr_type_needs_the_section(self):
         for kind in ("implementation", "change", "infra", "toolchain"):
             with self.subTest(kind=kind):
-                self.assertIn("PC-8", ids(evaluate(self.pr(kind), files=[fc("scripts/operator/setup")])))
+                self.assertIn("PC-8", ids(self.judge(self.pr(kind), files=[fc("scripts/operator/setup")])))
 
     def test_empty_or_comment_only_section_fails(self):
         for content in ("", "<!-- nothing -->", "   "):
             with self.subTest(content=content):
                 pr = self.pr(extra=f"## {self.SECTION}\n{content}")
-                self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+                self.assertIn("PC-8", ids(self.judge(pr, files=[fc("scripts/operator/setup")])))
 
     def test_section_inside_a_fence_does_not_count(self):
         pr = self.pr(extra=f"```\n## {self.SECTION}\ntext\n```")
-        self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+        self.assertIn("PC-8", ids(self.judge(pr, files=[fc("scripts/operator/setup")])))
 
     def test_non_empty_section_passes(self):
         for path in self.PATHS:
             with self.subTest(path=path):
                 pr = self.pr(extra=f"## {self.SECTION}\nCredentials: none. Commands: none. Modes: dry run default.")
-                self.assertEqual(evaluate(pr, files=[fc(path)]), [])
+                self.assertEqual(self.judge(pr, files=[fc(path)]), [])
 
     def test_no_operator_change_needs_nothing(self):
         for path in self.LOOKALIKES:
             with self.subTest(path=path):
-                self.assertNotIn("PC-8", ids(evaluate(self.pr(), files=[fc(path)])))
+                self.assertNotIn("PC-8", ids(self.judge(self.pr(), files=[fc(path)])))
         pr = self.pr(extra=f"## {self.SECTION}\nPresent but not needed.")
-        self.assertEqual(evaluate(pr, files=[fc("docs/README.md")]), [])
+        self.assertEqual(self.judge(pr, files=[fc("docs/README.md")]), [])
 
     def test_rename_source_counts(self):
         renamed = fc("scripts/other/setup", "renamed", previous="scripts/operator/setup")
-        self.assertIn("PC-8", ids(evaluate(self.pr(), files=[renamed])))
+        self.assertIn("PC-8", ids(self.judge(self.pr(), files=[renamed])))
 
     def test_design_pr_is_checked_too(self):
         pr = make_pr("design")
-        self.assertIn("PC-8", ids(evaluate(pr, files=[fc("scripts/operator/setup")])))
+        self.assertIn("PC-8", ids(self.judge(pr, files=[fc("scripts/operator/setup")])))
 
     def test_message_names_the_rule_and_section_and_no_pr_text(self):
         canary = "CANARY-PR-TEXT-5f3a"
         pr = self.pr(extra=f"## {self.SECTION}\n", sections={"Summary": canary})
-        violations = [v for v in evaluate(pr, files=[fc("scripts/operator/setup")]) if v.rule == "PC-8"]
+        violations = [v for v in self.judge(pr, files=[fc("scripts/operator/setup")]) if v.rule == "PC-8"]
         self.assertEqual(len(violations), 1)
         self.assertIn(self.SECTION, violations[0].message)
         self.assertNotIn(canary, text(violations))
@@ -305,7 +311,151 @@ class PC8(unittest.TestCase):
     def test_a_template_body_still_passes_pc1_without_the_section(self):
         for kind in ("change", "infra", "toolchain"):
             with self.subTest(kind=kind):
-                self.assertEqual(evaluate(make_pr(kind), files=[fc("README.md")]), [])
+                self.assertEqual(self.judge(make_pr(kind), files=[fc("README.md")]), [])
+
+
+class PC8FromConfig(unittest.TestCase):
+    """PC-8 reads `operator_paths` from the configuration of the BASE commit (ADR-003 PC-8, ADR-009 decision 14, CR-57 PA-A6)."""
+
+    SECTION = "Operator script review"
+    KEY = "operator_paths"
+
+    def run_with(self, config_value, files, **kw):
+        client = MemClient(config=config_value)
+        return evaluate(make_pr(**kw), client, files=files), client
+
+    def pc8(self, violations):
+        return [v for v in violations if v.rule == "PC-8"]
+
+    def test_the_hardcoded_sets_are_gone(self):
+        self.assertFalse(hasattr(rules, "OPERATOR_PREFIXES"))
+        self.assertFalse(hasattr(rules, "OPERATOR_PATHS"))
+        self.assertIn("toolchain/python/operator.lock", rules.MANIFEST_PATHS)  # PR 1 edits this one, not this PR
+
+    def test_configured_paths_are_active_and_the_old_set_is_not(self):
+        cfg = {"operator_paths": ["tools/ops/", "deploy/run.yml"]}
+        for path in ("tools/ops/a/b.py", "deploy/run.yml"):
+            with self.subTest(path=path):
+                found, _ = self.run_with(cfg, [fc(path)])
+                self.assertEqual(len(self.pc8(found)), 1, text(found))
+        for path in ("scripts/operator/setup", "ansible/operator.yml", "tools/other.py", "deploy/run.yml.bak"):
+            with self.subTest(path=path):
+                found, _ = self.run_with(cfg, [fc(path)])
+                self.assertEqual(found, [], text(found))
+
+    def test_a_non_empty_section_satisfies_a_configured_path(self):
+        pr = make_pr(body=body("implementation", top=helpers.IMPL_TOP, extra=f"## {self.SECTION}\nCredentials: none."))
+        client = MemClient(config={"operator_paths": ["tools/ops/"]}, files={10: [fc("tools/ops/x.py")]})
+        self.assertEqual(rules.evaluate(pr, client, helpers.TEMPLATES), [])
+
+    def test_matching_rule_exact_file_or_prefix(self):
+        # An entry matches an exact path, or a prefix when it ends with `/` or `*/` (`*/` drops the star: the old
+        # "ansible/roles/operator_" prefix). Case-sensitive. Nothing else matches.
+        cfg = {"operator_paths": ["ansible/lab.yml", "scripts/operator/", "ansible/roles/operator_*/"]}
+        hits = ("ansible/lab.yml", "scripts/operator/setup", "scripts/operator/lib/x.py", "ansible/roles/operator_ssh/tasks/main.yml",
+                "ansible/roles/operator_/x", "ansible/roles/operator_x")
+        misses = ("ansible/lab.yml.bak", "ansible/lab.yaml", "ansible/Lab.yml", "scripts/operator", "scripts/operators/x.py",
+                  "scripts/Operator/x.py", "docs/scripts/operator/x.py", "ansible/roles/operator/tasks/main.yml",
+                  "ansible/roles/Operator_x/a", "x/ansible/lab.yml")
+        for path in hits:
+            with self.subTest(hit=path):
+                found, _ = self.run_with(cfg, [fc(path)])
+                self.assertEqual(len(self.pc8(found)), 1, text(found))
+        for path in misses:
+            with self.subTest(miss=path):
+                found, _ = self.run_with(cfg, [fc(path)])
+                self.assertEqual(self.pc8(found), [], text(found))
+
+    def test_an_explicit_empty_value_makes_pc8_inactive(self):
+        for path in ("scripts/operator/setup", "ansible/operator.yml", "toolchain/python/operator.lock"):
+            with self.subTest(path=path):
+                found, _ = self.run_with({"operator_paths": []}, [fc(path)])
+                self.assertEqual(found, [], text(found))
+
+    def test_a_missing_key_fails_closed_naming_the_key(self):
+        cases = {"no file": None, "empty mapping": {}, "other keys only": {"architectures": [], "schema_version": 1}}
+        for name, cfg in cases.items():
+            with self.subTest(case=name):
+                for files in ([fc("scripts/operator/setup")], [fc("README.md")]):  # a violation even when nothing is touched
+                    found, _ = self.run_with(cfg, files)
+                    violations = self.pc8(found)
+                    self.assertEqual(len(violations), 1, text(found))
+                    self.assertIn(self.KEY, violations[0].message)
+
+    def test_a_malformed_key_fails_closed_naming_the_key(self):
+        bad = {
+            "a string": "scripts/operator/", "null": None, "a mapping": {"a": "b"}, "a number": 5, "a bool": True,
+            "entry not a string": ["scripts/operator/", 5], "entry null": [None], "nested list": [["a/"]],
+            "empty entry": [""], "blank entry": [" "], "star only": ["*/"], "slash only": ["/"], "absolute": ["/etc/x"],
+            "dot dot": ["a/../b"], "star in the middle": ["a/*/b"], "star at the end": ["scripts/*"], "glob": ["scripts/**/x"],
+            "space inside": ["scripts/op erator/"], "newline": ["a\nb"], "backslash": ["a\\b"], "duplicate": ["a/", "a/"],
+            "uppercase star": ["a/*"], "too long": ["a" * 300],
+        }
+        for name, value in bad.items():
+            with self.subTest(case=name):
+                found, _ = self.run_with({"operator_paths": value}, [fc("scripts/operator/setup")])
+                violations = self.pc8(found)
+                self.assertEqual(len(violations), 1, text(found))
+                self.assertIn(self.KEY, violations[0].message)
+
+    def test_an_unreadable_base_file_fails_closed(self):
+        found, _ = self.run_with(ConfigError("operator_paths key is repeated"), [fc("README.md")])
+        violations = self.pc8(found)
+        self.assertEqual(len(violations), 1, text(found))
+        self.assertIn(self.KEY, violations[0].message)
+
+    def test_an_api_error_is_not_a_pass(self):
+        with self.assertRaises(ApiError):
+            self.run_with(ApiError("boom"), [fc("README.md")])
+
+    def test_the_message_is_fixed_text(self):
+        found, _ = self.run_with(None, [fc("README.md")])
+        self.assertEqual(self.pc8(found)[0].message, "operator_paths missing or invalid in the base configuration")
+
+    def test_a_deleted_path_is_counted(self):
+        found, _ = self.run_with(helpers.operator_config(), [fc("scripts/operator/lib/old.py", "removed")])
+        self.assertEqual(len(self.pc8(found)), 1, text(found))
+
+    def test_a_renamed_path_is_counted_from_either_side(self):
+        for new, old in (("docs/x.md", "scripts/operator/setup"), ("scripts/operator/setup", "docs/x.md")):
+            with self.subTest(new=new, old=old):
+                found, _ = self.run_with(helpers.operator_config(), [fc(new, "renamed", previous=old)])
+                self.assertEqual(len(self.pc8(found)), 1, text(found))
+
+    def test_only_the_base_commit_is_read_and_a_head_edit_changes_nothing(self):
+        # The head edits config/project.yaml (it would empty the key); the client returns the base value, and PC-8 holds.
+        client = MemClient(config=helpers.operator_config(), files={10: [fc("scripts/operator/setup"), fc("config/project.yaml")]})
+        found = rules.evaluate(make_pr(), client, helpers.TEMPLATES)
+        self.assertEqual(len(self.pc8(found)), 1, text(found))
+        self.assertEqual([c for c in client.calls if c[0] == "base_config"], [("base_config", helpers.BASE_SHA)])
+
+    def test_the_file_is_read_once_when_pc9_reads_it_too(self):
+        client = MemClient(config=helpers.operator_config(), files={10: [fc("scripts/x")]})
+        rules.evaluate(make_pr(), client, helpers.TEMPLATES)  # an implementation PR: PC-8 and PC-9 both need the file
+        self.assertEqual(client.calls.count(("base_config", helpers.BASE_SHA)), 1)
+
+    def test_a_dependabot_pr_reads_nothing(self):
+        client = MemClient(config=None, files={10: [fc("requirements.txt")]})
+        pr = make_pr(author="dependabot[bot]", head_ref="dependabot/pip/x", body="")
+        self.assertEqual(rules.evaluate(pr, client, helpers.TEMPLATES), [])
+        self.assertEqual([c for c in client.calls if c[0] == "base_config"], [])
+
+    def test_too_many_files_still_reports_only_the_file_limit(self):
+        pr = make_pr(changed_files=rules.MAX_FILES)
+        found = rules.evaluate(pr, MemClient(config=None), helpers.TEMPLATES)
+        self.assertEqual(ids(found), {"PC-*"})
+
+    def test_a_malformed_key_does_not_hide_a_pc9_verdict_and_vice_versa(self):
+        cfg = {"operator_paths": "x", "architectures": [{"name": "arm64"}]}
+        found, _ = self.run_with(cfg, [fc("scripts/x")], body=body("implementation", top=helpers.IMPL_TOP, sections={"Architecture evidence": "n/a"}))
+        self.assertEqual(ids(found), {"PC-8", "PC-9"}, text(found))
+
+    def test_this_repositorys_configuration_lists_the_paths_the_plan_names(self):
+        paths = config.operator_paths(REPO_CONFIG)
+        for entry in ("scripts/operator/", "ansible/operator.yml", "ansible/roles/operator_*/", "toolchain/python/operator.lock",
+                      "ansible/lab.yml", "ansible/roles/ssh_hardening/"):
+            self.assertIn(entry, paths)
+        self.assertEqual(config.operator_endpoints(REPO_CONFIG), ("api.github.com",))
 
 
 USES_PATCH = ("@@ -10,7 +10,7 @@ jobs:\n steps:\n"

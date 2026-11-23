@@ -1,0 +1,7 @@
+# The configuration of the base commit for the recorded PRs: the operator set is configured, so PC-8 is active and does not fail closed.
+schema_version: 1
+operator_paths:
+  - scripts/operator/
+  - ansible/operator.yml
+  - ansible/roles/operator_*/
+  - toolchain/python/operator.lock
