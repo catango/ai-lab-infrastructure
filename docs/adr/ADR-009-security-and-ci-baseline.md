@@ -8,6 +8,7 @@
 | Change request | CR-43 (issue #43) |
 | Scope | Required status checks, Actions hardening, repository security features on GitHub Free for public and private repositories, fork pull requests and third-party Actions, the host-reported evidence line, the rulesets printed for a new repository, the gate checks `forbidden-api`, `operator-contract`, and `owned-drift`, the catalogue of gate checks, rule sharing between this repository and the template, and the settings the approver applies by hand. Not ADR-010 (token optimisation, metrics) |
 | Amends | ADR-001 (B1 note, section 5, RR-10), ADR-003 (section 6, PC-7, PC-9, AC3-8), ADR-005 (section 1 context), ADR-008 (decisions 1, 2, 3, 6, 9, 10), each with an "Amended by" entry, effective when this record is accepted |
+| Amended by | CR-55 (Proposed, design PR for issue #55): decisions 7, 10, and 14 (no host evidence for a cross-built target, the check `no-emulation`, `cross_builds` as a base-commit policy input). Takes effect when the CR-55 design PR is merged |
 | Related | Baseline v0.1 sections 3, 6, 7; ADR-001 (section 5, RR-10), ADR-003 (sections 5, 6), ADR-005 (decisions 3, 7), ADR-008 (decisions 6, 9, 10), ADR-011 (decision 3), ADR-010 (reserved; dependencies in design section 13) |
 
 > This ADR records a decision. It does not create or change a repository, a label, a ruleset, a workflow, a setting, a secret, or a tag, and it does not authorize any of them.
