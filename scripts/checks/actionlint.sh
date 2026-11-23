@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: actionlint
 # order: 90
+# class: generic
 # actionlint over the workflow files. The custom format omits the source snippet.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

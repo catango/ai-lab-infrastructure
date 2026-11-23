@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: python3
 # order: 95
+# class: generic
 # Python files in scripts/ are syntactically valid; unit tests (tests/*/test_*.py) pass.
 # Nothing is written to the repository (no bytecode files).
 set -euo pipefail

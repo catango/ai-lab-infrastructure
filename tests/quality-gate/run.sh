@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tests for scripts/quality-gate.sh and scripts/checks/*.sh (CR-2: Q-1..Q-9, C-1, C-2, C-6, C-7).
-# Usage: tests/quality-gate/run.sh [check-id | dispatcher ...]   (no arguments: everything)
+# Usage: tests/quality-gate/run.sh [check-id | dispatcher | classes ...]   (no arguments: everything)
 # Fixtures live in tests/quality-gate/fixtures/<check-id>/<pass-*|fail-*>/. A fail case may hold
 # an EXPECT file (substring that must appear in the findings). Fixtures that would contain
 # forbidden patterns (public-repo-hygiene) are generated here from fragments.
+# The catalogue of check classes is tests/quality-gate/catalogue.tsv; the class fixtures are fixtures/_class/<case>/zz-fixture.sh.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
@@ -134,6 +135,7 @@ run_check_fixtures() {
   for dir in "$FIXTURES"/*/ "$WORK"/gen/*/; do
     [[ -d $dir ]] || continue
     id=$(basename "$dir")
+    [[ $id == _* ]] && continue # _class holds the class fixtures, run by test_classes
     want "$id" || continue
     if [[ ! -f $CHECKS/$id.sh ]]; then
       fail "$id" "fixtures exist but scripts/checks/$id.sh does not"
@@ -364,7 +366,7 @@ test_dispatcher() {
 
   # robustness: a crashing check is a failure; output cannot forge workflow commands
   repo=$(new_repo)
-  printf '#!/usr/bin/env bash\n# tool: none\n# order: 999\nset -euo pipefail\nexit 5\n' >"$repo/scripts/checks/zz-crash.sh"
+  printf '#!/usr/bin/env bash\n# tool: none\n# order: 999\n# class: project\nset -euo pipefail\nexit 5\n' >"$repo/scripts/checks/zz-crash.sh"
   chmod 755 "$repo/scripts/checks/zz-crash.sh"
   commit_all "$repo"
   gate "$repo" --only zz-crash
@@ -381,9 +383,97 @@ test_dispatcher() {
   fi
 }
 
+# ---------------------------------------------------------------- check classes (CR-43 S-14, class part)
+
+CATALOGUE="$ROOT/tests/quality-gate/catalogue.tsv"
+CLASS_RE='^(generic|template|platform|project)$'
+
+# "id class" of the catalogue rows with status present, and of the last gate --list (in $OUT).
+catalogue_present() { awk -F'\t' '$0 !~ /^#/ && $3 == "present" {print $1 " " $2}' "$CATALOGUE" | LC_ALL=C sort; }
+list_pairs() { awk 'NF >= 3 {print $1 " " $3}' <<<"$OUT" | LC_ALL=C sort; }
+catalogue_diff() { diff <(catalogue_present) <(list_pairs); }
+
+test_classes() {
+  local repo dir name id class status n d
+
+  # the catalogue file itself
+  n=$(grep -vc '^#' "$CATALOGUE" || true)
+  if [[ $n -gt 0 ]]; then ok "S-14 the catalogue has rows"; else fail "S-14 the catalogue has rows"; fi
+  while IFS=$'\t' read -r id class status; do
+    if [[ $class =~ $CLASS_RE ]]; then ok "S-14 catalogue class of $id"; else fail "S-14 catalogue class of $id" "got: $class"; fi
+    case $status in
+      present) [[ -f $CHECKS/$id.sh ]] && d=0 || d=1 ;;
+      planned | template) [[ ! -f $CHECKS/$id.sh ]] && d=0 || d=1 ;;
+      *) d=1 ;;
+    esac
+    assert "S-14 catalogue status of $id ($status) matches scripts/checks/" "$d" "status: $status"
+  done < <(grep -v '^#' "$CATALOGUE")
+  n=$(grep -v '^#' "$CATALOGUE" | cut -f1 | sort | uniq -d | tr '\n' ' ')
+  if [[ -z $n ]]; then ok "S-14 catalogue ids are unique"; else fail "S-14 catalogue ids are unique" "duplicates: $n"; fi
+
+  # this repository: every check has a class, and --list equals the catalogue
+  for f in "$CHECKS"/*.sh; do
+    id=$(basename "$f" .sh)
+    class=$(header "$id" class)
+    if [[ $class =~ $CLASS_RE ]]; then ok "S-14 $id has a class header (first 12 lines)"; else fail "S-14 $id has a class header (first 12 lines)" "got: '$class'"; fi
+  done
+  gate "$ROOT" --list
+  rc_is "S-14 --list exits 0 with every class valid" 0
+  if d=$(catalogue_diff); then ok "S-14 --list equals the catalogue (ids and classes)"; else fail "S-14 --list equals the catalogue (ids and classes)" "$(tr '\n' ' ' <<<"$d")"; fi
+
+  # fixtures: a check with a missing or unknown class fails the gate, also under --list
+  for dir in "$FIXTURES"/_class/*/; do
+    name=$(basename "$dir")
+    repo=$(new_repo)
+    cp "$dir/zz-fixture.sh" "$repo/scripts/checks/zz-fixture.sh"
+    commit_all "$repo"
+    case $name in
+      pass-*)
+        gate "$repo" --list
+        rc_is "S-14 $name: --list exits 0" 0
+        out_has "S-14 $name: --list prints the class" "project"
+        gate "$repo" --only zz-fixture
+        rc_is "S-14 $name: the check runs" 0
+        ;;
+      fail-missing-class | fail-unknown-class)
+        want_msg='has no "# class:" header'
+        [[ $name == fail-unknown-class ]] && want_msg='unknown class "experimental"'
+        gate "$repo" --list
+        rc_is "S-14 $name: --list fails" 1
+        out_has "S-14 $name: --list names the check and the problem" "$(<"$dir/EXPECT"): $want_msg"
+        gate "$repo" --only bash-hygiene
+        rc_is "S-14 $name: the gate fails even when the check is not selected" 1
+        out_has "S-14 $name: the gate names the check and the problem" "$(<"$dir/EXPECT"): $want_msg"
+        out_lacks "S-14 $name: nothing is run after the failure" "PASS"
+        ;;
+      fail-not-in-catalogue)
+        gate "$repo" --list
+        rc_is "S-14 $name: --list itself succeeds" 0
+        if d=$(catalogue_diff); then fail "S-14 $name: --list differs from the catalogue"; else
+          if contains "$d" "$(<"$dir/EXPECT")"; then ok "S-14 $name: --list differs from the catalogue"; else fail "S-14 $name: the difference names the check" "$d"; fi
+        fi
+        ;;
+    esac
+  done
+
+  # a changed class is a difference; a class header below line 12 does not count
+  repo=$(new_repo)
+  sed -i 's/^# class: generic$/# class: platform/' "$repo/scripts/checks/bash-hygiene.sh"
+  gate "$repo" --list
+  if catalogue_diff >/dev/null; then fail "S-14 a changed class differs from the catalogue"; else ok "S-14 a changed class differs from the catalogue"; fi
+  repo=$(new_repo)
+  sed -i '/^# class: /d' "$repo/scripts/checks/bash-hygiene.sh"
+  { head -n 3 "$repo/scripts/checks/bash-hygiene.sh"; for n in $(seq 1 10); do printf '# filler\n'; done; printf '# class: generic\n'; tail -n +4 "$repo/scripts/checks/bash-hygiene.sh"; } >"$repo/b.sh"
+  mv "$repo/b.sh" "$repo/scripts/checks/bash-hygiene.sh"
+  gate "$repo" --list
+  rc_is "S-14 a class header after line 12 counts as missing" 1
+  out_has "S-14 a class header after line 12 is reported" 'bash-hygiene: has no "# class:" header'
+}
+
 # ---------------------------------------------------------------- main
 
 if want dispatcher; then test_dispatcher; fi
+if want classes; then test_classes; fi
 run_check_fixtures
 for f in "$CHECKS"/*.sh; do
   id=$(basename "$f" .sh)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: shellcheck
 # order: 20
+# class: generic
 # ShellCheck over every shell script.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

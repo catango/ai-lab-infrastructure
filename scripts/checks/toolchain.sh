@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: python3
 # order: 93
+# class: generic
 # Static validation of toolchain/manifest.toml and its lock file (scripts/toolchain check; no network).
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

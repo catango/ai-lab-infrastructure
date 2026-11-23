@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: yamllint
 # order: 70
+# class: generic
 # yamllint over every YAML file (configuration is inline so the check is one file).
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

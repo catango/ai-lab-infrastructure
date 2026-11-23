@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: python3
 # order: 96
+# class: platform
 # Operator scripts follow the contract (CR-18 acceptance S-6, S-11): no eval, exec, shell=True, os.system, sudo outside
 # setup and facts, Terraform, OCI call with a verb other than list, get, or inspect, or download piped to a shell.
 set -euo pipefail

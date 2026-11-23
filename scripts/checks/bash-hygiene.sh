@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tool: none
 # order: 10
+# class: generic
 # Shell scripts have a bash shebang, `set -euo pipefail` in the first 15 lines, and are executable.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR
