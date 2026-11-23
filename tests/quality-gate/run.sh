@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for scripts/quality-gate.sh and scripts/checks/*.sh (CR-2: Q-1..Q-9, C-1, C-2, C-6, C-7).
-# Usage: tests/quality-gate/run.sh [check-id | dispatcher | classes ...]   (no arguments: everything)
+# Usage: tests/quality-gate/run.sh [check-id | dispatcher | classes | repository ...]   (no arguments: everything)
 # Fixtures live in tests/quality-gate/fixtures/<check-id>/<pass-*|fail-*>/. A fail case may hold
 # an EXPECT file (substring that must appear in the findings). Fixtures that would contain
 # forbidden patterns (public-repo-hygiene) are generated here from fragments.
@@ -116,9 +116,10 @@ run_dir() { # id name dir
 
 gen_hygiene_cases() {
   local d="$WORK/gen/public-repo-hygiene" at='@' secret
-  mk() { # name expect content
-    mkdir -p "$d/$1"
-    printf '%s\n' "$3" >"$d/$1/file.txt"
+  mk() { # name expect content [path of the file, default file.txt]
+    local rel=${4:-file.txt}
+    mkdir -p "$d/$1/$(dirname "$rel")"
+    printf '%s\n' "$3" >"$d/$1/$rel"
     printf '%s\n' "$2" >"$d/$1/EXPECT"
     printf '%s\n' "$3" >"$d/$1/SECRET"
   }
@@ -131,6 +132,18 @@ gen_hygiene_cases() {
   mk fail-private-key "private key" "$(printf -- '-----BEGIN %s-----' 'OPENSSH PRIVATE KEY')"
   mk fail-token-ghp "token" "$(printf '%s_%s' ghp "$(rep 36 x)")"
   mk fail-token-fine-grained "token" "$(printf 'github_pat_%s' "$(rep 30 x)")"
+  # CR-43 S-14: the one seeded CODEOWNERS line is accepted, any other owner form is a finding (the handle is never printed).
+  mk fail-codeowners-second-owner "account handle" "* @example-approver @other-account" .github/CODEOWNERS
+  mk fail-codeowners-team "account handle" "* @example-approver/team" .github/CODEOWNERS
+  mk fail-codeowners-path-rule "account handle" "docs/ @example-approver" .github/CODEOWNERS
+  mk fail-codeowners-root-file "account handle" "* @example-approver @other-account" CODEOWNERS
+  mk fail-codeowners-invalid-login "account handle" "* @-example" .github/CODEOWNERS
+  mkdir -p "$d/pass-codeowners-line/.github"
+  printf '%s\n' "* @example-approver" >"$d/pass-codeowners-line/.github/CODEOWNERS"
+  mkdir -p "$d/pass-codeowners-no-final-newline/.github"
+  printf '%s' "* @example-approver" >"$d/pass-codeowners-no-final-newline/.github/CODEOWNERS"
+  mkdir -p "$d/pass-handle-outside-codeowners"
+  printf '%s\n' "Ask @example-approver in the pull request." >"$d/pass-handle-outside-codeowners/file.txt"
   secret=$(printf '%s.%s.%s.%s' 192 0 2 1)
   mkdir -p "$d/pass-doc-range-and-noreply"
   printf '%s\n%s\n' "$secret" "1234+bot${at}users.noreply.github.com" >"$d/pass-doc-range-and-noreply/file.txt"
@@ -262,7 +275,7 @@ test_dispatcher() {
   # Q-2 --list, --only, --skip, --base
   gate "$repo" --list
   rc_is "Q-2 --list exits 0" 0
-  expected="bash-hygiene shellcheck public-repo-hygiene workflow-policy no-claude-in-workflows links yaml markdown actionlint ansible toolchain python operator-contract gate-tests"
+  expected="bash-hygiene shellcheck public-repo-hygiene codeowners workflow-policy dependabot-config no-claude-in-workflows links yaml markdown actionlint ansible toolchain python operator-contract gate-tests"
   n=$(awk '{print $1}' <<<"$OUT" | grep -Ev '^(ID|CHECK)$' | tr '\n' ' ' | sed 's/ $//')
   if [[ $n == "$expected" ]]; then ok "Q-2 --list shows check ids in order"; else fail "Q-2 --list shows check ids in order" "got: $n"; fi
   out_has "Q-2 --list shows the tool" "shellcheck"
@@ -596,9 +609,54 @@ test_workflow_policy() {
 
 # ---------------------------------------------------------------- main
 
+# ---------------------------------------------------------------- this repository's own baseline files (CR-43 S-6, S-14, S-18)
+
+# repo_check ID: run the check on this repository's working tree with the files that matter; sets RC and OUT.
+repo_check() {
+  local id=$1
+  shift
+  RC=0
+  OUT=$(cd "$ROOT" && printf '%s\n' "$@" | "$BASH" "$CHECKS/$id.sh" 2>&1) || RC=$?
+}
+
+test_repository_files() {
+  local login line
+
+  repo_check dependabot-config .github/dependabot.yml
+  rc_is "S-6 dependabot-config passes this repository's .github/dependabot.yml" 0
+
+  repo_check codeowners .github/CODEOWNERS config/project.yaml
+  rc_is "S-14 codeowners passes this repository's .github/CODEOWNERS" 0
+  login=$(awk '/^github:/ {g = 1; next} /^[^ #]/ {g = 0} g && $1 == "approver_login:" {gsub(/"/, "", $2); print $2; exit}' "$ROOT/config/project.yaml")
+  if [[ -n $login && $(cat "$ROOT/.github/CODEOWNERS") == "* @$login" ]]; then
+    ok "S-18 .github/CODEOWNERS is exactly the one line for the approver_login of config/project.yaml"
+  else
+    fail "S-18 .github/CODEOWNERS is exactly the one line for the approver_login of config/project.yaml"
+  fi
+  line=$(wc -l <"$ROOT/.github/CODEOWNERS")
+  if [[ $line -eq 1 ]]; then ok "S-18 .github/CODEOWNERS has one line"; else fail "S-18 .github/CODEOWNERS has one line" "lines: $line"; fi
+
+  repo_check public-repo-hygiene .github/CODEOWNERS SECURITY.md .github/dependabot.yml
+  rc_is "S-14 public-repo-hygiene accepts this repository's CODEOWNERS, SECURITY.md, and dependabot.yml" 0
+
+  # SECURITY.md names GitHub private vulnerability reporting and carries no address, email, name, link, or key
+  if grep -qi 'private vulnerability reporting' "$ROOT/SECURITY.md" && grep -qi 'github' "$ROOT/SECURITY.md"; then
+    ok "S-18 SECURITY.md names GitHub private vulnerability reporting"
+  else
+    fail "S-18 SECURITY.md names GitHub private vulnerability reporting"
+  fi
+  if grep -qiE '@|https?:|mailto:|www[.]|[A-Za-z0-9-]+[.](com|org|net|io|dev)|-----BEGIN' "$ROOT/SECURITY.md"; then
+    fail "S-18 SECURITY.md has no address, email, link, or key"
+  else
+    ok "S-18 SECURITY.md has no address, email, link, or key"
+  fi
+  if grep -qF "$login" "$ROOT/SECURITY.md"; then fail "S-18 SECURITY.md names no account"; else ok "S-18 SECURITY.md names no account"; fi
+}
+
 if want dispatcher; then test_dispatcher; fi
 if want classes; then test_classes; fi
 if want workflow-policy; then test_workflow_policy; fi
+if want repository; then test_repository_files; fi
 run_check_fixtures
 for f in "$CHECKS"/*.sh; do
   id=$(basename "$f" .sh)
