@@ -14,7 +14,8 @@ Usage: scripts/quality-gate.sh [--list] [--only ID[,ID...]] [--skip ID[,ID...]]
 
   --list       print check IDs, the tool each needs, and its class
   --only/--skip  select checks (comma-separated, repeatable)
-  --base REF   only files changed since the merge base with REF (default: all tracked files)
+  --base REF   only files changed since the merge base with REF (default: all tracked files); REF is also the
+               base commit that the checks read their policy inputs from (GATE_BASE_REF)
   --strict     a missing tool is an error (exit 3); CI always passes this
   --verbose    print every finding instead of the first 20 per check
 
@@ -121,6 +122,9 @@ git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || usage_error "n
 FILES=()
 if [[ -n $BASE ]]; then
   merge_base=$(git -C "$ROOT" merge-base "$BASE" HEAD 2>/dev/null) || usage_error "cannot resolve --base $BASE"
+  # The policy inputs of the checks (CR-43 SC-20) are read from this commit, not from the head that is being judged.
+  GATE_BASE_REF=$(git -C "$ROOT" rev-parse --verify --quiet "$BASE^{commit}") || usage_error "cannot resolve --base $BASE"
+  export GATE_BASE_REF
   list_cmd=(git -C "$ROOT" -c core.quotepath=off diff --name-only --no-ext-diff --diff-filter=ACMR -z "$merge_base" --)
 else
   list_cmd=(git -C "$ROOT" -c core.quotepath=off ls-files -z)

@@ -6,7 +6,7 @@ on:
     branches: [main]
 permissions: write-all
 jobs:
-  gate:
+  quality-gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -17,6 +17,8 @@ trap 'rm -rf "$WORK"' EXIT
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=noreply GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=noreply
 export GATE_SELFTEST=1
+# The policy base commit (CR-43 SC-20) is set by the tests that need it, never inherited.
+unset GATE_BASE_REF
 
 PASSED=0
 FAILED=0
@@ -96,6 +98,11 @@ run_dir() { # id name dir
       if [[ -f $dir/EXPECT ]]; then expect=$(<"$dir/EXPECT"); fi
       if [[ -n $expect ]] && ! contains "$out" "$expect"; then
         fail "$id/$name" "findings do not mention: $expect"
+        return
+      fi
+      # An EXPECT of the form "WP-n:" also means that no other rule fires: one failing fixture per rule (CR-43 S-1).
+      if [[ $expect =~ ^(WP-[0-9]+):$ ]] && grep -qvF ": ${BASH_REMATCH[1]}: " <<<"$out"; then
+        fail "$id/$name" "findings of another rule than ${BASH_REMATCH[1]}: $(grep -vF ": ${BASH_REMATCH[1]}: " <<<"$out" | head -n 1)"
         return
       fi
       if [[ -f $dir/SECRET ]] && contains "$out" "$(<"$dir/SECRET")"; then
@@ -326,7 +333,7 @@ test_dispatcher() {
   good_script "$repo" good.sh
   printf '# T\n\n[a](good.sh)\n' >"$repo/README.md"
   mkdir -p "$repo/.github/workflows"
-  printf 'name: x\non: push\npermissions: {}\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo hi\n' >"$repo/.github/workflows/ci.yml"
+  printf 'name: x\non: push\npermissions: {}\njobs:\n  quality-gate:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: echo hi\n' >"$repo/.github/workflows/ci.yml"
   commit_all "$repo"
   RC=0
   OUT=$(cd "$repo" && env -i PATH="$PATH" HOME="$WORK/no-home" "$BASH" scripts/quality-gate.sh 2>&1) || RC=$?
@@ -470,10 +477,110 @@ test_classes() {
   out_has "S-14 a class header after line 12 is reported" 'bash-hygiene: has no "# class:" header'
 }
 
+# ---------------------------------------------------------------- workflow-policy (CR-43 S-1, S-8 gate part, S-22)
+
+WP_FX="$FIXTURES/workflow-policy"
+
+# policy_repo CONFIG_FILE_OR_EMPTY: a repository with the passing workflow; commits it as the base commit and prints its path.
+policy_repo() {
+  local repo
+  repo=$(new_repo)
+  mkdir -p "$repo/.github/workflows" "$repo/config"
+  cp "$WP_FX/pass-good/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  if [[ -n $1 ]]; then cp "$1" "$repo/config/project.yaml"; else printf 'schema_version: 1\n' >"$repo/config/project.yaml"; fi
+  commit_all "$repo" base
+  printf '%s\n' "$repo"
+}
+# head_commit REPO: commit the working tree as the head and print the base commit (the parent).
+head_commit() {
+  commit_all "$1" head
+  git -C "$1" rev-parse HEAD~1
+}
+
+test_workflow_policy() {
+  local n d repo base cfg_widen
+
+  # S-1: each rule WP-1 to WP-16 has a failing fixture; there are passing fixtures. WP-15 is the check no-claude-in-workflows.
+  for n in $(seq 1 16); do
+    if [[ $n -eq 15 ]]; then
+      d=$(find "$FIXTURES/no-claude-in-workflows" -maxdepth 1 -name 'fail-*' | wc -l)
+    else
+      d=$(grep -lx "WP-$n:" "$WP_FX"/fail-*/EXPECT 2>/dev/null | wc -l)
+    fi
+    if [[ $d -ge 1 ]]; then ok "S-1 WP-$n has a failing fixture"; else fail "S-1 WP-$n has a failing fixture"; fi
+  done
+  d=$(find "$WP_FX" -maxdepth 1 -name 'pass-*' | wc -l)
+  if [[ $d -ge 1 ]]; then ok "S-1 there is a passing fixture"; else fail "S-1 there is a passing fixture"; fi
+
+  command -v yq >/dev/null 2>&1 || {
+    skip "workflow-policy base-commit tests (tool not installed: yq)"
+    return
+  }
+
+  # SC-20: allowed_actions and runner_labels come from the base commit, not from the head. The head widens the policy
+  # and uses the widening in the same change: without a base it passes (working-tree policy), with a base it fails.
+  repo=$(policy_repo "")
+  mkdir -p "$repo/.github/actions/local"
+  cp "$WP_FX/fail-wp4-action-outside-allowlist/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  cp "$WP_FX/pass-allowlist-in-config/config/project.yaml" "$repo/config/project.yaml"
+  base=$(head_commit "$repo")
+  gate "$repo" --only workflow-policy
+  rc_is "SC-20 a head that widens allowed_actions passes when read from the working tree" 0
+  gate "$repo" --only workflow-policy --base "$base"
+  rc_is "SC-20 --base: the same head fails by the base allowed_actions" 1
+  out_has "SC-20 --base: the finding is WP-4" "WP-4:"
+  RC=0
+  OUT=$(GATE_BASE_REF=$base "$BASH" "$repo/scripts/quality-gate.sh" --only workflow-policy 2>&1) || RC=$?
+  rc_is "SC-20 GATE_BASE_REF: the same head fails by the base allowed_actions" 1
+  RC=0
+  OUT=$(GATE_BASE_REF=no-such-ref "$BASH" "$repo/scripts/quality-gate.sh" --only workflow-policy 2>&1) || RC=$?
+  rc_is "SC-20 an unreadable base commit fails closed" 1
+  out_has "SC-20 an unreadable base commit is named" "policy: cannot read the base commit"
+  RC=0
+  OUT=$(GATE_BASE_REF=--no-such-option "$BASH" "$repo/scripts/quality-gate.sh" --only workflow-policy 2>&1) || RC=$?
+  rc_is "SC-20 a base value that looks like an option fails closed" 1
+
+  # the base allows the action: the head passes under --base
+  repo=$(policy_repo "$WP_FX/pass-allowlist-in-config/config/project.yaml")
+  cp "$WP_FX/pass-allowlist-in-config/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  base=$(head_commit "$repo")
+  gate "$repo" --only workflow-policy --base "$base"
+  rc_is "SC-20 an action allowed by the base commit passes" 0
+
+  # runner_labels: widened in the head, used in the head
+  repo=$(policy_repo "")
+  cp "$WP_FX/pass-runner-labels-in-config/.github/workflows/ci.yml" "$repo/.github/workflows/ci.yml"
+  cp "$WP_FX/pass-runner-labels-in-config/config/project.yaml" "$repo/config/project.yaml"
+  base=$(head_commit "$repo")
+  gate "$repo" --only workflow-policy
+  rc_is "SC-20 a head that widens runner_labels passes when read from the working tree" 0
+  gate "$repo" --only workflow-policy --base "$base"
+  rc_is "SC-20 --base: the same head fails by the base runner_labels" 1
+  out_has "SC-20 --base: the finding is WP-13" "WP-13:"
+
+  # a base commit with an invalid key fails closed; a base without a configuration file means the defaults
+  cfg_widen=$(mktemp "$WORK/cfg.XXXXXX")
+  printf 'schema_version: 1\nallowed_actions: actions/checkout\n' >"$cfg_widen"
+  repo=$(policy_repo "$cfg_widen")
+  printf '# touch\n' >>"$repo/.github/workflows/ci.yml"
+  base=$(head_commit "$repo")
+  gate "$repo" --only workflow-policy --base "$base"
+  rc_is "SC-20 an invalid key in the base configuration fails closed" 1
+  out_has "SC-20 the invalid key is named" "allowed_actions"
+  repo=$(policy_repo "")
+  git -C "$repo" rm -q config/project.yaml
+  commit_all "$repo" "no config"
+  printf '# touch\n' >>"$repo/.github/workflows/ci.yml"
+  base=$(head_commit "$repo")
+  gate "$repo" --only workflow-policy --base "$base"
+  rc_is "SC-20 a base without a configuration file means the defaults (this workflow passes)" 0
+}
+
 # ---------------------------------------------------------------- main
 
 if want dispatcher; then test_dispatcher; fi
 if want classes; then test_classes; fi
+if want workflow-policy; then test_workflow_policy; fi
 run_check_fixtures
 for f in "$CHECKS"/*.sh; do
   id=$(basename "$f" .sh)
