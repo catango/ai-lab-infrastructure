@@ -25,7 +25,7 @@ class Scripts(unittest.TestCase):
         self.bin = base / "bin"
         self.bin.mkdir()
         self.marker = base / "ran"
-        for name in ("sudo", "oci", "ssh", "git", "curl", "wget", "ansible-playbook", "apt-get", "gh", "terraform", "tofu"):
+        for name in ("sudo", "ssh", "git", "curl", "wget", "ansible-playbook", "apt-get", "gh"):
             stub = self.bin / name
             stub.write_text(f"#!/bin/sh\ntouch {self.marker}\nexit 99\n")
             stub.chmod(stub.stat().st_mode | stat.S_IXUSR)

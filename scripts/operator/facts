@@ -5,9 +5,7 @@ Scope host reads /proc and /etc, `git --version`, and a small local state file. 
 rulesets, and security features with GET calls only, without a token unless --use-token asks for T3. Without --apply a scope
 lists its checks and changes nothing. With --apply the host scope writes only its local state files (mode 600) in the
 operator's home, and the github scope writes nothing. --privileged runs a fixed list of read-only root commands, each asking for
-the sudo password. Scope oci reads limits, usage, and resource counts with list, get, and inspect OCI CLI calls only, with the lab
-operator VM's instance principal or (--oci-auth instance_obo_user) the Cloud Shell session; it never handles an OCI credential, and
-with --apply it writes raw answers only to a private directory in the operator's home.
+the sudo password.
 """
 import os
 import sys
@@ -16,7 +14,7 @@ sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(HERE, "lib"))
 
-from operator_lib import credentials, download, exitcodes, github, githubfacts, hostfacts, modes, ocifacts, process, rawdir, release, sanitize  # noqa: E402
+from operator_lib import credentials, download, exitcodes, github, githubfacts, hostfacts, modes, process, release, sanitize  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 MANIFEST = os.path.join(ROOT, "toolchain", "manifest.toml")
@@ -36,18 +34,12 @@ MANUAL_LINES = (
     "manual: the SSH path from Z0 to this machine (test it from the Windows laptop)",
     "manual: corporate approval for this machine and its network use",
 )
-OCI_MANUAL_LINES = (
-    "manual: Always Free limits for alarms and Notifications, public IPv4 limits, and IP retention on stop and replacement are not readable here (VO-12, VO-13): read them in the Console",
-    "manual: a value shown as unknown was denied, failed, or had another page: check the access of the principal or session, then run again",
-)
 BANDWIDTH_CAP = 16 * 1024 * 1024
 BANDWIDTH_TIMEOUT = 60
 
 
 def add_arguments(parser):
-    parser.add_argument("--scope", choices=["host", "github", "oci"], default="host", help="the facts to gather")
-    parser.add_argument("--oci-auth", choices=ocifacts.AUTH_CHOICES, default=None,
-                        help="oci scope: how the OCI CLI authenticates: instance_principal (default, the lab operator VM) or instance_obo_user (Cloud Shell)")
+    parser.add_argument("--scope", choices=["host", "github"], default="host", help="the facts to gather")
     parser.add_argument("--owner", help="github scope: the account that owns the repositories")
     parser.add_argument("--repo", action="append", help="github scope: a repository to read (repeatable)")
     parser.add_argument("--use-token", action="store_true", help="github scope: ask for T3 (read-only) to read what needs a token")
@@ -57,8 +49,6 @@ def add_arguments(parser):
 
 
 def plan_lines(args):
-    if args.scope == "oci":
-        return ocifacts.plan_lines(args.oci_auth or ocifacts.DEFAULT_AUTH)
     if args.scope == "github":
         lines = ["would: read, with GET calls only and " + ("with T3 from a prompt" if args.use_token else "without a token") + ":"]
         for repo in args.repo:
@@ -114,12 +104,7 @@ def measure_bandwidth(downloader, manifest):
 def check_arguments(args):
     """Cross-checks that argparse cannot do: the github scope needs an owner and repositories, and the host scope takes none."""
     problem = None
-    if args.scope == "oci":
-        if args.owner or args.repo or args.use_token or args.privileged or args.measure_bandwidth or args.write_allowlist:
-            problem = "--scope oci takes only --oci-auth (the other options belong to the host and github scopes)"
-    elif args.oci_auth:
-        problem = "--oci-auth belongs to --scope oci"
-    elif args.scope == "github":
+    if args.scope == "github":
         if not args.owner or not args.repo:
             problem = "--scope github needs --owner and at least one --repo"
         elif not github.valid_login(args.owner) or not all(github.valid_repo(r) for r in args.repo):
@@ -151,42 +136,6 @@ def run_github(args, mode, out, opener, getpass_fn):
     return exitcodes.OK
 
 
-def run_oci(args, environ, out, runner):
-    auth = args.oci_auth or ocifacts.DEFAULT_AUTH
-    home = environ.get("HOME", "")
-    if not home or not os.path.isabs(home):
-        out("refused: HOME is not set to an absolute path")
-        return exitcodes.FAILED
-    try:
-        env = ocifacts.forwarded_env(auth, environ)
-    except ValueError as error:
-        out(f"refused: {error}")
-        return exitcodes.FAILED
-    try:
-        raw = rawdir.RawDir(os.path.join(home, ".local", "state", "operator", "oci-raw"), cap_bytes=ocifacts.RAW_CAP)
-        raw.cleanup(ocifacts.RAW_CAP // 2)
-    except (rawdir.RawDirError, OSError):
-        raw = None
-    try:
-        collected, resolved = ocifacts.collect(runner, auth, env, raw)
-    except process.CommandMissing:
-        out("skipped: the oci command is not installed or not executable (it comes with the operator profile, or is part of Cloud Shell)")
-        return exitcodes.SKIPPED
-    except process.PolicyViolation:
-        out("refused: an OCI call outside the read-only policy was blocked; nothing else was run")
-        return exitcodes.FAILED
-    out("== facts (oci) ==")
-    for line in sanitize.summary_lines(collected):
-        out(line)
-    out("== manual (off-host) ==")
-    for line in OCI_MANUAL_LINES:
-        out(line)
-    if not resolved:
-        out("refused: the tenancy could not be read with this authentication; no limits or resources were read")
-        return exitcodes.FAILED
-    return exitcodes.OK
-
-
 def main(argv=None, *, system=None, environ=None, out=print, require_release=release.require_release_commit,
          runner=process.run, downloader=download.timed_download, manifest=MANIFEST, opener=None, getpass_fn=credentials.getpass.getpass):
     mode, args = modes.parse_mode(sys.argv[1:] if argv is None else argv, "facts", DESCRIPTION, add_arguments)
@@ -200,8 +149,6 @@ def main(argv=None, *, system=None, environ=None, out=print, require_release=rel
         return exitcodes.OK
     if args.scope == "github":
         return run_github(args, mode, out, opener, getpass_fn)
-    if args.scope == "oci":
-        return run_oci(args, environ, out, runner)
 
     system = system or hostfacts.RealSystem()
     home = environ.get("HOME", "")

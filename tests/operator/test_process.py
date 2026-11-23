@@ -32,9 +32,9 @@ class Stubs(unittest.TestCase):
 
 class Policy(Stubs):
     def test_commands_outside_the_allowlist_are_refused(self):
-        for name in ("ls", "bash", "sh", "sudo", "curl", "python3", "terraform"):
+        for name in ("ls", "bash", "sh", "sudo", "curl", "python3", "make"):
             self.stub(name, f"touch {self.marker}")
-        for argv in (["ls"], ["bash", "-c", "x"], ["sudo", "true"], ["curl", "x"], ["python3"], ["terraform", "apply"],
+        for argv in (["ls"], ["bash", "-c", "x"], ["sudo", "true"], ["curl", "x"], ["python3"], ["make", "install"],
                      ["/usr/bin/git", "status"], ["./git", "status"], [""], []):
             with self.subTest(argv=argv), self.assertRaises(process.PolicyViolation):
                 self.run_cmd(argv)
@@ -70,35 +70,15 @@ class Policy(Stubs):
         self.assertFalse(self.marker.exists())
 
 
-class OciVerbs(Stubs):
-    def test_read_verbs_pass(self):
-        self.stub("oci", "echo ok")
-        for argv in (["oci", "iam", "compartment", "list", "--all"], ["oci", "limits", "resource-availability", "get", "--service-name", "compute"],
-                     ["oci", "compute", "instance", "list"], ["oci", "iam", "availability-domain", "inspect"], ["oci", "--version"]):
-            with self.subTest(argv=argv):
-                self.assertEqual(self.run_cmd(argv).returncode, 0)
-
-    def test_everything_else_is_refused(self):
-        self.stub("oci", f"touch {self.marker}")
-        for argv in (["oci"], ["oci", "compute", "instance", "terminate", "--instance-id", "x"], ["oci", "compute", "instance", "launch"],
-                     ["oci", "iam", "user", "create"], ["oci", "iam", "policy", "update"], ["oci", "network", "vcn", "delete"],
-                     ["oci", "compute", "instance", "action", "--action", "STOP"], ["oci", "--profile", "x", "iam", "compartment", "list"],
-                     ["oci", "setup", "config"], ["oci", "session", "authenticate"], ["oci", "iam", "compartment", "list-all"],
-                     ["oci", "os", "object", "put", "--file", "x"], ["oci", "list"]):
-            with self.subTest(argv=argv), self.assertRaises(process.PolicyViolation):
-                self.run_cmd(argv)
-        self.assertFalse(self.marker.exists())
-
-
 class Environment(Stubs):
     def test_the_child_gets_a_minimal_environment(self):
         self.stub("git", "env")
-        os.environ.update({"GH_TOKEN": helpers.PAT + "PARENT_CANARY_1", "OCI_CLI_KEY_CONTENT": "KEY_CANARY", "AWS_SECRET": "SECRET_CANARY",
+        os.environ.update({"GH_TOKEN": helpers.PAT + "PARENT_CANARY_1", "SERVICE_KEY_CONTENT": "KEY_CANARY", "AWS_SECRET": "SECRET_CANARY",
                            "SSH_AUTH_SOCK": "/tmp/agent-canary", "SSH_CLIENT": "192.0.2.5 1 22"})
         try:
             out = self.run_cmd(["git", "x"]).stdout
         finally:
-            for key in ("GH_TOKEN", "OCI_CLI_KEY_CONTENT", "AWS_SECRET", "SSH_AUTH_SOCK", "SSH_CLIENT"):
+            for key in ("GH_TOKEN", "SERVICE_KEY_CONTENT", "AWS_SECRET", "SSH_AUTH_SOCK", "SSH_CLIENT"):
                 del os.environ[key]
         for canary in ("CANARY", "192.0.2.5", "agent"):
             self.assertNotIn(canary, out)
@@ -106,12 +86,12 @@ class Environment(Stubs):
         self.assertTrue(keys <= {"PATH", "LANG", "LC_ALL", "HOME", "PWD", "SHLVL", "_", "OLDPWD"}, keys)
 
     def test_extra_environment_is_checked(self):
-        self.stub("oci", "env")
-        out = self.run_cmd(["oci", "iam", "region", "list"], extra_env={"OCI_CLI_AUTH": "instance_principal"}).stdout
-        self.assertIn("OCI_CLI_AUTH=instance_principal", out)
+        self.stub("git", "env")
+        out = self.run_cmd(["git", "status"], extra_env={"EXAMPLE_MODE": "fixed"}).stdout
+        self.assertIn("EXAMPLE_MODE=fixed", out)
         for env in ({"lower": "x"}, {"BAD-KEY": "x"}, {"A": "x\ny"}, {"A": 1}):
             with self.subTest(env=env), self.assertRaises(process.PolicyViolation):
-                self.run_cmd(["oci", "iam", "region", "list"], extra_env=env)
+                self.run_cmd(["git", "status"], extra_env=env)
 
     def test_a_secret_never_reaches_argv_or_the_environment(self):
         self.stub("git", f"touch {self.marker}")

@@ -37,7 +37,7 @@ class Modes(unittest.TestCase):
             self.assertEqual(caught.exception.code, exitcodes.USAGE)
 
     def test_extra_arguments_are_added_by_the_script(self):
-        mode, args = modes.parse_mode(["--scope", "host"], "example", "x", lambda p: p.add_argument("--scope", choices=["host", "oci"]))
+        mode, args = modes.parse_mode(["--scope", "host"], "example", "x", lambda p: p.add_argument("--scope", choices=["host", "github"]))
         self.assertEqual(args.scope, "host")
         self.assertTrue(mode.dry_run)
 
