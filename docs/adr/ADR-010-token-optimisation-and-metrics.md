@@ -7,8 +7,8 @@
 | Repositories | `ai-software-template` (primary), `ai-lab-infrastructure` (this record) |
 | Change request | CR-45 (issue #45) |
 | Scope | Size budgets and loading order for `CLAUDE.md` and its imports, rules, Skills, and the CR and ADR files; script output limits; concise CI output; the checkpoint format and what `resume-work` reads; the cost of the review loop; the metrics (what, how, where, who), the baseline, and what a regression is. Not ADR-009 (security and CI baseline) and not ADR-008 (template structure) |
-| Amended by (CR-57, follow-up R-1) | Proposed, takes effect when R-1 is merged. Status line corrected from Proposed to Accepted (merge of PR #46, 2026-11-20). No decision changes |
-| Related | ADR-001 (section 5, instruction trust), ADR-003 (sections 4, 7, 8; section 7 amended by this CR), ADR-008 (decision 7, design section 11 D10-1 and D10-2; amended by this CR), ADR-009 (reserved; dependencies in design section 11) |
+| Amended by (CR-57, follow-up R-1) | Proposed, takes effect when R-1 is merged. Status line corrected from Proposed to Accepted (merge of PR #46, 2026-11-20). Related row: the other record (ADR-009) is Accepted. No decision changes |
+| Related | ADR-001 (section 5, instruction trust), ADR-003 (sections 4, 7, 8; section 7 amended by this CR), ADR-008 (decision 7, design section 11 D10-1 and D10-2; amended by this CR), ADR-009 (Accepted; dependencies in design section 11) |
 
 > This ADR records a decision. It does not create or change a repository, a label, a ruleset, a workflow, a setting, or a tag, and it does not authorize any of them.
 > Detail, rationale, and the approver's decisions Q1 to Q15 (architecture discussion, 2026-11-19) are in `docs/cr/CR-45/design.md`. The decisions are applied below.
