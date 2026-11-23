@@ -15,3 +15,7 @@ class NotFound(Exception):
 
 class LimitExceeded(Exception):
     """A hard cap was reached (changed files); the check fails closed."""
+
+
+class ConfigError(Exception):
+    """The configuration of the base commit cannot be read as one YAML mapping, or a key has the wrong shape."""

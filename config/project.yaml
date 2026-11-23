@@ -10,3 +10,15 @@ github:
 workflow:
   merge_method: squash
   change_classes: [1, 2, 3]
+# Architectures the CI matrix and rule PC-9 know (ADR-003 PC-9, ADR-009 decision 7). Read from the BASE commit by pr-contract, so a PR
+# cannot change what judges it (SC-20). Per architecture: `name`, `runner` (hosted runner label for a public repository) and
+# `runner_private` (for a private one). An empty label means no runner: a change or implementation PR then needs the evidence line
+# that `scripts/gate-evidence <name>` prints on a host of that architecture, in the PR section "Architecture evidence".
+# No metered ARM64 runner is used, so arm64 has no private runner. If the key is absent, these values are the default.
+architectures:
+  - name: amd64
+    runner: ubuntu-24.04
+    runner_private: ubuntu-24.04
+  - name: arm64
+    runner: ubuntu-24.04-arm
+    runner_private: ""

@@ -65,7 +65,13 @@ class Applicability(unittest.TestCase):
                 with self.subTest(kind=kind):
                     client = MemClient(config=config)
                     self.assertEqual(pc9(evaluate(pr_with("n/a: every architecture has a runner", kind), client)), [])
-                    self.assertNotIn(("repo_private", None), client.calls)
+
+    def test_the_private_flag_is_not_read_when_every_label_is_set_or_the_list_is_empty(self):
+        every = {"architectures": [{"name": "amd64", "runner": "a", "runner_private": "a"}]}
+        for config in (every, {"architectures": []}):
+            client = MemClient(config=config)
+            self.assertEqual(pc9(evaluate(pr_with("n/a"), client)), [])
+            self.assertNotIn(("repo_private", None), client.calls)
 
     def test_a_missing_key_or_file_means_the_default_which_needs_no_line(self):
         for config in (None, {}, {"approver": "x"}):
@@ -200,11 +206,11 @@ class ValidAndInvalidLines(unittest.TestCase):
 
     def test_the_messages_are_fixed_text(self):
         found = self.check(evidence_line(sha="c3" * 20, state="dirty", command="true", code="2"))
-        self.assertEqual(sorted(v.message for v in found), [
-            "evidence for arm64: command is not the quality gate",
-            "evidence for arm64: exit status is not 0",
+        self.assertEqual([v.message for v in found], [
             "evidence for arm64: SHA is not the head of the PR",
             "evidence for arm64: working tree is not clean",
+            "evidence for arm64: command is not the quality gate",
+            "evidence for arm64: exit status is not 0",
         ])
         self.assertEqual({v.rule for v in found}, {"PC-9"})
 
