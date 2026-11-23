@@ -203,14 +203,14 @@ Read for this section: ADR-010; the CR-45 amendments of ADR-003 section 7 and AD
 
 ## 11. Open points, contradictions, and follow-ups (round 2 decisions)
 
-**Contradictions found in the first revision**
+### Contradictions found in the first revision
 
 | ID | Contradiction | Resolution |
 |---|---|---|
 | C-1 | PA-26 against PA-16 and PA-20: lab setup and operator configuration run only at a release tag, while PA-A28, U-5, and U-7 need real runs during the removal sequence | Resolved by O-3 |
 | C-2 | PA-42 against PA-45 and AC1-1: T3 is limited per project, but the allowlist audit must see every repository | Resolved by O-10 |
 
-**Open points** (all decided in round 2 unless marked)
+### Open points (all decided in round 2 unless marked)
 
 | ID | Decision (approver, round 2) |
 |---|---|
@@ -231,7 +231,7 @@ Read for this section: ADR-010; the CR-45 amendments of ADR-003 section 7 and AD
 | O-15 | The "one gate profile" of PA-A7 is the lab profile. The operator profile takes manifest membership for Python 3 and git only (OC-6) and installs no gate tools |
 | O-16 | Reading confirmed and written into PA-A16: PR 1 uses the existing `builder-profile` and `operator-profile` jobs; PRs 2 and 3 use the PA-28 job for the lab and `operator-profile` for the operator; from PR 4 the PA-28 job covers both |
 
-**Items of round 2**
+### Items of round 2
 
 | ID | Decision |
 |---|---|
@@ -241,7 +241,7 @@ Read for this section: ADR-010; the CR-45 amendments of ADR-003 section 7 and AD
 | X-4 | ADR-002's Status cell states that the record is superseded when the CR-57 design PR merges |
 | R-1 | After the CR-45 and CR-57 design PRs merge, one docs-only design PR carries I-1, I-2, I-10, I-15, the ADR-009 status line (O-12), and the "workspace" wording of ADR-009 decision 11. Claude Code opens it on the approver's instruction |
 
-**Still open** (raised while applying round 2; not guessed)
+### Still open (raised while applying round 2; not guessed)
 
 | ID | Point | Where it matters |
 |---|---|---|
