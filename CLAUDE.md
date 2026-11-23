@@ -13,7 +13,7 @@ This repository provisions, configures, and maintains the AI engineering platfor
 
 - **Platform workspace:** x86-64, Debian 13. The **home directory is ephemeral**: anything not pushed can be lost at any restart.
 - The lab VM (ARM64, Ubuntu 24.04, OCI `uk-london-1`) is a *target*. Never try to reach it from here.
-- The **platform operator VM** and the **lab operator VM** (ADR-011) are machines the AI never reaches, never probes, and never configures. Operator scripts (`scripts/operator/`, `ansible/operator.yml`) are written here and run only by the approver's operator user; Claude Code never runs them. Before designing or changing an operator script, read the machine-profile file `scripts/operator/machine-profiles.toml` for the limits of the smallest machine.
+- The **platform operator VM** (ADR-011) is a machine the AI never reaches, never probes, and never configures. Operator scripts (`scripts/operator/`, `ansible/operator.yml`) are written here and run only by the approver's operator user; Claude Code never runs them. Before designing or changing an operator script, read the machine-profile file `scripts/operator/machine-profiles.toml` for the limits of the smallest machine.
 
 ## Workflow (ADR-003)
 

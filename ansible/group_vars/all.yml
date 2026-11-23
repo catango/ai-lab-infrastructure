@@ -23,7 +23,7 @@ lab_expected_arch: aarch64
 # Opt-in (design 3.6, decision 5): not used in Stage 1.
 claude_managed_settings_enabled: false
 
-# The operator profile (CR-18, ADR-011): Ubuntu 24.04, x86-64, the platform operator VM and the lab operator VM.
+# The operator profile (CR-18, ADR-011): Ubuntu 24.04, x86-64, the platform operator VM.
 # A real run needs the explicit apply variable, which `scripts/operator/setup --apply` sets (a dry run is the default).
 operator_apply: false
 operator_expected_os: Ubuntu

@@ -1,12 +1,4 @@
-# Terraform / OpenTofu state, plans, and local data
-*.tfstate
-*.tfstate.*
-*.tfplan
-tfplan*
-crash.log
-crash.*.log
-.terraform/
-.terraform.lock.hcl.bak
+# Variable and override files of infrastructure tools (they can hold secrets)
 *.tfvars
 *.tfvars.json
 *.auto.tfvars

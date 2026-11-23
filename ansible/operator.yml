@@ -1,4 +1,4 @@
-# The operator profile (CR-18, ADR-011, ADR-005 decision 10): the platform operator VM and the lab operator VM,
+# The operator profile (CR-18, ADR-011, ADR-005 decision 10): the platform operator VM,
 # Ubuntu 24.04 (minimal), x86-64. Run only through scripts/operator/setup, which checks the release tag first.
 # A real run is refused unless operator_apply is set; --check always works. Nothing here connects to another host.
 - name: Apply the operator profile

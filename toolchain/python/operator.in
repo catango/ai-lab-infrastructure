@@ -1,4 +1,0 @@
-# Top-level Python tools for the operator profile (CR-18, ADR-005 decision 10). Exact pins; the closure is in operator.lock.
-# The lock is toolchain/python/operator.lock, built from the wheels `pip download` chose for CPython 3.12 on Linux x86-64 (the operator
-# machines' target) by toolchain/python/lock_from_wheels.py; the manifest entry [tools.oci-cli] names it. Regenerate both together.
-oci-cli==3.96.3

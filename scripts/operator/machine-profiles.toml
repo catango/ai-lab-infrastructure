@@ -1,14 +1,6 @@
 # Operator machine profiles (ADR-011, CR-18 design section 3.3). No identifiers: no names, addresses, or accounts.
-# Architecture, OS, and limits only. The tests and the CI job `operator-limits` size their limits from the smallest values.
-# Entries are filled from `facts` output (PR 2); a missing key means "not measured yet".
+# Architecture, OS, and limits only. Entries are filled from `facts` output; a missing key means "not measured yet".
 
 [machines.platform_operator]
 arch = "x86-64"
 os = "ubuntu-24.04-minimal"
-
-[machines.lab_operator]
-arch = "x86-64"
-os = "ubuntu-24.04-minimal"
-# Design inputs for an Always Free micro instance (VO-7, VO-8): about 1 GB of memory. One thread is the CI limit, not a measurement.
-memory_mb = 1024
-cpu_threads = 1

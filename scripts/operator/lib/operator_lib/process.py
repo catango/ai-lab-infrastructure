@@ -1,7 +1,5 @@
 """The only place that starts a subprocess (acceptance S-11). No shell, a fixed command allowlist, a minimal child
 environment, no secret in argv or the environment, bounded output, and a timeout.
-
-OCI calls are read-only here too: only list, get, and inspect verbs reach the CLI (design section 4 rule 10).
 """
 import os
 import re
@@ -10,8 +8,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 
-DEFAULT_ALLOW = frozenset({"oci", "ssh", "git"})
-READ_VERBS = frozenset({"list", "get", "inspect"})
+DEFAULT_ALLOW = frozenset({"ssh", "git"})
 MAX_OUTPUT = 4 * 1024 * 1024
 _ENV_KEY = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 
@@ -36,18 +33,6 @@ class Result:
     truncated: bool
 
 
-def oci_verb_allowed(argv):
-    """oci <service> [<resource>...] <verb> ... where the verb is list, get, or inspect, or oci --version."""
-    if list(argv) == ["oci", "--version"]:
-        return True
-    tokens = []
-    for item in argv[1:]:
-        if item.startswith("-"):
-            break
-        tokens.append(item)
-    return len(tokens) >= 2 and tokens[-1] in READ_VERBS
-
-
 def _check(argv, allow, allow_exact, secrets, extra_env):
     if isinstance(argv, (str, bytes)) or not isinstance(argv, (list, tuple)) or not argv:
         raise PolicyViolation("a command must be a non-empty list of arguments")
@@ -57,8 +42,6 @@ def _check(argv, allow, allow_exact, secrets, extra_env):
     if not exact:
         if "/" in argv[0] or argv[0] not in allow:
             raise PolicyViolation("command not in the allowlist")
-        if argv[0] == "oci" and not oci_verb_allowed(argv):
-            raise PolicyViolation("only list, get, and inspect OCI calls are allowed")
     live = [s for s in secrets if s]
     if any(s in item for s in live for item in argv):
         raise PolicyViolation("a secret must not be passed in arguments")
