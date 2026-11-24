@@ -9,6 +9,10 @@ fail() {
 }
 ok() { printf 'ok: %s\n' "$*"; }
 
+# What the container itself rewrites, and the backups that gpasswd and useradd keep of the account files (the group fixtures change them).
+TREE_SKIP=(-not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -not -path '/etc/group-' -not -path '/etc/gshadow-'
+  -not -path '/etc/passwd-' -not -path '/etc/shadow-')
+
 # tree_list: the names, types, modes, owners, link targets, and file contents under TREE_ROOTS, outside what the container itself
 # rewrites. A refusal and a dry run must leave tree_hash unchanged; tree_list shows what changed when two hashes differ.
 tree_list() {
@@ -17,8 +21,8 @@ tree_list() {
     if [[ -e $root ]]; then roots+=("$root"); fi
   done
   {
-    find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
-    find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
+    find "${roots[@]}" -xdev "${TREE_SKIP[@]}" -printf '%p %y %m %U %G %l\n'
+    find "${roots[@]}" -xdev -type f "${TREE_SKIP[@]}" -print0 | xargs -0 -r sha256sum
   } | LC_ALL=C sort
 }
 tree_hash() { tree_list | sha256sum | cut -d' ' -f1; }
