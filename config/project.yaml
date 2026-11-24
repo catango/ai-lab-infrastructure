@@ -8,9 +8,9 @@ github:
   approver_login: "catango"        # only this account's reviews count as instructions and approval (ADR-003)
   machine_login: "catango-gh-bot"  # machine account used by Claude Code (ADR-001)
   # The numeric GitHub id of the machine account. Lab setup writes the system-wide git identity from it, the form LC-8 checks:
-  # `<id>+<machine_login>@users.noreply.github.com`. Public data; the approver sets it. Lab setup refuses to run while it is
+  # `<id>+<machine_login>@users.noreply.github.com`. Public data; the approver set it. Lab setup refuses to run while it is
   # empty or not a positive integer, and nothing in the repository guesses it (CR-57 PR 4, LC-8).
-  machine_user_id:
+  machine_user_id: 357787378
 workflow:
   merge_method: squash
   change_classes: [1, 2, 3]
