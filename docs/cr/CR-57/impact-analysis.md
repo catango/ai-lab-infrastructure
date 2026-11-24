@@ -71,4 +71,10 @@ Before implementation, revert the design PR (it removes ADR-012, baseline v0.2, 
 
 ## 8. Alternatives considered
 
-See design section 8.
+See design section 8, and section 13.4 for the alternatives to the user-level deny layer.
+
+## 9. Follow-up R-2: user-level deny layer (Proposed)
+
+Design PR R-2 adds design section 13 and amends ADR-001 (section 5, AC1-5, RR-8), ADR-012 (decisions 5 and 14, LC-16, section 7), the acceptance criteria (PA-A11, PA-A29, PA-A31 amended; PA-A34 to PA-A38 new), the plan (PR 4a), and the CR-57 rows of `docs/README.md`. No code, workflow, setting, ruleset, tag, or operator script changes in the design PR.
+
+When plan PR 4a is implemented it adds one Ansible module and a `lab_deny_layer` variable to the lab profile (PC-8 paths), lab check item LC-16, new PA-28 steps, and probably container options in `ci.yml` (PC-6); the operator profile is not touched. Security impact: the deny rules gain a layer that the AI user cannot edit with Claude Code's tools on a lab where an organisation policy hides the managed file; the layer is not a barrier against an AI user that runs shell commands on purpose (RR-P12), and a root write into the AI user's home is a new, defended exception (PA-50, RR-P15). Cost: none. Rollback: the lab admin clears the attribute and removes the file as root (`chattr -i`, then delete) or sets `lab_deny_layer=managed` and re-runs lab setup; reverting plan PR 4a removes the module, LC-16, and the steps together. Approver impact: one check on a real lab (PA-A38) and decisions R2-O1 to R2-O5.

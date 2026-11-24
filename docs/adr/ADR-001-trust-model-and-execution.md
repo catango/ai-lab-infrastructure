@@ -6,6 +6,7 @@
 | Revision | 3 (2026-11-17): D17 added (GitHub access per surface; no MCP in v1), accepted on merge of the seed PR. Revision 2: GitHub organization (D14) dropped; one shared machine-account token |
 | Amended by | ADR-011 decision 7 (Accepted, 2026-11-18): the operator tier. Added zones Z6 and Z7, amended B3, the OCI credentials row, and the personal-account row of section 4, and added credential rows; CR-57 amends ADR-011 and this text (next row). CR-43 (design PR #44): B1 note, section 5 deny rules, RR-10. Takes effect when the CR-43 design PR is merged |
 | Amended by (CR-57) | CR-57 (Proposed, design PR 58 for issue #57; approver's decisions of 2026-11-23). Decisions 1, 5, and 7 and sections 3, 4a, 5 (settings location), and 6 refer to [ADR-012](ADR-012-host-model.md) for the host model; sections 1, 9, and 10 are updated; the T1 rotation procedure, "both hosts" in decision 4 and D17, RR-8, and RR-9 are updated; section 4 keeps the GitHub credential rows and refers to ADR-012 for host credentials. History: zones Z2, Z4, and Z7 are removed. CR-43's amendments are preserved. Takes effect when the CR-57 design PR is merged |
+| Amended by (CR-57, follow-up R-2) | Proposed, takes effect when the R-2 design PR is merged. Section 5 (settings location) names the user-level deny layer for AI labs where an organisation policy outranks the managed file; AC1-5 changes its evidence (LC-16 and the approver check PA-A38 on each AI lab); RR-8 notes that a managed file may be ignored; section 4a refers to LC-1 to LC-16. No required rule is added or relaxed. Detail: ADR-012 decision 14 and `docs/cr/CR-57/design.md` section 13 |
 | Target location | `ai-lab-infrastructure/docs/adr/ADR-001-trust-model-and-execution.md` |
 | Related | CHG-001, CHG-003, ADR-002 (superseded by CR-57), ADR-003, ADR-012 (host model), D8/D13 (machine account), D11 (MCP policy), D14 (repository ownership), D17 (GitHub access per surface) |
 
@@ -109,7 +110,7 @@ Target (AC1-7): from VM handover, lab setup, token step, and lab check take 15 m
 |---|---|---|
 | 1 | Lab admin | Clone the public `ai-lab-infrastructure` repo anonymously over HTTPS, at the latest release tag, and run lab setup in dry run, review the diff, then apply (ADR-012 decision 5). It is idempotent. |
 | 2 | You | Log in as the AI user in a plain SSH terminal and run the root-owned token step. It reads T1 through `gh auth login --with-token` from stdin; it refuses without a TTY or inside a Claude Code session; T1 is not echoed, logged, or stored in shell history. |
-| 3 | You | Run the read-only lab check (LC-1 to LC-15). |
+| 3 | You | Run the read-only lab check (LC-1 to LC-16). |
 | 4 | You | Connect the Claude Desktop SSH session. Claude Desktop deploys its engine under `~/.claude/remote/` automatically. Clone the project repository, check out the draft-PR branch, and run `resume-work` on the relevant PR. |
 
 **What does not survive a lab discard, by design:** uncommitted changes, the local `gh` login, Claude Code session state, and caches. Before discarding a lab, run the lab check in pre-disposal mode: it lists every repository under `~/work` with uncommitted changes or unpushed commits (ADR-012 decision 13). The checkpoint rule in each repository's CLAUDE.md is: commit and push after each completed plan item and before any long-running step.
@@ -118,6 +119,7 @@ Target (AC1-7): from VM handover, lab setup, token step, and lab check take 15 m
 
 **Settings location** (amended by CR-57, PA-5; ADR-012):
 - AI lab: root-owned managed settings (`/etc/claude-code/managed-settings.json` for settings; the location of the managed CLAUDE.md is verified in the lab setup PR), installed by lab setup, with highest precedence. A user or repository setting can tighten but never relax the managed settings (RR-8). If corporate managed settings already exist, they are merged, not replaced.
+- AI lab under an organisation policy (amended by CR-57 follow-up R-2; ADR-012 decision 14): an organisation policy that outranks the managed file makes Claude Code ignore it (the first managed source that delivers a policy key wins). Lab setup then also writes the deny rules into the AI user's user-level `~/.claude/settings.json`, root-owned and immutable, which the AI user cannot edit with Claude Code's tools. The managed file stays the layer for hosts without such a policy. The user-level layer is not a barrier against an AI user that runs shell commands (ADR-012 RR-P12).
 
 **Required rules.** Exact key names are verified against the current Claude Code settings documentation during implementation.
 
@@ -167,7 +169,7 @@ Historical record of the decisions of revisions 1 to 3; the alternatives of CR-5
 
 | ID | Risk | Mitigation |
 |---|---|---|
-| RR-8 | On the AI lab, guardrail strength depends on the lab admin running lab setup (RR-P2 of CR-57). A user or repository setting can tighten but never relax the managed settings | Managed settings are root-owned and independent of the AI user; rulesets on public repos; no production or infrastructure credential on the AI lab |
+| RR-8 | On the AI lab, guardrail strength depends on the lab admin running lab setup (RR-P2 of CR-57). A user or repository setting can tighten but never relax the managed settings. **R-2:** where an organisation policy outranks the managed file, the managed settings are not in force; the user-level deny layer takes their place for deny rules | Managed settings are root-owned and independent of the AI user, and the user-level layer is root-owned and immutable (a deliberate sidestep by a shell user remains, ADR-012 RR-P12); rulesets on public repos; no production or infrastructure credential on the AI lab |
 | RR-9 | **Accepted.** T1 reaches every repository of the machine account from every AI lab. A follow-up CR evaluates repository-scoped GitHub App tokens (the deferred alternative in section 7). | Rulesets on public repos block merges without your approval. PC-6 flags workflow changes. Token expiry is 90 days. Revocation cuts off every AI lab immediately. |
 | RR-10 | On any **private** repository on GitHub Free, rulesets and enforced branch protection, secret scanning, push protection, and code scanning are not available. A compromised host could push directly to `main`, and a committed secret would not be detected by GitHub. | Keep repositories public by default. If a private repository is needed, record a per-repository accepted-risk note, keep its deploy paths manual, rely on the gate's `public-repo-hygiene` and `forbidden-api`, and have the approver confirm `pr-contract`, `quality-gate`, and the evidence lines before each merge. |
 
@@ -192,7 +194,7 @@ Historical record of the decisions of revisions 1 to 3; the alternatives of CR-5
 - AC1-2: No AI lab can merge a PR or submit an approving review, whether via `gh`, `git`, or the API.
 - AC1-3: No production or infrastructure credential exists on an AI lab (lab check, by names, LC-10), and T2 and T3 exist only inside script processes on the operator machine (operator check).
 - AC1-4: *Removed by CR-57.*
-- AC1-5: Managed or project settings deny the commands in Section 5 (scripted test on each AI lab).
+- AC1-5: Managed settings, and on a lab where an organisation policy outranks them the user-level deny layer (ADR-012 decision 14), deny the commands in Section 5. Evidence on each AI lab: lab check items LC-4 and LC-16 (scripted), and the approver check PA-A38, which tries `ssh -V`, `ssh-keygen -h`, and a Read of `~/.ssh/authorized_keys` in a Desktop session in a folder with no project settings (amended by CR-57 follow-up R-2; was "Managed or project settings ... scripted test on each AI lab").
 - AC1-6: The machine account cannot change repository settings or rulesets (Write role; negative test), evidenced by facts on the operator machine.
 - AC1-7: From VM handover, lab setup, token step, and lab check take 15 minutes or less, excluding the time to type T1 (PA-6). A first timing is taken at the first real lab setup from a tag that contains the token step and the lab check (CR-57 plan PR 3) and is recorded in plan PR 4; the timed rebuild is a separate Stage 7 exit item of baseline v0.2, not part of the metrics baseline.
 - AC1-8: A Claude Code session never receives token T1 in its context. The token step reads it from stdin outside any Claude session.
