@@ -289,7 +289,10 @@ expect_failing() { # expect_failing NAME ITEMS: exactly these items fail (space 
 # What lab setup does not apply yet (no plan PR owns it: the system-wide git identity LC-8, unattended security updates LC-15) and
 # what only the user can do (T1, LC-7) are put in place by fixtures, so the rest of the check is shown on a complete lab.
 complete_lab() {
-  printf '[user]\n\tname = machine-bot\n\temail = 42+machine-bot@users.noreply.github.com\n' >/etc/gitconfig
+  local login
+  login=$(sed -n 's/^machine_login=//p' "$TOOLS/lab.conf")
+  [[ -n $login ]] || fail "lab.conf has no machine_login"
+  printf '[user]\n\tname = %s\n\temail = 42+%s@users.noreply.github.com\n' "$login" "$login" >/etc/gitconfig
   printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' >/etc/apt/apt.conf.d/20auto-upgrades
   LAB_GH=$WORK/stub-gh
   cat >"$LAB_GH" <<'STUB'
