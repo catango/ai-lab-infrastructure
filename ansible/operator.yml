@@ -1,22 +1,38 @@
-# The operator profile (CR-18, ADR-011, ADR-005 decision 10): the platform operator VM,
-# Ubuntu 24.04 (minimal), x86-64. Run only through scripts/operator/setup, which checks the release tag first.
-# A real run is refused unless operator_apply is set; --check always works. Nothing here connects to another host.
+# The operator profile (CR-57, ADR-012 decision 7, PA-20): the operator machine, Debian 13, x86-64. The CR-18 Ubuntu profile became this one.
+# Run by the operator admin from a clone the admin owns, at a release tag (the first pre-task refuses anything else; nothing skips it).
+# The names of the two managed accounts are not in the repository: pass them as -e operator_user=<name> -e operator_admin_user=<name>.
+#   Dry run (default):  ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml --check --diff -e operator_user=... -e operator_admin_user=...
+#   Apply:              the same without --check, with -e operator_apply=true
+#   Switch sshd:        only after a second login with each account worked while this session stayed open, add
+#                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
+#   Other projects:     each project's operator scripts are installed from a clone of that project at its release tag (PA-42): pass the
+#                       whole list, this repository included, as -e @file with `operator_projects: [{name: <name>, source: <path>}, ...]`.
+# Order: the gates and the key audit first (a refusal changes nothing), the toolchain (Python 3 and git only, O-15), unattended security
+# updates, the operator accounts, the root-owned operator tools and each project's installation, sshd, and the operator check last.
 - name: Apply the operator profile
   hosts: all
   connection: local
   gather_facts: true
   vars:
     toolchain_profile: operator
+    ssh_hardening_accounts: ["{{ operator_user | default('') }}", "{{ operator_admin_user | default('') }}"]
+    ssh_hardening_private_key_accounts: ["{{ operator_user | default('') }}"]
+    ssh_hardening_key_options: []
   pre_tasks:
-    - name: Refuse a real run without the explicit apply variable (setup --apply sets it)
+    - name: Refuse a real run without the explicit apply variable
       tags: [always]
       ansible.builtin.assert:
         that:
           - ansible_check_mode or (operator_apply | bool)
         quiet: true
         fail_msg: >-
-          the operator profile changes this machine, so it needs -e operator_apply=true (scripts/operator/setup --apply sets it);
-          use --check for a dry run
+          the operator profile changes this machine, so a real run needs -e operator_apply=true; use --check --diff for a dry run
+
+    - name: Release check, the operator configuration runs only at a release tag
+      tags: [always]
+      ansible.builtin.import_role:
+        name: release_check
+
     - name: Preflight, the operator profile supports one platform only
       tags: [preflight]
       ansible.builtin.assert:
@@ -29,26 +45,42 @@
           operator profile requires {{ operator_expected_os }} {{ operator_expected_major }} on {{ operator_expected_arch }}
           (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
           on {{ ansible_facts['architecture'] }})
+
+    - name: The two managed accounts are named and differ
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - operator_user is defined
+          - operator_admin_user is defined
+          - operator_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+          - operator_admin_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+          - operator_user != operator_admin_user
+          - operator_user != 'root'
+          - operator_admin_user != 'root'
+        quiet: true
+        fail_msg: >-
+          name the two managed accounts with -e operator_user=<name> -e operator_admin_user=<name>: plain, different, and neither is root
+
+    - name: Key audit, one key per managed account and no other key on the machine (PA-16, PA-A29); refuses before anything changes
+      tags: [always]
+      ansible.builtin.import_role:
+        name: ssh_hardening
+        tasks_from: audit
+
   roles:
     - apt_base
     - toolchain
-    - python_tools
     - shell_env
-    - operator_system
-    - operator_user
-    - operator_sudo
-    - operator_ssh
-    - operator_firewall
-    - operator_checks
     - verify
-
-# Separate play, never run by default. Run it by hand after an operator login is confirmed from a second session:
-#   ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml --tags operator_lock --ask-become-pass \
-#     -e operator_apply=true -e operator_login_confirmed=true -e operator_initial_account=<the provider's initial account>
-- name: Lock the initial admin account's SSH access (run only after an operator login is confirmed)
-  hosts: all
-  connection: local
-  gather_facts: true
-  tags: [operator_lock, never]
-  roles:
-    - operator_lock
+    - role: unattended_upgrades
+      tags: [unattended_upgrades]
+    - role: operator_user
+      tags: [operator_user]
+    - role: operator_tools
+      tags: [operator_tools]
+    - role: operator_projects
+      tags: [operator_projects]
+    - role: ssh_hardening
+      tags: [ssh_hardening]
+    - role: operator_checks
+      tags: [operator_checks]

@@ -1,6 +1,7 @@
-# Operator machine profiles (ADR-011, CR-18 design section 3.3). No identifiers: no names, addresses, or accounts.
+# Operator machine profiles (ADR-011, ADR-012, CR-57 OC-6). No identifiers: no names, addresses, or accounts.
 # Architecture, OS, and limits only. Entries are filled from `facts` output; a missing key means "not measured yet".
+# The operator machine is a Debian 13, x86-64 VM (ADR-012 section 1); the Ubuntu 24.04 profile of CR-18 is gone with the Ubuntu profile.
 
 [machines.platform_operator]
 arch = "x86-64"
-os = "ubuntu-24.04-minimal"
+os = "debian-13"

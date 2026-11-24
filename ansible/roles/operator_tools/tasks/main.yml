@@ -1,0 +1,94 @@
+# The root-owned operator check and the run launcher (ADR-012 decisions 7 and 12, CR-57 PA-A14, PA-A30). Everything here belongs to root
+# and the operator user cannot change it: the user runs these files and never owns them. Besides the two scripts the check needs the
+# shared SSH audit module (OC-10, OC-11), copied from the release clone because the operator user cannot read the clone of the
+# operator admin, and operator.conf (the two account names and the release this installation is from). Nothing is written into a home.
+- name: Read the release this installation is from (the release check has already passed for this clone)
+  ansible.builtin.command:
+    argv: "{{ item.argv }}"
+  register: operator_tools_git
+  changed_when: false
+  check_mode: false
+  loop:
+    - {name: tags, argv: [git, -C, "{{ repo_root }}", tag, --points-at, HEAD, --list, "v*"]}
+    - {name: commit, argv: [git, -C, "{{ repo_root }}", rev-parse, HEAD]}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: The primary group of the operator user
+  ansible.builtin.command:
+    argv: [id, -gn, "{{ operator_user }}"]
+  register: operator_tools_group
+  changed_when: false
+  check_mode: false
+
+- name: The tools, state, and project directories exist, owned by root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ operator_tools_dir }}"
+    - "{{ operator_tools_dir }}/projects"
+    - /var/lib/ai-lab
+    - "{{ operator_state_dir }}"
+    - "{{ operator_output_dir }}"
+  become: "{{ ai_lab_become }}"
+
+- name: Install the operator check and the run launcher
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ operator_tools_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [operator-check, operator-run]
+  become: "{{ ai_lab_become }}"
+
+- name: Install the shared SSH audit module the operator check imports
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/ansible/roles/ssh_hardening/library/ssh_hardening_audit.py"
+    dest: "{{ operator_tools_dir }}/ssh_hardening_audit.py"
+    owner: root
+    group: root
+    mode: "0644"
+  become: "{{ ai_lab_become }}"
+
+- name: Write the operator configuration (the managed account names and the release)
+  vars:
+    operator_tools_release_tag: "{{ operator_tools_git.results[0].stdout_lines | select('match', '^v[0-9]+([.][0-9]+)*([-+][0-9A-Za-z.]+)?$') | sort | first }}"
+  ansible.builtin.copy:
+    dest: "{{ operator_tools_dir }}/operator.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Written by the operator configuration (ansible/roles/operator_tools). Do not edit.
+      operator_user={{ operator_user }}
+      admin_user={{ operator_admin_user }}
+      release_tag={{ operator_tools_release_tag }}
+      release_commit={{ operator_tools_git.results[1].stdout | trim }}
+  become: "{{ ai_lab_become }}"
+
+- name: The run lock (created once, the operator user's, private; its content is never used)
+  ansible.builtin.copy:
+    dest: "{{ operator_lock_file }}"
+    content: ""
+    force: false
+    owner: "{{ operator_user }}"
+    group: "{{ operator_tools_group.stdout | trim }}"
+    mode: "0600"
+  become: "{{ ai_lab_become }}"
+
+- name: The commands the user types are links to the root-owned files
+  ansible.builtin.file:
+    src: "{{ operator_tools_dir }}/{{ item }}"
+    dest: "{{ operator_tools_link_dir }}/{{ item }}"
+    state: link
+    # A dry run on a fresh machine has not created the files yet; `force` only lets check mode plan the link (a real run never sets it).
+    force: "{{ ansible_check_mode }}"
+    owner: root
+    group: root
+  loop: [operator-check, operator-run]
+  become: "{{ ai_lab_become }}"

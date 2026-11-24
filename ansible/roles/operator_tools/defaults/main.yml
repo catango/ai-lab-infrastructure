@@ -1,0 +1,8 @@
+# Where the operator configuration installs the root-owned tools the operator user runs (CR-57 OC-2, PA-42, PA-A14, PA-A30).
+operator_tools_dir: "{{ toolchain_prefix }}/operator"
+# The commands the user types are links in a root-owned directory on the default PATH to the files above.
+operator_tools_link_dir: /usr/local/bin
+# State: one output directory per project (mode 0700, the operator user's) and the lock that lets one run at a time. Nothing in a home.
+operator_state_dir: /var/lib/ai-lab/operator
+operator_output_dir: "{{ operator_state_dir }}/output"
+operator_lock_file: "{{ operator_state_dir }}/run.lock"

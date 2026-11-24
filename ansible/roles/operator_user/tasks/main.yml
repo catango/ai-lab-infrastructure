@@ -1,58 +1,30 @@
-# The operator account: a private home, an SSH directory, and the approver's public keys. No password is set here and the
-# account is in no privileged group. Sudo is granted by operator_sudo (with a password).
-- name: The operator group
-  ansible.builtin.group:
-    name: "{{ operator_user_name }}"
-    state: present
+# The operator accounts (CR-57 OC-8, ADR-012 decision 7): both exist, and the operator user has no sudo. The accounts are provisioned
+# with the machine, so this role creates none and writes nothing into a home directory (no mode change, no .ssh): keys are the business
+# of the shared SSH hardening role. Sudo for the operator user is not granted anywhere: the operator admin holds it.
+- name: Both managed accounts exist
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: ["{{ operator_user }}", "{{ operator_admin_user }}"]
+
+- name: Read the groups of the operator user
+  ansible.builtin.command:
+    argv: [id, -nG, "{{ operator_user }}"]
+  register: operator_user_groups
+  changed_when: false
+  check_mode: false
+
+- name: Take the operator user out of every root-equivalent group
+  ansible.builtin.command:
+    argv: [gpasswd, -d, "{{ operator_user }}", "{{ item }}"]
+  loop: "{{ operator_user_privileged_groups | intersect(operator_user_groups.stdout.split()) }}"
   become: "{{ ai_lab_become }}"
 
-- name: The operator user (set its sudo password yourself at the first login)
-  ansible.builtin.user:
-    name: "{{ operator_user_name }}"
-    group: "{{ operator_user_name }}"
-    shell: /bin/bash
-    create_home: true
-    home: "/home/{{ operator_user_name }}"
+- name: No sudoers rule names the operator user (it is for the operator admin to remove, not edited here)
+  ansible.builtin.command:
+    argv: [grep, -rEls, '^[^#]*(^|[[:space:]])({{ operator_user | regex_escape }})([[:space:]]|$)', /etc/sudoers, /etc/sudoers.d]
+  register: operator_user_sudoers
+  changed_when: false
+  failed_when: operator_user_sudoers.rc == 0
+  check_mode: false
   become: "{{ ai_lab_become }}"
-
-- name: A private home directory
-  ansible.builtin.file:
-    path: "/home/{{ operator_user_name }}"
-    state: directory
-    owner: "{{ operator_user_name }}"
-    group: "{{ operator_user_name }}"
-    mode: "0700"
-  when: not ansible_check_mode
-  become: "{{ ai_lab_become }}"
-
-- name: A private SSH directory
-  ansible.builtin.file:
-    path: "/home/{{ operator_user_name }}/.ssh"
-    state: directory
-    owner: "{{ operator_user_name }}"
-    group: "{{ operator_user_name }}"
-    mode: "0700"
-  when: not ansible_check_mode
-  become: "{{ ai_lab_become }}"
-
-- name: Is there a root-owned key file from the approver?
-  ansible.builtin.stat:
-    path: "{{ operator_authorized_keys_file }}"
-  register: operator_keys_file
-  become: "{{ ai_lab_become }}"
-
-- name: Install the operator's authorized keys from that file
-  ansible.builtin.copy:
-    src: "{{ operator_authorized_keys_file }}"
-    remote_src: true
-    dest: "/home/{{ operator_user_name }}/.ssh/authorized_keys"
-    owner: "{{ operator_user_name }}"
-    group: "{{ operator_user_name }}"
-    mode: "0600"
-  when: operator_keys_file.stat.exists and not ansible_check_mode
-  become: "{{ ai_lab_become }}"
-
-- name: Say so when no key file was provided
-  ansible.builtin.debug:
-    msg: "{{ operator_authorized_keys_file }} does not exist: no key was installed for the operator login. Create it (public keys only) and apply again."
-  when: not operator_keys_file.stat.exists

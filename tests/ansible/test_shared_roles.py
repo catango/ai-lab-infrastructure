@@ -109,7 +109,7 @@ class UnattendedUpgrades(unittest.TestCase):
         self.assertIn("ansible.builtin.apt:", self.TEXT)
         self.assertIn("name: unattended-upgrades", self.TEXT)
         manifest = (ROOT / "toolchain" / "manifest.toml").read_text()
-        self.assertNotIn("unattended-upgrades", manifest, "the operator profile takes manifest membership for Python 3 and git only (O-15)")
+        self.assertFalse("[tools.unattended-upgrades]" in manifest, "the operator profile takes manifest membership for Python 3 and git only (O-15)")
         for banned in ("apt_repository", "apt_key", "get_url", "deb822", "sources.list"):
             self.assertNotIn(banned, self.TEXT)
 

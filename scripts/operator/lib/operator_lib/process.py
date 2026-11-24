@@ -33,15 +33,13 @@ class Result:
     truncated: bool
 
 
-def _check(argv, allow, allow_exact, secrets, extra_env):
+def _check(argv, allow, secrets, extra_env):
     if isinstance(argv, (str, bytes)) or not isinstance(argv, (list, tuple)) or not argv:
         raise PolicyViolation("a command must be a non-empty list of arguments")
     if not all(isinstance(item, str) and "\0" not in item for item in argv) or not argv[0]:
         raise PolicyViolation("arguments must be strings without NUL")
-    exact = tuple(argv) in allow_exact
-    if not exact:
-        if "/" in argv[0] or argv[0] not in allow:
-            raise PolicyViolation("command not in the allowlist")
+    if "/" in argv[0] or argv[0] not in allow:
+        raise PolicyViolation("command not in the allowlist")
     live = [s for s in secrets if s]
     if any(s in item for s in live for item in argv):
         raise PolicyViolation("a secret must not be passed in arguments")
@@ -68,22 +66,18 @@ def _read(handle, cap):
     return data[:cap].decode("utf-8", errors="replace"), len(data) > cap
 
 
-def run(argv, *, allow=DEFAULT_ALLOW, allow_exact=frozenset(), secrets=(), extra_env=None, timeout=60, cwd=None,
-        max_output=MAX_OUTPUT, path=None, input_text=None, interactive=False):
-    """Run one allowlisted command and return its Result. A non-zero exit status is returned, not raised.
-
-    interactive=True keeps the caller's terminal session and stdin, so that a command such as sudo can ask for a password
-    on the terminal. Its output is still captured, and the policy checks are the same."""
-    if interactive and input_text is not None:
-        raise PolicyViolation("an interactive command takes no input text")
-    extra = _check(argv, allow, allow_exact, secrets, extra_env)
+def run(argv, *, allow=DEFAULT_ALLOW, secrets=(), extra_env=None, timeout=60, cwd=None, max_output=MAX_OUTPUT, path=None,
+        input_text=None):
+    """Run one allowlisted command and return its Result. A non-zero exit status is returned, not raised. No command runs with
+    sudo: the allowlist has no exact-command exception any more (CR-57 OC-8, OC-9)."""
+    extra = _check(argv, allow, secrets, extra_env)
     env = _child_env(path, extra)
     data = input_text.encode("utf-8") if input_text is not None else None
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
-            stdin = None if interactive else (subprocess.PIPE if data is not None else subprocess.DEVNULL)
+            stdin = subprocess.PIPE if data is not None else subprocess.DEVNULL
             proc = subprocess.Popen(list(argv), shell=False, stdin=stdin, stdout=out, stderr=err, env=env, cwd=cwd,
-                                    start_new_session=not interactive)
+                                    start_new_session=True)
         except (FileNotFoundError, PermissionError, NotADirectoryError):
             raise CommandMissing("command not found or not executable") from None
         try:

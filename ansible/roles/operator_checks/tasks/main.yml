@@ -1,37 +1,25 @@
-# Separation checks (design section 3.2), the last tasks before verify. Read-only: they change nothing, and a failure stops the run.
-- name: Separation checks
+# The operator configuration ends by running the operator check as the operator user (ADR-012 decision 7). The check is read-only. Its
+# output is shown as printed. A failure stops the run once sshd has been switched (-e ssh_second_login_confirmed=true), because then every
+# item must hold; before that OC-10 cannot hold yet, so the run goes on and says so. A dry run installs nothing, so there is nothing to run.
+- name: Run the operator check as the operator user
+  ansible.builtin.command:
+    argv: [/usr/sbin/runuser, -u, "{{ operator_user }}", --, "{{ operator_tools_dir }}/operator-check"]
+  register: operator_checks_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
   when: not ansible_check_mode
-  block:
-    - name: No Claude Desktop remote engine under any home
-      ansible.builtin.command:
-        argv: [find, /home, /root, -maxdepth, "3", -type, d, -path, "*/.claude/remote"]
-      register: operator_check_remote
-      changed_when: false
-      failed_when: operator_check_remote.stdout | length > 0
-      check_mode: false
-      become: "{{ ai_lab_become }}"
+  become: "{{ ai_lab_become }}"
 
-    - name: No shared network or host-shared mounts
-      ansible.builtin.command:
-        argv: [findmnt, -rn, -o, FSTYPE, -t, "nfs,nfs4,cifs,smb3,fuse.sshfs,9p,virtiofs"]
-      register: operator_check_mounts
-      changed_when: false
-      failed_when: operator_check_mounts.stdout | length > 0
-      check_mode: false
+- name: The operator check, as printed
+  ansible.builtin.debug:
+    msg: "{{ (operator_checks_result.stdout_lines | default([])) + (operator_checks_result.stderr_lines | default([])) }}"
+  when: not ansible_check_mode
 
-    - name: No sudoers rule skips the password
-      ansible.builtin.command:
-        argv: [grep, -rEl, '^[^#]*NOPASSWD', /etc/sudoers, /etc/sudoers.d]
-      register: operator_check_nopasswd
-      changed_when: false
-      failed_when: operator_check_nopasswd.rc == 0
-      check_mode: false
-      become: "{{ ai_lab_become }}"
-
-    - name: The operator is in no group but its own
-      ansible.builtin.command:
-        argv: [id, -nG, "{{ operator_user_name }}"]
-      register: operator_check_groups
-      changed_when: false
-      failed_when: operator_check_groups.stdout | trim != operator_user_name
-      check_mode: false
+- name: The operator check must pass once sshd is switched
+  ansible.builtin.assert:
+    that:
+      - operator_checks_result.rc == 0
+    quiet: true
+    fail_msg: the operator check failed after sshd was switched; read its output above (item ids and rules only)
+  when: not ansible_check_mode and (ssh_second_login_confirmed | bool)

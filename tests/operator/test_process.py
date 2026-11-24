@@ -58,19 +58,6 @@ class Policy(Stubs):
         result = self.run_cmd(["git", "a;b", "$HOME", "`x`", "c d"])
         self.assertEqual(result.stdout.split(), ["[a;b]", "[$HOME]", "[`x`]", "[c", "d]"])
 
-    def test_exact_privileged_commands_are_allowed_only_as_listed(self):
-        self.stub("sudo", f'echo "$@"; touch {self.marker}')
-        allowed = frozenset({("sudo", "-n", "true"), ("sudo", "sshd", "-T")})
-        self.assertEqual(self.run_cmd(["sudo", "-n", "true"], allow_exact=allowed).returncode, 0)
-        self.assertEqual(self.run_cmd(["sudo", "sshd", "-T"], allow_exact=allowed).stdout.strip(), "sshd -T")
-        self.marker.unlink()
-        for argv in (["sudo", "-n", "false"], ["sudo", "sshd", "-T", "-f", "x"], ["sudo", "sh"], ["sudo"], ["sudo", "-n", "true", "x"]):
-            with self.subTest(argv=argv), self.assertRaises(process.PolicyViolation):
-                self.run_cmd(argv, allow_exact=allowed)
-        self.assertFalse(self.marker.exists())
-
-
-class Environment(Stubs):
     def test_the_child_gets_a_minimal_environment(self):
         self.stub("git", "env")
         os.environ.update({"GH_TOKEN": helpers.PAT + "PARENT_CANARY_1", "SERVICE_KEY_CONTENT": "KEY_CANARY", "AWS_SECRET": "SECRET_CANARY",
@@ -110,23 +97,11 @@ class Environment(Stubs):
 
 
 class Interactive(Stubs):
-    def test_an_interactive_command_keeps_the_session_for_a_password_prompt(self):
-        self.stub("sudo", 'cut -d" " -f6 /proc/self/stat')
-        allowed = frozenset({("sudo", "-n", "true")})
-        quiet = self.run_cmd(["sudo", "-n", "true"], allow_exact=allowed)
-        loud = self.run_cmd(["sudo", "-n", "true"], allow_exact=allowed, interactive=True)
-        self.assertNotEqual(int(quiet.stdout), os.getsid(0))
-        self.assertEqual(int(loud.stdout), os.getsid(0))
-
-    def test_interactive_cannot_be_combined_with_input_text(self):
-        self.stub("git", "true")
-        with self.assertRaises(process.PolicyViolation):
-            self.run_cmd(["git", "x"], interactive=True, input_text="x")
-
-    def test_the_policy_still_applies(self):
+    def test_sudo_is_refused_even_when_a_stub_for_it_exists(self):
         self.stub("sudo", f"touch {self.marker}")
-        with self.assertRaises(process.PolicyViolation):
-            self.run_cmd(["sudo", "sh"], interactive=True)
+        for argv in (["sudo", "sh"], ["sudo", "-n", "true"]):
+            with self.subTest(argv=argv), self.assertRaises(process.PolicyViolation):
+                self.run_cmd(argv)
         self.assertFalse(self.marker.exists())
 
 
