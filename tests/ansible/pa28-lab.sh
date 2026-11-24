@@ -46,7 +46,10 @@ tree_list() {
   for root in /etc /opt/ai-lab /usr/local /home; do
     if [[ -e $root ]]; then roots+=("$root"); fi
   done
-  find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n' | LC_ALL=C sort
+  {
+    find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
+    find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
+  } | LC_ALL=C sort
 }
 
 # The same for the two managed accounts' home directories only: lab setup writes nothing into a user's home (PA-16).
