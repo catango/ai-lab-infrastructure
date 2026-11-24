@@ -7,6 +7,7 @@
 #                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
 #   Other projects:     each project's operator scripts are installed from a clone of that project at its release tag (PA-42): pass the
 #                       whole list, this repository included, as -e @file with `operator_projects: [{name: <name>, source: <path>}, ...]`.
+# The operator admin runs it: as that account, or as root with SUDO_USER set to it (sudo from that account).
 # Order: the gates and the key audit first (a refusal changes nothing), the toolchain (Python 3 and git only, O-15), unattended security
 # updates, the operator accounts, the root-owned operator tools and each project's installation, sshd, and the operator check last.
 - name: Apply the operator profile
@@ -60,6 +61,16 @@
         quiet: true
         fail_msg: >-
           name the two managed accounts with -e operator_user=<name> -e operator_admin_user=<name>: plain, different, and neither is root
+
+    - name: Only the operator admin runs the operator configuration
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['user_id'] == operator_admin_user or (ansible_facts['user_id'] == 'root' and lookup('ansible.builtin.env', 'SUDO_USER') == operator_admin_user)
+        quiet: true
+        fail_msg: >-
+          refused: the operator configuration is run by the operator admin, as that account or with sudo from it, and by no other account
+          (the operator user never runs it)
 
     - name: Key audit, one key per managed account and no other key on the machine (PA-16, PA-A29); refuses before anything changes
       tags: [always]
