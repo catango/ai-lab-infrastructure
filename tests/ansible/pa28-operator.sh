@@ -73,6 +73,7 @@ prepare() {
   done
   provision "$AI" ai
   provision "$ADMIN" admin
+  provider_dropin
   git init -q --bare --initial-branch=main "$WORK/origin.git"
   git -C "$source" push -q "$WORK/origin.git" HEAD:refs/heads/main
   git clone -q "$WORK/origin.git" "$CLONE"
@@ -262,6 +263,15 @@ operator_check() {
   grep -q '^PASS OC-2: 2 project(s)' "$WORK/operator-check.txt" || fail "OC-2 does not show both projects"
   grep -q '^WARN OC-10: .*inert authorized_keys' "$WORK/operator-check.txt" || fail "the inert authorized_keys file in the operator user's home is not a warning"
   grep -q '^PASS OC-12: .*no systemd here' "$WORK/operator-check.txt" || fail "OC-12 does not say the units are left to PA-A33"
+  grep -q '^WARN OC-10: sshd_config.d/60-provider.conf cannot be read by this account' "$WORK/operator-check.txt" ||
+    fail "the drop-in that the operator user cannot read is not a warning"
+  # A sudo that asks for a password (as for an account with no rule) is a warning, not a failure (OC-8).
+  sudo_stub on
+  op_run
+  sudo_stub off
+  grep -q '^WARN OC-8: sudo asks this account for a password' "$WORK/operator-check.txt" || fail "a sudo password prompt is not a warning for OC-8"
+  expect_failing "a password prompt of sudo does not fail the operator check" ""
+  op_run
 
   # 2. The refusals: a run from a tree the operator user owns, and from the clone of the admin.
   install -m 0755 -o "$AI" -g "$AI" "$TOOLS/operator-check" "/home/$AI/operator-check"

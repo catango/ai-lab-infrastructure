@@ -43,6 +43,26 @@ provision() { # provision ACCOUNT KEYNAME: the one provisioned key, as a fresh V
   install -m 0600 -o "$1" -g "$1" "$WORK/key-$2.pub" "/home/$1/.ssh/authorized_keys"
 }
 
+# provider_dropin: a drop-in that an ordinary account cannot read (mode 0600, root only, as some cloud images ship theirs). It holds a
+# comment and no setting, so the audit of the settings is unaffected. The read-only checks of an ordinary account must report it (a
+# warning) and not stop (a real lab stopped LC-13 with a PermissionError on such a file).
+provider_dropin() {
+  install -d -m 0755 /etc/ssh/sshd_config.d
+  printf '# a provider drop-in that only root can read\n' >/etc/ssh/sshd_config.d/60-provider.conf
+  chmod 0600 /etc/ssh/sshd_config.d/60-provider.conf
+}
+
+# sudo_stub on|off: a `sudo` that answers as the real one does for an account that has no rule or one that needs a password
+# (`sudo: a password is required`, status 1). The container has no sudo; the checks look in /usr/bin.
+sudo_stub() {
+  if [[ $1 == on ]]; then
+    printf '#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n' >/usr/bin/sudo
+    chmod 0755 /usr/bin/sudo
+  else
+    rm -f /usr/bin/sudo
+  fi
+}
+
 refused() { # refused NAME CLONE MESSAGE ARGUMENT...: the run fails, says why, and changes nothing
   local name=$1 clone=$2 message=$3 before after rc=0
   shift 3

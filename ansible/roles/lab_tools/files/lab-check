@@ -175,9 +175,14 @@ class Lab:
         rc, out = self.run(["sudo", "-n", "-l"])
         if rc == 0:
             problems.append("sudo allows the AI user to run commands")
-        elif "password is required" in out:
-            problems.append("sudo asks the AI user for a password, so the account has sudo rights")
-        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "no sudo and no root-equivalent group")]
+        if problems:
+            return [("FAIL", "; ".join(problems))]
+        if rc != 0 and "password is required" in out:
+            # Sudo prints this line for an account with a rule that needs a password and for an account with no rule at all (it asks
+            # for the password before it answers), so an ordinary account cannot tell the two apart. Not a failure by itself.
+            return [("WARN", "sudo asks this account for a password, which it also does for an account with no sudo rule, so this check "
+                             "cannot tell; no root-equivalent group (the lab admin confirms with `sudo -l -U <this account>`)")]
+        return [("PASS", "no sudo and no root-equivalent group")]
 
     def _groups(self):
         import grp
@@ -366,11 +371,14 @@ class Lab:
             results.append(("FAIL", "; ".join(problems)))
         else:
             found = self.audit.audit_lc13(text, accounts, self.p(SSH_KEYS))
-            found += self.audit.audit_sshd_files(self.p("/etc/ssh"))
+            found += self.audit.audit_sshd_files(self.p("/etc/ssh"), skip_unreadable=True)
             if found:
                 results.append(("FAIL", "; ".join(sorted(set(found)))))
             else:
                 results.append(("PASS", f"sshd settings are LC-13 ({source})"))
+            for name in self.audit.unreadable_config_files(self.p("/etc/ssh")):
+                results.append(("WARN", f"{name} cannot be read by this account: it is compared by size and time with the record of lab "
+                                        "setup, and a Match block or a setting in it is not audited here (read it as root)"))
         for name in sorted({self.user, accounts[1]} - {""}):
             try:
                 home = self.home_of(name)

@@ -143,6 +143,44 @@ class Snapshot(unittest.TestCase):
         _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
         self.assertTrue(any("writable by others" in problem for problem in problems))
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    def test_an_unreadable_file_gives_no_content_digest_and_the_stat_record_stands_in(self):
+        provider = self.ssh / "sshd_config.d" / "60-provider.conf"
+        provider.write_text("# provider\n")
+        provider.chmod(0o000)
+        self.assertIsNone(audit.config_digest(str(self.ssh)))
+        self.assertEqual(audit.unreadable_config_files(str(self.ssh)), ["sshd_config.d/60-provider.conf"])
+        # recorded as root would: the content digest is the one of a reader that can see every file
+        provider.chmod(0o600)
+        content_digest = audit.config_digest(str(self.ssh))
+        provider.chmod(0o000)
+        audit.write_snapshot(str(self.path), "passwordauthentication no\n", content_digest, stat_digest=audit.config_stat_digest(str(self.ssh)))
+        text, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertEqual(problems, [])
+        self.assertIn("passwordauthentication no", text)
+        provider.chmod(0o600)
+        provider.write_text("# provider\n# edited\n")
+        provider.chmod(0o000)
+        _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertTrue(any("changed after lab setup" in problem for problem in problems), problems)
+        self.assertEqual(audit.audit_sshd_files(str(self.ssh)), ["sshd: sshd_config.d/60-provider.conf cannot be read"])
+        self.assertEqual(audit.audit_sshd_files(str(self.ssh), skip_unreadable=True), [])
+        provider.chmod(0o600)
+
+    def test_the_stat_record_changes_with_a_new_file_or_a_new_size_and_a_record_without_it_still_reads_while_all_files_are_readable(self):
+        before = audit.config_stat_digest(str(self.ssh))
+        (self.ssh / "sshd_config.d" / "10-new.conf").write_text("# x\n")
+        self.assertNotEqual(audit.config_stat_digest(str(self.ssh)), before)
+        (self.ssh / "sshd_config.d" / "10-new.conf").unlink()
+        self.assertEqual(audit.config_stat_digest(str(self.ssh)), before)
+        audit.write_snapshot(str(self.path), "passwordauthentication no\n", audit.config_digest(str(self.ssh)))
+        _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertEqual(problems, [])
+
+    def test_the_module_records_the_stat_digest_with_the_snapshot(self):
+        text = (ROOT / "ansible" / "roles" / "ssh_hardening" / "library" / "ssh_hardening_audit.py").read_text()
+        self.assertIn("config_stat_digest(params[\"ssh_dir\"])", text)
+
     def test_the_role_records_the_snapshot_only_after_the_audit_of_the_switched_settings(self):
         text = (ROOT / "ansible" / "roles" / "ssh_hardening" / "tasks" / "main.yml").read_text()
         self.assertLess(text.index("mode: sshd_after"), text.index("mode: snapshot"))

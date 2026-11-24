@@ -57,6 +57,7 @@ prepare() {
   done
   provision "$AI" ai
   provision "$ADMIN" admin
+  provider_dropin
   git init -q --bare --initial-branch=main "$WORK/origin.git"
   git -C "$source" push -q "$WORK/origin.git" HEAD:refs/heads/main
   # github.machine_user_id (LC-8) may be empty at the head of the pull request: the approver sets it, and lab setup refuses while it is
@@ -303,12 +304,21 @@ lab_check() {
   grep -q '^PASS LC-8:' "$WORK/lab-check.txt" || fail "LC-8 does not pass on the lab that lab setup leaves"
   grep -q '^PASS LC-15:' "$WORK/lab-check.txt" || fail "LC-15 does not pass on the lab that lab setup leaves"
   grep -q '^WARN LC-13: .*inert authorized_keys' "$WORK/lab-check.txt" || fail "the inert authorized_keys file in the AI user's home is not a warning"
+  grep -q '^PASS LC-13:' "$WORK/lab-check.txt" || fail "LC-13 does not pass beside a provider drop-in that the AI user cannot read"
+  grep -q '^WARN LC-13: sshd_config.d/60-provider.conf cannot be read by this account' "$WORK/lab-check.txt" ||
+    fail "the drop-in that the AI user cannot read is not a warning"
 
   # 3. A complete lab passes (a stand-in gh stands in for the token step).
   complete_lab
   lab_run --gh "$LAB_GH"
   cat "$WORK/lab-check.txt"
   expect_failing "a complete lab passes every item" ""
+  # 4. A sudo that asks for a password (as for an account with no rule) is a warning, not a failure (LC-2).
+  sudo_stub on
+  lab_run --gh "$LAB_GH"
+  sudo_stub off
+  grep -q '^WARN LC-2: sudo asks this account for a password' "$WORK/lab-check.txt" || fail "a sudo password prompt is not a warning for LC-2"
+  expect_failing "a password prompt of sudo does not fail the lab check" ""
   lab_run --pre-disposal
   [[ $LAB_RC -eq 0 ]] || fail "the pre-disposal mode lists unsaved work on a lab with no repository"
 

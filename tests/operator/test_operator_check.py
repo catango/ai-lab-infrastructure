@@ -137,7 +137,8 @@ class Machine:
     def record_sshd(self, text=None):
         path = self.root / "etc" / "ssh" / "ai-lab-sshd-effective.txt"
         path.unlink(missing_ok=True)
-        audit.write_snapshot(str(path), text or self.sshd_text(), audit.config_digest(str(self.root / "etc" / "ssh")))
+        ssh = str(self.root / "etc" / "ssh")
+        audit.write_snapshot(str(path), text or self.sshd_text(), audit.config_digest(ssh), stat_digest=audit.config_stat_digest(ssh))
 
     def process(self, pid, names, command):
         directory = self.proc / str(pid)
@@ -301,8 +302,15 @@ class PerItem(Case):
         self.assertPass(machine.check("OC-8"))
         machine.sudo = (0, "")
         self.assertFail(machine.check("OC-8"), "sudo -n true succeeds")
+
+    def test_oc8_a_password_prompt_cannot_tell_a_rule_from_no_rule_so_it_is_a_warning(self):
+        machine = self.machine()
         machine.sudo = (1, "sudo: a password is required")
-        self.assertFail(machine.check("OC-8"), "sudo rights")
+        results = machine.check("OC-8")
+        self.assertEqual([status for status, _ in results], ["WARN"], results)
+        self.assertIn("sudo -l -U", results[0][1])
+        machine.op.groups = ["op", "sudo"]
+        self.assertFail(machine.check("OC-8"), "sudo")  # a root-equivalent group still fails whatever sudo answers
 
     def test_oc8_a_root_equivalent_group_fails(self):
         for group in ("sudo", "docker", "lxd", "disk", "adm" if False else "wheel"):
@@ -319,6 +327,20 @@ class PerItem(Case):
         self.assertFail(machine.check("OC-10"), "")  # a stray option, or a configuration that changed after the snapshot
         (machine.root / "etc" / "ssh" / "sshd_config.d" / "50-stray.conf").unlink()
         self.assertEqual([s for s, _ in machine.check("OC-10")], ["PASS"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    def test_oc10_a_config_file_this_account_cannot_read_is_a_warning_and_never_a_crash(self):
+        machine = self.machine()
+        provider = machine.root / "etc" / "ssh" / "sshd_config.d" / "60-provider.conf"
+        machine.write(provider, "# provider\n", 0o000)
+        machine.record_sshd()
+        results = machine.check("OC-10")
+        self.assertEqual(sorted(status for status, _ in results), ["PASS", "WARN"], results)
+        provider.chmod(0o600)
+        provider.write_text("# provider\n# changed\n")
+        provider.chmod(0o000)
+        self.assertFail(machine.check("OC-10"), "changed after")
+        provider.chmod(0o600)
 
     def test_oc10_sshd_reading_keys_from_anywhere_else_fails(self):
         machine = self.machine()
