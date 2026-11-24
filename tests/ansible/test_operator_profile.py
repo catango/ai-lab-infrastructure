@@ -32,7 +32,7 @@ def tasks(role, name="main.yml"):
 
 
 def everything(ansible=ANSIBLE):
-    return {p.relative_to(ansible).as_posix(): p.read_text() for p in ansible.rglob("*.yml") if "operator" in p.as_posix()}
+    return {p.relative_to(ansible).as_posix(): p.read_text() for p in ansible.rglob("*.yml") if "operator" in p.relative_to(ansible).as_posix()}
 
 
 def operator_yml():
