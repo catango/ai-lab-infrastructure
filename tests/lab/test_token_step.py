@@ -187,7 +187,9 @@ class Login(unittest.TestCase):
 
     def test_a_logged_in_gh_is_not_asked_again_unless_reauth(self):
         fixture = Fixture(self)
-        (fixture.prefix / "state" / "logged-in").write_text("")
+        logged_in = fixture.prefix / "state" / "logged-in"
+        logged_in.write_text("")
+        logged_in.chmod(0o666)  # the stub runs as the account under test and replaces it
         code, out = run_pty(fixture.argv(), fixture.env)
         self.assertEqual(code, 0, out)
         self.assertNotIn("Token T1", out)
