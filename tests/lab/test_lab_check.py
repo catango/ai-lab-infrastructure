@@ -531,6 +531,27 @@ class PreDisposal(Case):
         self.assertEqual(machine.lab.pre_disposal(), [])
 
 
+class Scratch(Case):
+    def test_the_tools_it_starts_keep_their_state_in_a_scratch_directory_not_the_home(self):
+        machine = self.machine()
+        seen = {}
+        lab = lab_check.Lab(audit, {}, "ai", str(machine.home), prefix=str(machine.prefix), scratch=str(machine.base / "scratch"))
+        original = lab_check.subprocess.run
+
+        def fake(argv, env=None, **_):
+            seen.update(env)
+            return type("Done", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        lab_check.subprocess.run = fake
+        try:
+            lab._run(["true"])
+        finally:
+            lab_check.subprocess.run = original
+        for name in ("XDG_STATE_HOME", "XDG_CACHE_HOME", "ANSIBLE_HOME", "ANSIBLE_LOCAL_TEMP", "ANSIBLE_REMOTE_TEMP"):
+            self.assertTrue(seen[name].startswith(str(machine.base / "scratch")), name)
+        self.assertEqual(seen["HOME"], str(machine.home))
+
+
 class Static(unittest.TestCase):
     def test_the_check_never_uses_a_shell_eval_or_a_write(self):
         text = (TOOLS / "lab-check").read_text()

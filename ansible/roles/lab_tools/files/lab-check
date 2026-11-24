@@ -20,6 +20,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 
 sys.dont_write_bytecode = True
 
@@ -68,7 +69,7 @@ class Lab:
     """One machine as the check sees it. Tests pass another root, home, environment, and command runner."""
 
     def __init__(self, ssh_audit, conf, user, home, root="", prefix="/opt/ai-lab", environ=None, run=None, gh=None, machine=None,
-                 trusted_uids=(0,), groups=None, home_of=None, systemd=None, chain_top="/"):
+                 trusted_uids=(0,), groups=None, home_of=None, systemd=None, chain_top="/", scratch=None):
         self.audit = ssh_audit
         self.conf = conf
         self.user = user
@@ -85,6 +86,7 @@ class Lab:
         self.systemd = os.path.isdir(self.p("/run/systemd/system")) if systemd is None else systemd
         self.work = os.path.join(home, "work")
         self.chain_top = chain_top
+        self.scratch = scratch
 
     # ------------------------------------------------------------------ plumbing
     def p(self, path):
@@ -97,6 +99,12 @@ class Lab:
     def _run(self, argv, env=None, cwd="/", timeout=120):
         base = {"PATH": f"{self.prefix}/bin:/usr/bin:/bin", "HOME": self.home, "LC_ALL": "C.UTF-8", "GH_PROMPT_DISABLED": "1",
                 "NO_COLOR": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
+        if self.scratch:
+            # The tools this check starts keep state under the home directory (gh its device id, ansible its temporary files). The
+            # check writes nothing there: their state goes to a scratch directory that is removed when the check ends.
+            base.update({"XDG_STATE_HOME": f"{self.scratch}/state", "XDG_CACHE_HOME": f"{self.scratch}/cache",
+                         "ANSIBLE_HOME": f"{self.scratch}/ansible", "ANSIBLE_LOCAL_TEMP": f"{self.scratch}/ansible/tmp",
+                         "ANSIBLE_REMOTE_TEMP": f"{self.scratch}/ansible/tmp"})
         base.update(env or {})
         try:
             done = subprocess.run(argv, env=base, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
@@ -514,11 +522,11 @@ class Lab:
         return listing
 
 
-def build(prefix, gh=None):
+def build(prefix, gh=None, scratch=None):
     conf = read_conf(os.path.join(prefix, "lab", "lab.conf"))
     audit = load_module("ssh_hardening_audit", os.path.join(prefix, "lab", "ssh_hardening_audit.py"))
     entry = pwd.getpwuid(os.getuid())  # the account database, not the environment: LOGNAME and USER are not trusted
-    return Lab(audit, conf, entry.pw_name, entry.pw_dir, prefix=prefix, gh=gh)
+    return Lab(audit, conf, entry.pw_name, entry.pw_dir, prefix=prefix, gh=gh, scratch=scratch)
 
 
 def main(argv):
@@ -537,8 +545,13 @@ def main(argv):
         else:
             print("usage: lab-check [--pre-disposal]", file=sys.stderr)
             return 2
+    with tempfile.TemporaryDirectory(prefix="lab-check-") as scratch:
+        return run_check(prefix, gh, pre, scratch)
+
+
+def run_check(prefix, gh, pre, scratch):
     try:
-        lab = build(prefix, gh)
+        lab = build(prefix, gh, scratch)
     except (OSError, KeyError, SyntaxError):
         print("lab-check: lab setup has not installed the lab tools", file=sys.stderr)
         return 2
