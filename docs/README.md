@@ -65,8 +65,8 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 section 7 and were ne
 | [scripts/gate-evidence](../scripts/gate-evidence) | Runs the quality gate on a host and prints the one evidence line for an architecture with no runner (rule PC-9) | Active |
 | [scripts/toolchain](../scripts/toolchain) | Install engine for the toolchain manifest: `check`, `list`, `install`, `verify` | Active |
 | [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
-| [ansible/](../ansible/) | `builder` profile (Debian 13, x86-64) and the `lab` placeholder (Stage 3) | Active |
+| [ansible/](../ansible/) | `lab` profile (Debian 13, x86-64; CR-57, called `builder` before), the shared SSH hardening role, the release check, and the managed settings; `builder.yml` is a legacy playbook for `workspace/restore.sh` until CR-57 PR 7 | Active |
 | [workspace/](../workspace/) | `restore.sh`, `verify.sh`, repositories, user-level Claude Code configuration | Active |
 | [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, memory, CPU, disk, and bandwidth of the operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture and OS only (its measured memory, CPU, and disk are not in the file yet) |
-| [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `toolchain-arm64`, `builder-profile`) and `pr-contract.yml` | Active |
+| [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `toolchain-arm64`, `host-profiles`, `operator-profile`) and `pr-contract.yml` | Active |
 | [.github/dependabot.yml](../.github/dependabot.yml) | Weekly version updates for the pinned Actions and the Python lock | Active |

@@ -1,12 +1,37 @@
-# The lab profile (Ubuntu 24.04, ARM64) is a placeholder in Stage 1: it keeps the structure under
-# --syntax-check and fails when applied. Stage 3 implements it (ADR-005 O5-5).
-- name: Apply the lab profile (placeholder)
+# The lab profile (CR-57, ADR-012 decision 5, PA-16): the AI lab, Debian 13, x86-64. The CR-2 `builder` profile became this one.
+# Run by the lab admin from a clone the admin owns, at a release tag (the first pre-task refuses anything else; nothing skips it).
+# The names of the two managed accounts are not in the repository: pass them as -e lab_ai_user=<name> -e lab_admin_user=<name>.
+#   Dry run (default):  ansible-playbook -i ansible/inventory/localhost.yml ansible/lab.yml --check --diff -e lab_ai_user=... -e lab_admin_user=...
+#   Apply:              the same without --check, with -e lab_apply=true
+#   Switch sshd:        only after a second login with each account worked while this session stayed open, add
+#                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
+# Order: the gates and the key audit first (a refusal changes nothing), the toolchain and the managed files next, sshd last.
+- name: Apply the lab profile
   hosts: all
   connection: local
   gather_facts: true
   vars:
     toolchain_profile: lab
+    ssh_hardening_accounts: ["{{ lab_ai_user | default('') }}", "{{ lab_admin_user | default('') }}"]
+    ssh_hardening_private_key_accounts: ["{{ lab_ai_user | default('') }}"]
+    ssh_hardening_key_options:
+      - account: "{{ lab_ai_user | default('') }}"
+        options: "restrict,pty"
   pre_tasks:
+    - name: Refuse a real run without the explicit apply variable
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode or (lab_apply | bool)
+        quiet: true
+        fail_msg: >-
+          the lab profile changes this machine, so a real run needs -e lab_apply=true; use --check --diff for a dry run
+
+    - name: Release check, lab setup runs only at a release tag
+      tags: [always]
+      ansible.builtin.import_role:
+        name: release_check
+
     - name: Preflight, the lab profile supports one platform only
       tags: [preflight]
       ansible.builtin.assert:
@@ -19,13 +44,35 @@
           lab profile requires {{ lab_expected_os }} {{ lab_expected_major }} on {{ lab_expected_arch }}
           (found {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
           on {{ ansible_facts['architecture'] }})
-    - name: Stop, the lab profile is not implemented yet
-      ansible.builtin.fail:
-        msg: lab profile is implemented in Stage 3
-  # Roles the lab profile will use. They are listed so --syntax-check validates them; the play fails above first.
+
+    - name: The two managed accounts are named and differ
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - lab_ai_user is defined
+          - lab_admin_user is defined
+          - lab_ai_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+          - lab_admin_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+          - lab_ai_user != lab_admin_user
+          - lab_ai_user != 'root'
+          - lab_admin_user != 'root'
+        quiet: true
+        fail_msg: >-
+          name the two managed accounts with -e lab_ai_user=<name> -e lab_admin_user=<name>: plain, different, and neither is root
+
+    - name: Key audit, one key per managed account and no other key on the machine (PA-16); refuses before anything changes
+      tags: [always]
+      ansible.builtin.import_role:
+        name: ssh_hardening
+        tasks_from: audit
+
   roles:
     - apt_base
     - toolchain
     - python_tools
     - shell_env
     - verify
+    - role: claude_managed_settings
+      tags: [claude_managed_settings]
+    - role: ssh_hardening
+      tags: [ssh_hardening]

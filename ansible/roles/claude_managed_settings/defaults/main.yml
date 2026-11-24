@@ -1,0 +1,6 @@
+# Where Claude Code reads the managed (root-owned) settings and the managed CLAUDE.md on Linux.
+claude_managed_dir: /etc/claude-code
+claude_managed_settings_path: "{{ claude_managed_dir }}/managed-settings.json"
+claude_managed_claude_md_path: "{{ claude_managed_dir }}/CLAUDE.md"
+# The settings that are merged into the managed settings: the user-level settings of the workspace, deny list included (CR-57 C-8, PA-5).
+claude_managed_settings_source: "{{ repo_root }}/workspace/claude-user/settings.json"

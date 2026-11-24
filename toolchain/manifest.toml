@@ -1,6 +1,7 @@
 # Toolchain manifest (CR-2, ADR-005): the single source of truth for tools, versions, sources, and checksums.
 # Every download has amd64 and arm64 artifacts with SHA-256 checksums. Changes are toolchain PRs (ADR-003).
-# Profiles: Stage 1 defines the builder profile in full; lab membership is decided in Stage 3 (ADR-005 O5-5).
+# Profiles: `lab` (the gate tools of the AI lab and of CI; CR-2 called it `builder`, which stays accepted as an alias of `lab` until
+# CR-57 plan PR 7) and `operator`.
 # Apt tools use a minimum version and rely on the signed archive (design section 9, decision 1).
 
 schema_version = 1
@@ -10,7 +11,7 @@ schema_version = 1
 # GitHub CLI. Checksums: upstream gh_2.104.0_checksums.txt and the GitHub release asset digest agree.
 [tools.gh]
 version     = "2.104.0"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.gz"
 strip       = 1
@@ -30,7 +31,7 @@ sha256 = "cb34cefc6f4e77b90731374a2b737516bb8f3033c6ca46aa949e5344f68069e3"
 # yq (mikefarah). The upstream checksums file is signed (sigstore bundle, verified with cosign); the release asset digest agrees.
 [tools.yq]
 version     = "4.54.3"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "binary"
 binaries    = ["yq"]
@@ -49,7 +50,7 @@ sha256 = "89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67"
 # ripgrep, static musl builds. Per-artifact upstream .sha256 files and the release asset digests agree.
 [tools.ripgrep]
 version     = "15.2.0"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.gz"
 strip       = 1
@@ -69,7 +70,7 @@ sha256 = "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915"
 # fd, static musl builds, installed under the name fd (the Debian package installs fdfind). Upstream publishes no checksums: the release asset digest and a local download hash agree.
 [tools.fd]
 version     = "10.5.2"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.gz"
 strip       = 1
@@ -89,7 +90,7 @@ sha256 = "63ea52cb31586e6d98efa2f06d73d542f16c7d0c4af0f07b579aaf9714cf907a"
 # ShellCheck. Upstream publishes no checksums: the release asset digest and a local download hash agree.
 [tools.shellcheck]
 version     = "0.11.0"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.xz"
 strip       = 1
@@ -109,7 +110,7 @@ sha256 = "12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
 # actionlint. Upstream actionlint_1.7.12_checksums.txt and the release asset digest agree.
 [tools.actionlint]
 version     = "1.7.12"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.gz"
 binaries    = ["actionlint"]
@@ -128,7 +129,7 @@ sha256 = "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
 # ---- pip (hash-locked: toolchain/python/builder.lock, installed with --require-hashes into <prefix>/venv)
 
 [tools.yamllint]
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "pip"
 lockfile    = "toolchain/python/builder.lock"
 binaries    = ["yamllint"]
@@ -136,7 +137,7 @@ smoke       = ["yamllint", "--version"]
 smoke_match = "1.38.0"
 
 [tools.pymarkdownlnt]
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "pip"
 lockfile    = "toolchain/python/builder.lock"
 binaries    = ["pymarkdown"]
@@ -148,7 +149,7 @@ smoke_match = "0.9.42"
 # Python 3 (3.12 on Ubuntu 24.04, 3.13 on Debian 13; pymarkdownlnt needs 3.11 or newer).
 [tools.python3]
 version_min = "3.11"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "python3"
 smoke       = ["python3", "--version"]
@@ -157,14 +158,14 @@ smoke       = ["python3", "--version"]
 # Needed by Ansible's apt module on Debian and Ubuntu.
 [tools.python3-apt]
 version_min = "2.6"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "python3-apt"
 smoke       = ["python3", "-c", "import apt"]
 
 [tools.python3-venv]
 version_min = "3.11"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "python3-venv"
 smoke       = ["python3", "-c", "import venv"]
@@ -172,35 +173,35 @@ smoke       = ["python3", "-c", "import venv"]
 # Bootstrapped from the archive by restore.sh before any profile can be applied.
 [tools.ansible-core]
 version_min = "2.14"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "ansible-core"
 smoke       = ["ansible", "--version"]
 
 [tools.git]
 version_min = "1:2.39"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "git"
 smoke       = ["git", "--version"]
 
 [tools.curl]
 version_min = "7.88"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "apt"
 package     = "curl"
 smoke       = ["curl", "--version"]
 
 [tools.ca-certificates]
 version_min = "20230311"
-profiles    = ["builder", "operator"]
+profiles    = ["lab", "operator"]
 source      = "apt"
 package     = "ca-certificates"
 smoke       = ["test", "-s", "/etc/ssl/certs/ca-certificates.crt"]
 
 [tools.tmux]
 version_min = "3.3"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "apt"
 package     = "tmux"
 smoke       = ["tmux", "-V"]
@@ -208,7 +209,7 @@ smoke       = ["tmux", "-V"]
 # jq from the archive (1.7.1 on both target releases).
 [tools.jq]
 version_min = "1.6"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "apt"
 package     = "jq"
 smoke       = ["jq", "--version"]

@@ -1,0 +1,18 @@
+# The one defaults file of the shared SSH hardening role (design PA-31, PA-A27). The lab profile and the operator profile include
+# this role by this name and set only the accounts below; they do not copy the sshd settings.
+
+# The managed accounts: exactly one provisioned key each. Set by the profile (the names are not in the repository).
+ssh_hardening_accounts: []
+# Managed accounts whose ~/.ssh must hold no private key (the AI user on a lab, the operator user on the operator machine).
+ssh_hardening_private_key_accounts: []
+# Options placed in front of the key of an account in the root-owned location: [{account: <name>, options: "restrict,pty"}].
+ssh_hardening_key_options: []
+
+# The root-owned location sshd reads keys from after the switch: one file per account, owned by root.
+ssh_hardening_keys_dir: /etc/ssh/authorized_keys
+# The drop-in sorts before the files of the cloud images (the first value of a keyword wins).
+ssh_hardening_dropin: /etc/ssh/sshd_config.d/00-ai-lab.conf
+ssh_hardening_sshd: /usr/sbin/sshd
+
+# sshd is switched only after a second login with each managed account worked while the current session stayed open (PA-16).
+ssh_second_login_confirmed: false

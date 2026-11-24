@@ -1,44 +1,47 @@
-# Opt-in (claude_managed_settings_enabled: false by default; design 3.6 and decision 5).
-# Writes /etc/claude-code/managed-settings.json from the repository's .claude/settings.json deny rules.
-# Never replaces a file this role did not write: an existing foreign file stops the play (merge by hand).
-- name: Managed settings (opt-in)
-  when: claude_managed_settings_enabled | bool
+# Root-owned managed settings and managed CLAUDE.md of the AI lab (CR-57 PA-16, C-8, I-13, LC-4). Both are merged with what is there
+# and never replaced: a file that already exists keeps every setting and line this role does not own, and this role's settings win
+# where both set one. The AI user cannot write /etc/claude-code, so it cannot change either file.
+- name: The managed directory exists
+  ansible.builtin.file:
+    path: "{{ claude_managed_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: "{{ ai_lab_become }}"
+
+- name: Look for existing managed settings
+  ansible.builtin.stat:
+    path: "{{ claude_managed_settings_path }}"
+  register: claude_managed_current_stat
+  become: "{{ ai_lab_become }}"
+
+- name: Read them when they exist (a file that is not a JSON object stops the play, to be merged by hand and never replaced)
+  ansible.builtin.slurp:
+    src: "{{ claude_managed_settings_path }}"
+  register: claude_managed_current
+  when: claude_managed_current_stat.stat.exists
+  become: "{{ ai_lab_become }}"
+
+- name: Write the managed settings, the existing ones merged with the settings of workspace/claude-user/
   vars:
-    managed_settings_path: /etc/claude-code/managed-settings.json
-    managed_settings_marker: ai-lab-infrastructure
-    repo_settings: "{{ lookup('ansible.builtin.file', repo_root + '/.claude/settings.json') | from_json }}"
-  block:
-    - name: Look for an existing managed settings file
-      ansible.builtin.stat:
-        path: "{{ managed_settings_path }}"
-      register: managed_settings_stat
+    claude_managed_existing: "{{ (claude_managed_current.content | b64decode | from_json) if claude_managed_current_stat.stat.exists else {} }}"
+    claude_managed_ours: "{{ lookup('ansible.builtin.file', claude_managed_settings_source) | from_json }}"
+  ansible.builtin.copy:
+    dest: "{{ claude_managed_settings_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ claude_managed_existing | combine(claude_managed_ours, recursive=True, list_merge='append_rp') | to_nice_json }}\n"
+  become: "{{ ai_lab_become }}"
 
-    - name: Read it when it exists
-      ansible.builtin.slurp:
-        src: "{{ managed_settings_path }}"
-      register: managed_settings_current
-      when: managed_settings_stat.stat.exists
-
-    - name: Refuse to replace a file this role did not write
-      ansible.builtin.assert:
-        that:
-          - (managed_settings_current.content | b64decode | from_json)['_managed_by'] | default('') == managed_settings_marker
-        quiet: true
-        fail_msg: "{{ managed_settings_path }} exists and is not managed by this repository; merge it by hand (refusing to replace it)"
-      when: managed_settings_stat.stat.exists
-
-    - name: Create the directory
-      ansible.builtin.file:
-        path: /etc/claude-code
-        state: directory
-        mode: "0755"
-      become: "{{ ai_lab_become }}"
-
-    - name: Write the managed settings
-      ansible.builtin.copy:
-        dest: "{{ managed_settings_path }}"
-        owner: root
-        group: root
-        mode: "0644"
-        content: "{{ {'_managed_by': managed_settings_marker, 'permissions': {'disableBypassPermissionsMode': 'disable', 'deny': repo_settings['permissions']['deny']}} | to_nice_json }}\n"
-      become: "{{ ai_lab_become }}"
+- name: Write the managed CLAUDE.md (the rules that must not be relaxed), inside markers, keeping every other line of an existing file
+  ansible.builtin.blockinfile:
+    path: "{{ claude_managed_claude_md_path }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "<!-- {mark} ai-lab-infrastructure managed rules -->"
+    block: "{{ lookup('ansible.builtin.file', role_path + '/files/managed-CLAUDE.md') }}"
+  become: "{{ ai_lab_become }}"

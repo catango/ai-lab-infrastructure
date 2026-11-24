@@ -24,14 +24,14 @@ class ProfileName(unittest.TestCase):
     def test_operator_is_an_allowed_profile_name(self):
         self.assertEqual(manifest.PROFILES, ("builder", "lab", "operator"))
 
-    def test_the_message_names_all_three(self):
-        text = good().replace('profiles = ["builder", "lab"]', 'profiles = ["prod"]')
-        self.assertIn("builder, lab, operator", " ".join(self.errors(text)))
+    def test_the_message_names_the_profiles_and_the_alias(self):
+        text = good().replace('profiles = ["lab"]', 'profiles = ["prod"]')
+        self.assertIn("lab, operator (builder is an alias of lab)", " ".join(self.errors(text)))
 
-    def test_operator_alone_and_with_builder_pass(self):
-        for value in ('["operator"]', '["builder", "operator"]', '["builder", "lab", "operator"]'):
+    def test_operator_alone_and_with_lab_pass(self):
+        for value in ('["operator"]', '["lab", "operator"]', '["builder", "operator"]'):
             with self.subTest(value=value):
-                self.assertEqual(self.errors(good().replace('profiles = ["builder", "lab"]', f"profiles = {value}")), [])
+                self.assertEqual(self.errors(good().replace('profiles = ["lab"]', f"profiles = {value}")), [])
 
 
 class RealManifest(unittest.TestCase):
@@ -45,11 +45,21 @@ class RealManifest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(json.loads(done.stdout), [])
 
-    def test_the_builder_profile_is_unchanged(self):
-        done = engine("list", "--profile", "builder", "--source", "apt", "--format", "json")
+    def test_the_lab_profile_is_unchanged_and_builder_lists_the_same_tools(self):
+        done = engine("list", "--profile", "lab", "--source", "apt", "--format", "json")
         names = {item["package"] for item in json.loads(done.stdout)}
         self.assertTrue({"python3", "git", "curl", "tmux", "jq", "ansible-core"} <= names)
         self.assertFalse(names & {"nftables", "openssh-server", "sudo", "unattended-upgrades", "systemd-timesyncd"})
+        alias = engine("list", "--profile", "builder", "--source", "apt", "--format", "json")
+        self.assertEqual(alias.returncode, 0, alias.stderr)
+        self.assertEqual(alias.stdout, done.stdout)
+
+    def test_builder_alias_selects_every_lab_tool_of_the_real_manifest(self):
+        lab = engine("list", "--profile", "lab", "--format", "json")
+        builder = engine("list", "--profile", "builder", "--format", "json")
+        self.assertEqual((lab.returncode, builder.returncode), (0, 0), lab.stderr + builder.stderr)
+        self.assertGreater(len(json.loads(lab.stdout)), 5)
+        self.assertEqual(builder.stdout, lab.stdout)
 
     def test_every_operator_tool_has_a_version_minimum_and_a_smoke_command(self):
         import tomllib

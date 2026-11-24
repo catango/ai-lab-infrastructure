@@ -1,0 +1,36 @@
+# The release check (ADR-012 decision 5, design O-8 and C-4). Lab setup and the operator configuration run only from a clone whose
+# HEAD is a release tag (v<number>...) contained in origin/main, with no local changes. There is no variable, tag, or option that
+# skips it: the playbook that imports this role has to pass it first. The git calls only read, so they also run in check mode.
+# The messages are fixed text; no path or output of the repository is printed.
+- name: Release check, read the state of the clone
+  ansible.builtin.command:
+    argv: "{{ item.argv }}"
+  environment:
+    GIT_TERMINAL_PROMPT: "0"
+  register: release_check_git
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop:
+    - {name: status, argv: [git, -C, "{{ repo_root }}", status, --porcelain, --untracked-files=all]}
+    - {name: tags, argv: [git, -C, "{{ repo_root }}", tag, --points-at, HEAD, --list, "v*"]}
+    - {name: contained, argv: [git, -C, "{{ repo_root }}", merge-base, --is-ancestor, HEAD, refs/remotes/origin/main]}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Release check, refuse unless HEAD is a release tag contained in origin/main with no local changes
+  vars:
+    release_check_result: "{{ dict(release_check_git.results | map(attribute='item.name') | zip(release_check_git.results)) }}"
+    release_check_tags: >-
+      {{ release_check_result['tags'].stdout_lines | select('match', '^v[0-9]+([.][0-9]+)*([-+][0-9A-Za-z.]+)?$') | list }}
+  ansible.builtin.assert:
+    that:
+      - release_check_result['status'].rc == 0
+      - release_check_result['status'].stdout | length == 0
+      - release_check_result['tags'].rc == 0
+      - release_check_tags | length > 0
+      - release_check_result['contained'].rc == 0
+    quiet: true
+    fail_msg: >-
+      refused: this clone is not a release. Lab setup and the operator configuration run only when HEAD is a release tag (v<number>)
+      contained in origin/main, with no local changes in the clone; fetch and check out the tag first

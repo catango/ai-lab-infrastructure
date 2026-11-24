@@ -77,7 +77,7 @@ def manifest_text(*, amd64_sha=ZERO, arm64_sha=ZERO, extra_tools="", head='schem
     return f'''{head}
 [tools.alpha]
 version = "{version}"
-profiles = ["builder", "lab"]
+profiles = ["lab", "operator"]
 source = "download"
 format = "tar.gz"
 strip = 1
@@ -95,7 +95,7 @@ sha256 = "{arm64_sha}"
 
 [tools.gitlike]
 version_min = "1:2.0"
-profiles = ["builder"]
+profiles = ["lab"]
 source = "apt"
 package = "git"
 smoke = ["git", "--version"]

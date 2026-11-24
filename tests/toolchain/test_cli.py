@@ -13,9 +13,9 @@ from toolchain_engine import cli, manifest
 
 class Usage(Base):
     def test_usage_errors_exit_2(self):
-        cases = [[], ["bogus"], ["install"], ["install", "--profile", "builder"], ["install", "--profile", "prod", "--prefix", "/x"],
-                 ["install", "--profile", "builder", "--prefix", "/x", "--arch", "riscv"], ["list"], ["verify", "--profile", "builder"],
-                 ["install", "--profile", "builder", "--prefix", "/x", "--unknown"]]
+        cases = [[], ["bogus"], ["install"], ["install", "--profile", "lab"], ["install", "--profile", "prod", "--prefix", "/x"],
+                 ["install", "--profile", "lab", "--prefix", "/x", "--arch", "riscv"], ["list"], ["verify", "--profile", "lab"],
+                 ["install", "--profile", "lab", "--prefix", "/x", "--unknown"]]
         for argv in cases:
             with self.subTest(argv=argv):
                 out, err = io.StringIO(), io.StringIO()
@@ -38,32 +38,32 @@ class Usage(Base):
         self.assertIn("ok", out)
 
     def test_list(self):
-        code, out, _ = self.run_cli("list", "--profile", "builder", "--arch", "amd64")
+        code, out, _ = self.run_cli("list", "--profile", "lab", "--arch", "amd64")
         self.assertEqual(code, 0)
         self.assertIn("alpha 1.2.3 download", out)
         self.assertIn("gitlike", out)
-        code, out, _ = self.run_cli("list", "--profile", "lab")
+        code, out, _ = self.run_cli("list", "--profile", "operator")
         self.assertIn("alpha", out)
         self.assertNotIn("gitlike", out)
 
 
     def test_list_json_and_source_filter(self):
         import json
-        code, out, _ = self.run_cli("list", "--profile", "builder", "--format", "json")
+        code, out, _ = self.run_cli("list", "--profile", "lab", "--format", "json")
         self.assertEqual(code, 0)
         data = json.loads(out)
         names = {item["name"]: item for item in data}
         self.assertEqual(names["gitlike"]["package"], "git")
         self.assertEqual(names["gitlike"]["source"], "apt")
         self.assertEqual(names["alpha"]["version"], "1.2.3")
-        code, out, _ = self.run_cli("list", "--profile", "builder", "--format", "json", "--source", "apt")
+        code, out, _ = self.run_cli("list", "--profile", "lab", "--format", "json", "--source", "apt")
         self.assertEqual([item["name"] for item in json.loads(out)], ["gitlike"])
-        code, out, _ = self.run_cli("list", "--profile", "builder", "--source", "download")
+        code, out, _ = self.run_cli("list", "--profile", "lab", "--source", "download")
         self.assertNotIn("gitlike", out)
 
     def test_bad_format_or_source_is_a_usage_error(self):
-        for argv in (["list", "--profile", "builder", "--format", "xml"], ["list", "--profile", "builder", "--source", "snap"],
-                     ["install", "--profile", "builder", "--prefix", "/x", "--source", "snap"]):
+        for argv in (["list", "--profile", "lab", "--format", "xml"], ["list", "--profile", "lab", "--source", "snap"],
+                     ["install", "--profile", "lab", "--prefix", "/x", "--source", "snap"]):
             with self.subTest(argv=argv):
                 self.assertEqual(cli.main(argv, out=io.StringIO(), err=io.StringIO()), 2)
 
@@ -87,7 +87,7 @@ class RealManifest(unittest.TestCase):
     def test_check_passes(self):
         self.assertEqual(manifest.check_file(self.path, ROOT), [])
 
-    def test_builder_tools_resolve_under_their_expected_names(self):
+    def test_lab_tools_resolve_under_their_expected_names(self):
         names = set()
         for tool in self.raw["tools"].values():
             names.update(pathlib.PurePosixPath(b).name for b in tool.get("binaries", []))

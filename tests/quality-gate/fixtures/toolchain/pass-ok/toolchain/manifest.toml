@@ -2,7 +2,7 @@ schema_version = 1
 
 [tools.demo]
 version     = "1.2.3"
-profiles    = ["builder"]
+profiles    = ["lab"]
 source      = "download"
 format      = "tar.gz"
 strip       = 1
