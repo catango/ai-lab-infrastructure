@@ -322,7 +322,13 @@ operator_check() {
   expect_failing "a token in the environment of a process that is not a script fails PA-13" "PA-13"
   ! grep -q canary "$WORK/operator-check.txt" || fail "the check printed the value of a token variable"
 
-  # 4. The run lock (PA-A30): a second run is refused while a first is in progress, and runs again once the first has ended.
+  # 4. The run lock (PA-A30): a second run is refused while a first is in progress, and runs again once the first has ended. The fixture
+  #    script is put into each installation by root for this step and taken away again; the operator scripts themselves are not run here.
+  for dir in "$PROJECT" "$SECOND_NAME"; do
+    # shellcheck disable=SC2016 # the fixture script expands its own variables
+    printf '#!/bin/sh\nprintf "%%s\\n" "$OPERATOR_PROJECT" >"$OPERATOR_OUTPUT_DIR/ran.txt"\n' >"$TOOLS/projects/$dir/scripts/operator/lock-fixture"
+    chmod 0755 "$TOOLS/projects/$dir/scripts/operator/lock-fixture"
+  done
   runuser -u "$AI" -- python3 -I -c 'import fcntl, os, sys, time
 fd = os.open(sys.argv[1], os.O_RDWR)
 fcntl.flock(fd, fcntl.LOCK_EX)
@@ -332,12 +338,21 @@ time.sleep(120)' "$STATE/run.lock" >"$WORK/lock-holder.txt" &
   for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q held "$WORK/lock-holder.txt" && break; sleep 0.5; done
   grep -q held "$WORK/lock-holder.txt" || fail "the lock holder did not start"
   OP_RC=0
-  runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || OP_RC=$?
+  runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/lock-fixture >"$WORK/operator-run.txt" 2>&1 || OP_RC=$?
   kill "$holder" 2>/dev/null || true
   wait "$holder" 2>/dev/null || true
   refusal_is 1 "$WORK/operator-run.txt" 'another operator run is in progress' "a second run was not refused while the first was in progress"
-  runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || fail "the script did not run once the lock was free"
-  runuser -u "$AI" -- "$TOOLS/operator-run" "$SECOND_NAME" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || fail "the second project's script did not run"
+  if ! runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/lock-fixture >"$WORK/operator-run.txt" 2>&1; then
+    cat "$WORK/operator-run.txt"
+    fail "the script did not run once the lock was free"
+  fi
+  [[ $(cat "$STATE/output/$PROJECT/ran.txt") == "$PROJECT" ]] || fail "the script did not run in the output directory of its project"
+  if ! runuser -u "$AI" -- "$TOOLS/operator-run" "$SECOND_NAME" scripts/operator/lock-fixture >"$WORK/operator-run.txt" 2>&1; then
+    cat "$WORK/operator-run.txt"
+    fail "the second project's script did not run"
+  fi
+  rm -f "$STATE/output/$PROJECT/ran.txt" "$STATE/output/$SECOND_NAME/ran.txt" "$TOOLS/projects/$PROJECT/scripts/operator/lock-fixture" \
+    "$TOOLS/projects/$SECOND_NAME/scripts/operator/lock-fixture"
   ok "the run lock refuses a second run while one is in progress and releases after it"
 
   # 5. Read-only: the tree and the homes are the same after the run and all fixtures; the profile then makes the account sudo-free again.
