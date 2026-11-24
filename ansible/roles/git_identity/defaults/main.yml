@@ -1,0 +1,5 @@
+# The configuration the machine account comes from (the lab admin applies lab setup from a release tag, so it is trusted).
+git_identity_project_config: "{{ repo_root }}/config/project.yaml"
+# The system-wide git configuration, root-owned. Lab setup writes nothing into a user's home.
+git_identity_file: /etc/gitconfig
+git_identity_noreply_domain: users.noreply.github.com

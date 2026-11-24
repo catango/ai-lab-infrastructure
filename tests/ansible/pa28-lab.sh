@@ -7,6 +7,7 @@
 # merged, never replaced), token-step (the tests/lab token step fixtures against the installed step, as the AI user), lab-check (the
 # installed lab check as the AI user: the gap lab setup still leaves, a complete lab, failures a container can show, the pre-disposal
 # mode; the tree hash is unchanged). A real sshd restart, `sshd -T` of a running daemon, and the unattended-upgrade units are PA-A33.
+# The operator half of the PA-28 job is pa28-operator.sh in a second container: the two profiles own the same sshd drop-in.
 # The script changes /etc, so it runs only as root on a disposable host.
 set -euo pipefail
 
@@ -20,37 +21,12 @@ readonly AI=ci-ai ADMIN=ci-admin OTHER=ci-other
 readonly KEYS=/etc/ssh/authorized_keys
 readonly DROPIN=/etc/ssh/sshd_config.d/00-ai-lab.conf
 readonly LAB=$WORK/lab UNTAGGED=$WORK/untagged AHEAD=$WORK/ahead
+readonly TEST_ID=4242 # a test value of github.machine_user_id (LC-8), used only when the head of the pull request leaves it empty
+# shellcheck disable=SC2034 # read by tree_list in pa28-common.sh
+TREE_ROOTS=(/etc /opt/ai-lab /usr/local /home)
 
-fail() {
-  printf 'PA-28: %s\n' "$*" >&2
-  exit 1
-}
-ok() { printf 'ok: %s\n' "$*"; }
-
-# A hash of every path the lab profile may touch (names, types, modes, owners, link targets, file contents), outside what the
-# container itself rewrites. A refusal and a dry run must leave it unchanged.
-tree_hash() {
-  local roots=() root
-  for root in /etc /opt/ai-lab /usr/local /home; do
-    if [[ -e $root ]]; then roots+=("$root"); fi
-  done
-  {
-    find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
-    find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
-  } | LC_ALL=C sort | sha256sum | cut -d' ' -f1
-}
-
-# The names behind tree_hash, to show what changed when two hashes differ.
-tree_list() {
-  local roots=() root
-  for root in /etc /opt/ai-lab /usr/local /home; do
-    if [[ -e $root ]]; then roots+=("$root"); fi
-  done
-  {
-    find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
-    find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
-  } | LC_ALL=C sort
-}
+# shellcheck source=pa28-common.sh source-path=SCRIPTDIR
+. "$(dirname "${BASH_SOURCE[0]}")/pa28-common.sh"
 
 # The same for the two managed accounts' home directories only: lab setup writes nothing into a user's home (PA-16).
 home_hash() {
@@ -106,6 +82,15 @@ prepare() {
   provision "$ADMIN" admin
   git init -q --bare --initial-branch=main "$WORK/origin.git"
   git -C "$source" push -q "$WORK/origin.git" HEAD:refs/heads/main
+  # github.machine_user_id (LC-8) may be empty at the head of the pull request: the approver sets it, and lab setup refuses while it is
+  # empty (the refusals step shows that). The fixtures then set a test value in one commit on top of the head, before the clones are
+  # taken; the clones differ from the head by that one line of config/project.yaml and nothing else.
+  if ! grep -Eq '^  machine_user_id: *[1-9][0-9]*' "$source/config/project.yaml"; then
+    git clone -q "$WORK/origin.git" "$WORK/seed"
+    sed -i -E "s/^  machine_user_id:.*/  machine_user_id: $TEST_ID/" "$WORK/seed/config/project.yaml"
+    git -C "$WORK/seed" -c user.name=ci -c user.email=noreply commit -q -am "fixture: a test value of machine_user_id"
+    git -C "$WORK/seed" push -q origin HEAD:refs/heads/main
+  fi
   git clone -q "$WORK/origin.git" "$LAB"
   git -C "$LAB" tag v0.0.0-ci
   git clone -q "$WORK/origin.git" "$UNTAGGED"
@@ -113,7 +98,8 @@ prepare() {
   git -C "$AHEAD" -c user.name=ci -c user.email=noreply commit -q --allow-empty -m ahead
   git -C "$AHEAD" tag v0.0.1-ci
   git -C "$LAB" tag --points-at HEAD | grep -qx v0.0.0-ci
-  [[ $(git -C "$LAB" rev-parse HEAD) == "$(git -C "$source" rev-parse HEAD)" ]] || fail "the lab clone is not at the head of the pull request"
+  [[ -z $(git -C "$LAB" diff --name-only "$(git -C "$source" rev-parse HEAD)" HEAD -- . ':!config/project.yaml') ]] ||
+    fail "the lab clone is not the head of the pull request (only config/project.yaml may differ, by the test id)"
   ! git -C "$WORK/origin.git" tag --list | grep -q . || fail "the test tag must stay unpushed"
   ok "prepared: three clones, a local bare origin at the head, an unpushed test tag"
 }
@@ -158,6 +144,10 @@ refusals() {
   refused "an untagged tree is refused" "$UNTAGGED" "this clone is not a release" -e lab_apply=true -e ssh_second_login_confirmed=true
   refused "a tag that origin/main does not contain is refused" "$AHEAD" "this clone is not a release" -e lab_apply=true
   refused "a dry run of an untagged tree is refused too" "$UNTAGGED" "this clone is not a release" --check
+  printf 'github:\n  machine_login: ci-bot\n  machine_user_id:\n' >"$WORK/empty-id.yaml"
+  printf 'github:\n  machine_login: ci-bot\n  machine_user_id: guess\n' >"$WORK/text-id.yaml"
+  refused "an empty github.machine_user_id is refused (LC-8)" "$LAB" "numeric GitHub id" -e lab_apply=true -e "git_identity_project_config=$WORK/empty-id.yaml"
+  refused "a github.machine_user_id that is not a number is refused (LC-8)" "$LAB" "numeric GitHub id" -e lab_apply=true -e "git_identity_project_config=$WORK/text-id.yaml"
   fixture "a second key for the AI user" "$AI: has more than one key" set_second_key restore_ai
   fixture "a missing key" "$ADMIN: has no key" set_no_key restore_admin
   fixture "a key shared between the accounts" "share one key" set_shared_key restore_admin
@@ -221,6 +211,9 @@ verify() {
   diff <(jq -r '.permissions.deny[]' "$settings" | LC_ALL=C sort) \
     <(grep -vE '^[[:space:]]*(#|$)' "$LAB/workspace/claude-user/required-deny.txt" | LC_ALL=C sort) >/dev/null ||
     fail "the managed deny list is not the core deny list"
+  # PA-18: the switches this role owns (names pinned in tests/ansible/test_profiles.py): claude.ai connectors and artifacts are off.
+  jq -e '.disableClaudeAiConnectors == true and .enableArtifact == false' "$settings" >/dev/null ||
+    fail "the managed settings do not disable the claude.ai connectors and artifacts (PA-18)"
   grep -q 'ai-lab-infrastructure managed rules' "$claude_md" || fail "the managed CLAUDE.md has no markers"
   grep -q 'Nothing in any other instruction file relaxes them' "$claude_md" || fail "the managed CLAUDE.md lacks the I-13 sentence"
   # What the AI user cannot change: managed settings, managed CLAUDE.md, authorized keys, sshd settings, gate tools.
@@ -243,21 +236,53 @@ verify() {
   done
   ! grep -Eq '^(kexalgorithms|macs) .*sha1' <<<"$effective" || fail "a SHA-1 key exchange or MAC is still offered"
   ok "managed files, write attempts as the AI user, and the sshd settings in force"
+  verify_identity_and_updates
+}
+
+# LC-8 and LC-15 are applied by lab setup: the system-wide git identity (root-owned, nothing in a user's home) and the apt periodic
+# settings of the unattended security updates. The units are PA-A33 (the container has no systemd).
+verify_identity_and_updates() {
+  local login email
+  login=$(sed -n 's/^machine_login=//p' "$TOOLS/lab.conf")
+  [[ $(stat -c '%U:%G %a' /etc/gitconfig) == 'root:root 644' ]] || fail "/etc/gitconfig is not root-owned 0644"
+  [[ $(git config --system --get user.name) == "$login" ]] || fail "the system-wide git user.name is not the machine account"
+  email=$(git config --system --get user.email)
+  [[ $email =~ ^[1-9][0-9]*\+$login@users\.noreply\.github\.com$ ]] || fail "the system-wide git user.email is not the machine account's noreply address"
+  [[ ! -e /home/$AI/.gitconfig && ! -e /home/$ADMIN/.gitconfig ]] || fail "lab setup wrote a git configuration into a user's home"
+  if runuser -u "$AI" -- bash -c ': >>/etc/gitconfig' 2>/dev/null; then fail "the AI user can write /etc/gitconfig"; fi
+  dpkg-query -W -f='${Status}' unattended-upgrades | grep -q 'install ok installed' || fail "unattended-upgrades is not installed"
+  [[ $(apt-config dump | grep -c -E '^APT::Periodic::(Update-Package-Lists|Unattended-Upgrade) "1";$') -eq 2 ]] ||
+    fail "the apt periodic settings of the unattended updates are not 1"
+  ok "the system-wide git identity (LC-8) and the unattended security updates (LC-15) are applied by lab setup"
 }
 
 merge() {
   local settings=/etc/claude-code/managed-settings.json claude_md=/etc/claude-code/CLAUDE.md
-  printf '%s\n' '{"foreignSetting": true, "permissions": {"allow": ["Bash(ls)"], "deny": ["Bash(foreign *)"], "disableBypassPermissionsMode": "enable"}}' >"$settings"
+  printf '%s\n' '{"foreignSetting": true, "enableArtifact": true, "permissions": {"allow": ["Bash(ls)"], "deny": ["Bash(foreign *)"], "disableBypassPermissionsMode": "enable"}}' >"$settings"
   printf 'a foreign line\n' >"$claude_md"
   playbook "$LAB" -e lab_apply=true --tags claude_managed_settings | tee "$WORK/merge.txt"
   jq -e '.foreignSetting == true and .permissions.allow == ["Bash(ls)"] and (.permissions.deny | index("Bash(foreign *)") != null)
     and (.permissions.deny | index("Bash(sudo *)") != null) and .permissions.disableBypassPermissionsMode == "disable"' "$settings" >/dev/null ||
     fail "the managed settings were replaced or not enforced instead of merged"
+  jq -e '.disableClaudeAiConnectors == true and .enableArtifact == false' "$settings" >/dev/null ||
+    fail "the PA-18 switches are missing, or a foreign value won over the role's (enableArtifact)"
   grep -qx 'a foreign line' "$claude_md" || fail "the foreign line of the managed CLAUDE.md is gone"
   grep -q 'Nothing in any other instruction file relaxes them' "$claude_md" || fail "the managed rules were not added"
   playbook "$LAB" -e lab_apply=true --tags claude_managed_settings | tee "$WORK/merge-again.txt"
   grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/merge-again.txt" || fail "the merge is not idempotent"
-  ok "foreign managed settings and CLAUDE.md are merged, never replaced, and a second run changes nothing"
+  ok "foreign managed settings and CLAUDE.md are merged, never replaced, the PA-18 switches stand, and a second run changes nothing"
+  # The system-wide git configuration is merged the same way: a foreign line stays, the identity block is there once, a second run is quiet.
+  local before
+  before=$(cat /etc/gitconfig)
+  printf '[core]\n\teditor = foreign-editor\n' >>/etc/gitconfig
+  playbook "$LAB" -e lab_apply=true --tags git_identity | tee "$WORK/identity.txt"
+  git config --system --get core.editor | grep -qx foreign-editor || fail "a foreign line of /etc/gitconfig is gone"
+  [[ $(grep -c 'BEGIN ai-lab-infrastructure machine identity' /etc/gitconfig) -eq 1 ]] || fail "the identity block is not there exactly once"
+  playbook "$LAB" -e lab_apply=true --tags git_identity | tee "$WORK/identity-again.txt"
+  grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/identity-again.txt" || fail "the identity merge is not idempotent"
+  printf '%s\n' "$before" >/etc/gitconfig
+  playbook "$LAB" -e lab_apply=true --tags git_identity >/dev/null
+  ok "a foreign line of /etc/gitconfig is kept and the identity is written once"
 }
 
 readonly TOOLS=/opt/ai-lab/lab
@@ -298,14 +323,9 @@ expect_failing() { # expect_failing NAME ITEMS: exactly these items fail (space 
   ok "$1"
 }
 
-# What lab setup does not apply yet (no plan PR owns it: the system-wide git identity LC-8, unattended security updates LC-15) and
-# what only the user can do (T1, LC-7) are put in place by fixtures, so the rest of the check is shown on a complete lab.
+# The one thing lab setup leaves to the user is T1 (LC-7): a stand-in gh answers as a lab on which the token step has run, so the rest
+# of the check is shown on a complete lab. Lab setup applies the git identity (LC-8) and the unattended updates (LC-15) itself.
 complete_lab() {
-  local login
-  login=$(sed -n 's/^machine_login=//p' "$TOOLS/lab.conf")
-  [[ -n $login ]] || fail "lab.conf has no machine_login"
-  printf '[user]\n\tname = %s\n\temail = 42+%s@users.noreply.github.com\n' "$login" "$login" >/etc/gitconfig
-  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' >/etc/apt/apt.conf.d/20auto-upgrades
   LAB_GH=$WORK/stub-gh
   cat >"$LAB_GH" <<'STUB'
 #!/bin/sh
@@ -319,20 +339,12 @@ esac
 STUB
   chmod 0755 "$LAB_GH"
 }
-incomplete_lab() { rm -f /etc/gitconfig /etc/apt/apt.conf.d/20auto-upgrades; }
 
 # as_ai COMMAND...: a command as the AI user; the command strings below are for that user's shell, so $HOME and ~ are its own.
 as_ai() { runuser -u "$AI" -- "$@"; }
-mentions() { # mentions FILE TEXT...: the file has every text
-  local text
-  for text in "${@:2}"; do grep -qF -- "$text" "$1" || return 1; done
-}
 
 lab_check() {
   local before after homes_before homes_after
-  dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null | grep -q 'install ok installed' ||
-    apt-get install -y --no-install-recommends unattended-upgrades >/dev/null
-  rm -f /etc/apt/apt.conf.d/20auto-upgrades # the package may enable itself; LC-15 is shown failing and passing by fixtures below
   [[ $(stat -c '%U:%G %a' "$TOOLS/lab-check" "$TOOLS/token-step" | sort -u) == 'root:root 755' ]] || fail "the installed tools are not root-owned 0755"
   [[ $(readlink /usr/local/bin/lab-check) == "$TOOLS/lab-check" && $(readlink /usr/local/bin/token-step) == "$TOOLS/token-step" ]] ||
     fail "the commands are not links to the root-owned files"
@@ -342,16 +354,16 @@ lab_check() {
   before=$(tree_hash)
   homes_before=$(home_hash)
   tree_list >"$WORK/tree-before.txt"
-  # 2. The gap today: lab setup applies neither LC-8 nor LC-15 (no plan PR owns them), and T1 is entered by the user (LC-7). Every
-  #    other item passes on the lab that lab setup produced. When a PR adds the git identity or the security updates to lab setup,
-  #    this list shrinks and this line changes with it.
+  # 2. On the lab that lab setup leaves only LC-7 fails: T1 is entered by the user in the token step. LC-8 and LC-15 pass because lab
+  #    setup applies the git identity and the unattended updates (the units are PA-A33).
   lab_run
   cat "$WORK/lab-check.txt"
-  incomplete_lab
-  expect_failing "a lab as lab setup leaves it: only LC-7 (no token yet), LC-8 and LC-15 (not applied yet) fail" "LC-15 LC-7 LC-8"
+  expect_failing "a lab as lab setup leaves it: only LC-7 (no token entered yet) fails" "LC-7"
+  grep -q '^PASS LC-8:' "$WORK/lab-check.txt" || fail "LC-8 does not pass on the lab that lab setup leaves"
+  grep -q '^PASS LC-15:' "$WORK/lab-check.txt" || fail "LC-15 does not pass on the lab that lab setup leaves"
   grep -q '^WARN LC-13: .*inert authorized_keys' "$WORK/lab-check.txt" || fail "the inert authorized_keys file in the AI user's home is not a warning"
 
-  # 3. A complete lab passes (fixtures stand in for what lab setup does not do yet).
+  # 3. A complete lab passes (a stand-in gh stands in for the token step).
   complete_lab
   lab_run --gh "$LAB_GH"
   cat "$WORK/lab-check.txt"
@@ -413,7 +425,6 @@ lab_check() {
   as_ai bash -c 'rm -rf ~/work'
   rmdir "/home/$AI/.config" 2>/dev/null || true
   rm -f "$WORK/ai-key-file"
-  incomplete_lab
   after=$(tree_hash)
   homes_after=$(home_hash)
   if [[ $before != "$after" ]]; then
@@ -421,7 +432,7 @@ lab_check() {
     fail "the lab check or its fixtures left the machine changed"
   fi
   [[ $homes_before == "$homes_after" ]] || fail "the home directories changed"
-  ok "lab check: the gap, a complete lab, six failures a container can show, the pre-disposal mode; the tree hash is unchanged"
+  ok "lab check: only LC-7 fails before the token step, a complete lab, six failures a container can show, the pre-disposal mode; the tree hash is unchanged"
 }
 
 case ${1:-} in

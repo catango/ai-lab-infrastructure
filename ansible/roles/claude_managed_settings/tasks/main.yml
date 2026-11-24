@@ -23,7 +23,7 @@
   when: claude_managed_current_stat.stat.exists
   become: "{{ ai_lab_become }}"
 
-- name: Write the managed settings, the existing ones merged with the settings of workspace/claude-user/
+- name: Write the managed settings, the existing ones merged with the settings of workspace/claude-user/ and the settings this role owns
   vars:
     claude_managed_existing: "{{ (claude_managed_current.content | b64decode | from_json) if claude_managed_current_stat.stat.exists else {} }}"
     claude_managed_ours: "{{ lookup('ansible.builtin.file', claude_managed_settings_source) | from_json }}"
@@ -32,7 +32,7 @@
     owner: root
     group: root
     mode: "0644"
-    content: "{{ claude_managed_existing | combine(claude_managed_ours, recursive=True, list_merge='append_rp') | to_nice_json }}\n"
+    content: "{{ claude_managed_existing | combine(claude_managed_ours, claude_managed_role_settings, recursive=True, list_merge='append_rp') | to_nice_json }}\n"
   become: "{{ ai_lab_become }}"
 
 - name: Write the managed CLAUDE.md (the rules that must not be relaxed), inside markers, keeping every other line of an existing file

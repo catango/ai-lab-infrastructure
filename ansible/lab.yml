@@ -5,8 +5,8 @@
 #   Apply:              the same without --check, with -e lab_apply=true
 #   Switch sshd:        only after a second login with each account worked while this session stayed open, add
 #                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
-# Order: the gates and the key audit first (a refusal changes nothing), the toolchain, the managed files, and the root-owned token step
-# and lab check next, sshd last.
+# Order: the gates and the key audit first (a refusal changes nothing), the toolchain, the managed files, the root-owned token step
+# and lab check, the system-wide git identity (LC-8) and unattended security updates (LC-15) next, sshd last.
 - name: Apply the lab profile
   hosts: all
   connection: local
@@ -67,6 +67,12 @@
         name: ssh_hardening
         tasks_from: audit
 
+    - name: The configuration names the machine account and its numeric id, for the system-wide git identity (LC-8); refuses before anything changes
+      tags: [always]
+      ansible.builtin.import_role:
+        name: git_identity
+        tasks_from: assert
+
   roles:
     - apt_base
     - toolchain
@@ -77,5 +83,9 @@
       tags: [claude_managed_settings]
     - role: lab_tools
       tags: [lab_tools]
+    - role: git_identity
+      tags: [git_identity]
+    - role: unattended_upgrades
+      tags: [unattended_upgrades]
     - role: ssh_hardening
       tags: [ssh_hardening]

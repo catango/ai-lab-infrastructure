@@ -1,4 +1,4 @@
-"""CR-57 plan PR 3: the lab_tools role (the root-owned token step and lab check, LC-14), the sshd snapshot, and the PC-8 path.
+"""CR-57 plan PR 3 and PR 4: the lab_tools role (the root-owned token step and lab check, LC-14), the sshd snapshot, and the PC-8 paths.
 
 Nothing here needs root. The role is read in text and run in check mode against a temporary prefix; what needs root (ownership,
 the links in /usr/local/bin, the AI user unable to write) is the PA-28 job (tests/ansible/pa28-lab.sh, job `host-profiles`).
@@ -49,10 +49,22 @@ class Role(unittest.TestCase):
         self.assertLess(roles.index("lab_tools"), roles.index("ssh_hardening"))
         self.assertEqual(roles[-1], "ssh_hardening")
 
-    def test_the_new_role_is_an_operator_path_for_the_next_pr(self):
-        """PC-8 reads the base commit, so this PR states the path in its body; the file lists it for every PR after this one."""
+    def test_lab_setup_applies_what_lc8_and_lc15_read_so_only_lc7_is_left_to_the_user(self):
+        """Plan PR 4, first extension: the git identity and the unattended updates are part of lab setup (they had no owner before)."""
+        text = (ROOT / "ansible" / "lab.yml").read_text()
+        roles = re.findall(r"^    - (?:role: )?([a-z_]+)$", text[text.index("  roles:"):], re.M)
+        for role in ("git_identity", "unattended_upgrades"):
+            self.assertLess(roles.index(role), roles.index("ssh_hardening"), role)
+        check = (ROLE / "files" / "lab-check").read_text()
+        self.assertIn("APT::Periodic::Unattended-Upgrade", check)
+        self.assertIn("def lc8", check)
+
+    def test_the_roles_are_operator_paths(self):
+        """PC-8 reads the base commit, so a PR that adds a path states it in its body; the file lists it for every PR after that."""
         config = (ROOT / "config" / "project.yaml").read_text()
-        self.assertIn("  - ansible/roles/lab_tools/\n", config)
+        for path in ("lab_tools", "git_identity", "unattended_upgrades", "ssh_hardening", "release_check", "claude_managed_settings"):
+            self.assertIn(f"  - ansible/roles/{path}/\n", config, path)
+        self.assertIn("  - ansible/roles/operator_*/\n", config)
 
     def test_a_check_mode_run_renders_the_lab_configuration_from_the_project_configuration(self):
         if shutil.which("ansible-playbook") is None:
