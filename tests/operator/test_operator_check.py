@@ -6,6 +6,7 @@ root. The PA-28 job runs the installed check as the operator user on a real Debi
 """
 import base64
 import fcntl
+import hashlib
 import importlib.machinery
 import importlib.util
 import os
@@ -51,11 +52,7 @@ def key_line(seed, options="", comment=""):
 
 
 def tree_hash(path):
-    return helpers_tree_hash(path)
-
-
-def helpers_tree_hash(path):
-    import hashlib
+    """A hash of names, types, modes, and contents under path (the check is read-only: the tree must be the same after a run)."""
     digest = hashlib.sha256()
     for current, dirs, files in os.walk(path):
         dirs.sort()

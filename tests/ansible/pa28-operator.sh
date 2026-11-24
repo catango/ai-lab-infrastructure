@@ -365,7 +365,7 @@ time.sleep(120)' "$STATE/run.lock" >"$WORK/lock-holder.txt" &
     fail "the operator check or its fixtures left the machine changed"
   fi
   [[ $homes_before == "$homes_after" ]] || fail "the home directories changed"
-  ok "operator check: every item passes, nine failures a container can show, the run lock; the tree hash is unchanged"
+  ok "operator check: every item passes, eight failures a container can show, the run lock; the tree hash is unchanged"
 }
 
 # The profile takes the operator user out of a root-equivalent group again (it "sets the operator user without sudo").
