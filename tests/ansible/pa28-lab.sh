@@ -40,6 +40,15 @@ tree_hash() {
   } | LC_ALL=C sort | sha256sum | cut -d' ' -f1
 }
 
+# The names behind tree_hash, to show what changed when two hashes differ.
+tree_list() {
+  local roots=() root
+  for root in /etc /opt/ai-lab /usr/local /home; do
+    if [[ -e $root ]]; then roots+=("$root"); fi
+  done
+  find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n' | LC_ALL=C sort
+}
+
 # The same for the two managed accounts' home directories only: lab setup writes nothing into a user's home (PA-16).
 home_hash() {
   {
@@ -329,6 +338,7 @@ lab_check() {
   # 1. Read-only: the tree and the homes are the same after a run.
   before=$(tree_hash)
   homes_before=$(home_hash)
+  tree_list >"$WORK/tree-before.txt"
   # 2. The gap today: lab setup applies neither LC-8 nor LC-15 (no plan PR owns them), and T1 is entered by the user (LC-7). Every
   #    other item passes on the lab that lab setup produced. When a PR adds the git identity or the security updates to lab setup,
   #    this list shrinks and this line changes with it.
@@ -403,7 +413,10 @@ lab_check() {
   incomplete_lab
   after=$(tree_hash)
   homes_after=$(home_hash)
-  [[ $before == "$after" ]] || fail "the lab check or its fixtures left the machine changed"
+  if [[ $before != "$after" ]]; then
+    tree_list | diff "$WORK/tree-before.txt" - || true
+    fail "the lab check or its fixtures left the machine changed"
+  fi
   [[ $homes_before == "$homes_after" ]] || fail "the home directories changed"
   ok "lab check: the gap, a complete lab, six failures a container can show, the pre-disposal mode; the tree hash is unchanged"
 }
