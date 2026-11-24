@@ -23,9 +23,6 @@ architectures:
   - name: amd64
     runner: ubuntu-24.04
     runner_private: ubuntu-24.04
-  - name: arm64
-    runner: ubuntu-24.04-arm
-    runner_private: ""
 # Operator paths of rule PC-8 (ADR-003 PC-8, ADR-011, CR-57). A PR that changes (adds, edits, deletes, or renames away from or
 # to) one of these needs the PR-body section "Operator script review". Read from the BASE commit by pr-contract, so a PR cannot
 # change what judges it (SC-20); a missing or malformed key fails closed, an explicit `[]` makes PC-8 inactive (a newly
