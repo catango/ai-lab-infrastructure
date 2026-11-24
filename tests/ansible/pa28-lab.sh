@@ -34,7 +34,10 @@ ok() { printf 'ok: %s\n' "$*"; }
 # A hash of every path the lab profile may touch (names, types, modes, owners, link targets, file contents), outside what the
 # container itself rewrites. A refusal and a dry run must leave it unchanged.
 tree_hash() {
-  local roots=(/etc /opt/ai-lab /usr/local /home)
+  local roots=() root
+  for root in /etc /opt/ai-lab /usr/local /home; do
+    if [[ -e $root ]]; then roots+=("$root"); fi
+  done
   {
     find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
     find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
