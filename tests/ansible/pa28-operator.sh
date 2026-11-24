@@ -26,6 +26,9 @@ readonly TOOLS=/opt/ai-lab/operator
 readonly STATE=/var/lib/ai-lab/operator
 readonly CLONE=$WORK/clone UNTAGGED=$WORK/untagged AHEAD=$WORK/ahead SECOND=$WORK/second
 readonly SECOND_NAME=second-project
+# The name of the first project is the one the profile reads from config/project.yaml of the clone it runs from (the default list).
+PROJECT=$(sed -n 's/^  name: //p' "$(dirname "${BASH_SOURCE[0]}")/../../config/project.yaml" | head -n 1)
+readonly PROJECT
 # shellcheck disable=SC2034 # read by tree_list in pa28-common.sh
 TREE_ROOTS=(/etc /opt/ai-lab /usr/local /home /var/lib/ai-lab)
 
@@ -151,17 +154,17 @@ second_run() {
 
 # Two projects (PA-A30, PA-42): this clone and a second clone at its own tag, each with its own installation and output directory.
 two_projects() {
-  printf '{"operator_projects":[{"name":"platform","source":"%s"},{"name":"%s","source":"%s"}]}\n' "$CLONE" "$SECOND_NAME" "$SECOND" \
+  printf '{"operator_projects":[{"name":"%s","source":"%s"},{"name":"%s","source":"%s"}]}\n' "$PROJECT" "$CLONE" "$SECOND_NAME" "$SECOND" \
     >"$WORK/projects.json"
 }
 
 second_project() {
   two_projects
   playbook "$CLONE" -e operator_apply=true -e ssh_second_login_confirmed=true -e "@$WORK/projects.json" | tee "$WORK/second-project.txt"
-  [[ -f $TOOLS/projects/platform/RELEASE && -f $TOOLS/projects/$SECOND_NAME/RELEASE ]] || fail "a project is not installed"
-  grep -qx 'release_tag=v0.0.0-ci' "$TOOLS/projects/platform/RELEASE" || fail "the first project is not at its tag"
+  [[ -f $TOOLS/projects/$PROJECT/RELEASE && -f $TOOLS/projects/$SECOND_NAME/RELEASE ]] || fail "a project is not installed"
+  grep -qx 'release_tag=v0.0.0-ci' "$TOOLS/projects/$PROJECT/RELEASE" || fail "the first project is not at its tag"
   grep -qx 'release_tag=v0.0.2-ci' "$TOOLS/projects/$SECOND_NAME/RELEASE" || fail "the second project is not at its own tag"
-  [[ $(stat -c '%U %a' "$STATE/output/platform" "$STATE/output/$SECOND_NAME" | sort -u) == "$AI 700" ]] || fail "an output directory is not the operator user's 0700"
+  [[ $(stat -c '%U %a' "$STATE/output/$PROJECT" "$STATE/output/$SECOND_NAME" | sort -u) == "$AI 700" ]] || fail "an output directory is not the operator user's 0700"
   playbook "$CLONE" -e operator_apply=true -e ssh_second_login_confirmed=true -e "@$WORK/projects.json" | tee "$WORK/second-project-again.txt"
   grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/second-project-again.txt" || fail "a second run with two projects changed something"
   ok "two projects installed, each at its own tag with its own 0700 output directory; a second run changes nothing"
@@ -187,17 +190,17 @@ verify() {
     fail "the commands are not links to the root-owned files"
   grep -qx "operator_user=$AI" "$TOOLS/operator.conf" || fail "operator.conf does not name the operator user"
   # What the operator user cannot change (PA-A21): the installed scripts of every project, the tools, the keys, the sshd settings.
-  tool=$(find "$TOOLS/projects/platform/scripts/operator" -maxdepth 1 -type f | LC_ALL=C sort | head -n 1)
-  for target in "$tool" "$TOOLS/operator-check" "$TOOLS/operator.conf" "$TOOLS/projects/platform/RELEASE" "$KEYS/$AI" "$KEYS/$ADMIN" "$DROPIN"; do
+  tool=$(find "$TOOLS/projects/$PROJECT/scripts/operator" -maxdepth 1 -type f | LC_ALL=C sort | head -n 1)
+  for target in "$tool" "$TOOLS/operator-check" "$TOOLS/operator.conf" "$TOOLS/projects/$PROJECT/RELEASE" "$KEYS/$AI" "$KEYS/$ADMIN" "$DROPIN"; do
     if runuser -u "$AI" -- bash -c "$append" _ "$target" 2>/dev/null; then fail "the operator user can write $target"; fi
     runuser -u "$AI" -- rm -f -- "$target" 2>/dev/null || true
     [[ -e $target ]] || fail "the operator user removed $target"
   done
-  for dir in "$TOOLS" "$TOOLS/projects" "$TOOLS/projects/platform" "$TOOLS/projects/platform/scripts/operator" "$KEYS" /etc/ssh/sshd_config.d /opt/ai-lab; do
+  for dir in "$TOOLS" "$TOOLS/projects" "$TOOLS/projects/$PROJECT" "$TOOLS/projects/$PROJECT/scripts/operator" "$KEYS" /etc/ssh/sshd_config.d /opt/ai-lab; do
     if runuser -u "$AI" -- test -w "$dir"; then fail "the operator user can write into $dir"; fi
   done
   # Per project: one root-owned installation directory at its tag, one output directory (0700) of the operator user.
-  for dir in platform "$SECOND_NAME"; do
+  for dir in "$PROJECT" "$SECOND_NAME"; do
     [[ $(stat -c '%U:%G %a' "$TOOLS/projects/$dir") == 'root:root 755' ]] || fail "the installation of $dir is not root-owned"
     [[ $(stat -c '%U %a' "$STATE/output/$dir") == "$AI 700" ]] || fail "the output directory of $dir is not the operator user's 0700"
   done
@@ -306,9 +309,9 @@ operator_check() {
   expect_failing "an output directory that is not 0700 fails PA-42" "PA-42"
   # T2 and T3 only inside script processes (PA-A26): in a file, and in the environment of a process that is not a script.
   # shellcheck disable=SC2016 # the token text is assembled by the operator user's shell
-  runuser -u "$AI" -- bash -c 'printf "token %s%s\n" "gh""p_" "AAAAAAAAAAAAAAAAAAAAAAAA" >"$1/leak.txt"' _ "$STATE/output/platform"
+  runuser -u "$AI" -- bash -c 'printf "token %s%s\n" "gh""p_" "AAAAAAAAAAAAAAAAAAAAAAAA" >"$1/leak.txt"' _ "$STATE/output/$PROJECT"
   op_run
-  rm -f "$STATE/output/platform/leak.txt"
+  rm -f "$STATE/output/$PROJECT/leak.txt"
   expect_failing "a token in a file of an output directory fails PA-13" "PA-13"
   runuser -u "$AI" -- env GH_TOKEN=canary sleep 120 &
   local holder=$!
@@ -329,11 +332,11 @@ time.sleep(120)' "$STATE/run.lock" >"$WORK/lock-holder.txt" &
   for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q held "$WORK/lock-holder.txt" && break; sleep 0.5; done
   grep -q held "$WORK/lock-holder.txt" || fail "the lock holder did not start"
   OP_RC=0
-  runuser -u "$AI" -- "$TOOLS/operator-run" platform scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || OP_RC=$?
+  runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || OP_RC=$?
   kill "$holder" 2>/dev/null || true
   wait "$holder" 2>/dev/null || true
   refusal_is 1 "$WORK/operator-run.txt" 'another operator run is in progress' "a second run was not refused while the first was in progress"
-  runuser -u "$AI" -- "$TOOLS/operator-run" platform scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || fail "the script did not run once the lock was free"
+  runuser -u "$AI" -- "$TOOLS/operator-run" "$PROJECT" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || fail "the script did not run once the lock was free"
   runuser -u "$AI" -- "$TOOLS/operator-run" "$SECOND_NAME" scripts/operator/facts --help >"$WORK/operator-run.txt" 2>&1 || fail "the second project's script did not run"
   ok "the run lock refuses a second run while one is in progress and releases after it"
 
