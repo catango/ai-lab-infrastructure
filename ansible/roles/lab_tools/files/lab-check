@@ -10,7 +10,6 @@ environment variable. Exit 0 when nothing failed, 1 when something failed, 2 for
 before a lab is discarded. It reads the remote branches as of the last fetch and changes nothing.
 The logic is in plain functions of the class Lab, so tests/lab can run every item against a fake machine without root or sshd.
 """
-import getpass
 import importlib.machinery
 import importlib.util
 import json
@@ -516,8 +515,8 @@ class Lab:
 def build(prefix, gh=None):
     conf = read_conf(os.path.join(prefix, "lab", "lab.conf"))
     audit = load_module("ssh_hardening_audit", os.path.join(prefix, "lab", "ssh_hardening_audit.py"))
-    user = getpass.getuser()
-    return Lab(audit, conf, user, pwd.getpwnam(user).pw_dir, prefix=prefix, gh=gh)
+    entry = pwd.getpwuid(os.getuid())  # the account database, not the environment: LOGNAME and USER are not trusted
+    return Lab(audit, conf, entry.pw_name, entry.pw_dir, prefix=prefix, gh=gh)
 
 
 def main(argv):

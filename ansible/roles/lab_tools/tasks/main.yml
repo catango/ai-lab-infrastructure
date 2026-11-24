@@ -1,0 +1,80 @@
+# The root-owned token step and lab check of the AI lab (ADR-012 decisions 5 and 6, CR-57 LC-14, PA-A8). Everything here belongs to
+# root and the AI user cannot change it: the user runs these files and never owns them. Nothing is written into a user's home.
+# Besides the two scripts the lab check needs three things that lab setup copies from the release clone, because the AI user cannot
+# read the clone of the lab admin: the shared SSH audit module (LC-11 to LC-13), a copy of the toolchain engine with the manifest
+# (LC-9), and lab.conf (the machine account's login and the names of the two managed accounts).
+- name: The lab tools directories exist, owned by root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ lab_tools_dir }}"
+    - "{{ lab_tools_dir }}/engine"
+    - "{{ lab_tools_dir }}/engine/scripts"
+  become: "{{ ai_lab_become }}"
+
+- name: Install the token step and the lab check
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ lab_tools_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [token-step, lab-check]
+  become: "{{ ai_lab_become }}"
+
+- name: Install the shared SSH audit module the lab check imports
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/ansible/roles/ssh_hardening/library/ssh_hardening_audit.py"
+    dest: "{{ lab_tools_dir }}/ssh_hardening_audit.py"
+    owner: root
+    group: root
+    mode: "0644"
+  become: "{{ ai_lab_become }}"
+
+- name: Install a copy of the toolchain engine and the manifest (the lab check verifies the gate tools with it)
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ lab_tools_dir }}/engine/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+    directory_mode: "0755"
+  loop:
+    - {src: "{{ repo_root }}/scripts/toolchain", dest: scripts/toolchain, mode: "0755"}
+    - {src: "{{ repo_root }}/scripts/toolchain_engine/", dest: scripts/toolchain_engine/, mode: "0644"}
+    - {src: "{{ repo_root }}/toolchain/", dest: toolchain/, mode: "0644"}
+  loop_control:
+    label: "{{ item.dest }}"
+  become: "{{ ai_lab_become }}"
+
+- name: Write the lab configuration (the machine account's login and the managed account names)
+  vars:
+    lab_tools_project: "{{ lookup('ansible.builtin.file', lab_tools_project_config) | from_yaml }}"
+  ansible.builtin.copy:
+    dest: "{{ lab_tools_dir }}/lab.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Written by lab setup (ansible/roles/lab_tools). Do not edit.
+      owner={{ lab_tools_project.github.owner }}
+      machine_login={{ lab_tools_project.github.machine_login }}
+      ai_user={{ lab_ai_user }}
+      admin_user={{ lab_admin_user }}
+  become: "{{ ai_lab_become }}"
+
+- name: The commands the user types are links to the root-owned files
+  ansible.builtin.file:
+    src: "{{ lab_tools_dir }}/{{ item }}"
+    dest: "{{ lab_tools_link_dir }}/{{ item }}"
+    state: link
+    # A dry run on a fresh machine has not created the files yet; `force` only lets check mode plan the link (a real run never sets it).
+    force: "{{ ansible_check_mode }}"
+    owner: root
+    group: root
+  loop: [token-step, lab-check]
+  become: "{{ ai_lab_become }}"

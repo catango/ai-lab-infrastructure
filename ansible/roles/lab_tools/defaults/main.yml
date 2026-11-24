@@ -1,0 +1,6 @@
+# Where lab setup installs the root-owned tools the user runs on the AI lab (CR-57 LC-14, PA-17): the token step and the lab check.
+lab_tools_dir: "{{ toolchain_prefix }}/lab"
+# The commands the user types are links in a root-owned directory on the default PATH to the files above.
+lab_tools_link_dir: /usr/local/bin
+# The configuration the machine account's login comes from (the lab admin applies lab setup from a release tag, so it is trusted).
+lab_tools_project_config: "{{ repo_root }}/config/project.yaml"
