@@ -4,3 +4,13 @@ claude_managed_settings_path: "{{ claude_managed_dir }}/managed-settings.json"
 claude_managed_claude_md_path: "{{ claude_managed_dir }}/CLAUDE.md"
 # The settings that are merged into the managed settings: the user-level settings of the workspace, deny list included (CR-57 C-8, PA-5).
 claude_managed_settings_source: "{{ repo_root }}/workspace/claude-user/settings.json"
+# Settings this role owns, merged over the settings above and over a file that already exists, and never a replacement of it (PA-18,
+# ADR-012 section 6). The names are those of the Claude Code settings reference and managed-settings page (see the pull request body
+# for the pages read). Kept in step by tests/ansible/test_profiles.py, so a rename is a visible diff.
+#   disableClaudeAiConnectors: Claude Code does not fetch the claude.ai MCP connectors; a `true` in any managed source applies.
+#   enableArtifact: a `false` from any managed source turns the Artifact tool off.
+# Open, not set here: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is a documented environment variable, but no page names it as carried
+# by the `env` of managed settings; it is added when that is confirmed (PA-18, design section 12).
+claude_managed_role_settings:
+  disableClaudeAiConnectors: true
+  enableArtifact: false

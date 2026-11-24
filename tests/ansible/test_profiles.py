@@ -17,8 +17,9 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "ansible"
 ROLES = ("apt_base", "toolchain", "python_tools", "shell_env", "verify", "claude_managed_settings", "release_check", "ssh_hardening",
-         "lab_tools")
-LAB_ROLES = ["apt_base", "toolchain", "python_tools", "shell_env", "verify", "claude_managed_settings", "lab_tools", "ssh_hardening"]
+         "lab_tools", "git_identity", "unattended_upgrades")
+LAB_ROLES = ["apt_base", "toolchain", "python_tools", "shell_env", "verify", "claude_managed_settings", "lab_tools", "git_identity",
+             "unattended_upgrades", "ssh_hardening"]
 HAVE_ANSIBLE = shutil.which("ansible-playbook") is not None and shutil.which("git") is not None
 GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "noreply",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "noreply"}
@@ -100,7 +101,8 @@ class Structure(unittest.TestCase):
         names = re.findall(r"^    - name: (.+)$", pre, re.M)
         self.assertEqual([n.split(",")[0] for n in names], [
             "Refuse a real run without the explicit apply variable", "Release check", "Preflight",
-            "The two managed accounts are named and differ", "Key audit"])
+            "The two managed accounts are named and differ", "Key audit",
+            "The configuration names the machine account and its numeric id"])
         self.assertIn("name: release_check", pre)
         self.assertIn("tasks_from: audit", pre)
 
@@ -124,7 +126,8 @@ class Structure(unittest.TestCase):
         self.assertIn("ansible/builder.yml", (ROOT / "workspace" / "restore.sh").read_text(), "restore.sh still applies it until PR 7")
 
     def test_privilege_only_where_the_design_allows(self):
-        allowed = {"apt_base", "toolchain", "python_tools", "shell_env", "claude_managed_settings", "ssh_hardening", "lab_tools"}
+        allowed = {"apt_base", "toolchain", "python_tools", "shell_env", "claude_managed_settings", "ssh_hardening", "lab_tools",
+                   "git_identity", "unattended_upgrades"}
         for role in ROLES:
             for path in (ANSIBLE / "roles" / role / "tasks").glob("*.yml"):
                 text = path.read_text()
@@ -211,7 +214,7 @@ class ManagedFiles(unittest.TestCase):
 
     def test_the_role_merges_and_never_replaces(self):
         text = (ANSIBLE / "roles" / "claude_managed_settings" / "tasks" / "main.yml").read_text()
-        self.assertIn("combine(claude_managed_ours, recursive=True, list_merge='append_rp')", text)
+        self.assertIn("combine(claude_managed_ours, claude_managed_role_settings, recursive=True, list_merge='append_rp')", text)
         self.assertIn("ansible.builtin.blockinfile", text)
         self.assertNotIn("refusing to replace", text)
 

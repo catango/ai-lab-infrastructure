@@ -1,0 +1,75 @@
+# One project of operator_projects (the loop variable is operator_project: name and source).
+- name: Read the release of this project's clone
+  ansible.builtin.command:
+    argv: "{{ item.argv }}"
+  register: operator_project_git
+  changed_when: false
+  check_mode: false
+  loop:
+    - {name: tags, argv: [git, -C, "{{ operator_project.source }}", tag, --points-at, HEAD, --list, "v*"]}
+    - {name: commit, argv: [git, -C, "{{ operator_project.source }}", rev-parse, HEAD]}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: The installation directory of this project and the marker of the release it is from
+  vars:
+    operator_project_dir: "{{ operator_tools_dir }}/projects/{{ operator_project.name }}"
+    operator_project_tag: "{{ operator_project_git.results[0].stdout_lines | select('match', '^v[0-9]+([.][0-9]+)*([-+][0-9A-Za-z.]+)?$') | sort | first }}"
+    operator_project_marker: |
+      # Written by the operator configuration (ansible/roles/operator_projects). Do not edit.
+      project={{ operator_project.name }}
+      release_tag={{ operator_project_tag }}
+      release_commit={{ operator_project_git.results[1].stdout | trim }}
+      contained_in_origin_main=yes
+  block:
+    - name: Look for the marker of an earlier installation
+      ansible.builtin.slurp:
+        src: "{{ operator_project_dir }}/RELEASE"
+      register: operator_project_current
+      failed_when: false
+      become: "{{ ai_lab_become }}"
+
+    - name: Take an installation of another release away (nothing of an older tag may stay)
+      ansible.builtin.file:
+        path: "{{ operator_project_dir }}"
+        state: absent
+      when: (operator_project_current.content | default('') | b64decode) != operator_project_marker
+      become: "{{ ai_lab_become }}"
+
+    - name: The installation directory, owned by root
+      ansible.builtin.file:
+        path: "{{ operator_project_dir }}/scripts"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: "{{ ai_lab_become }}"
+
+    - name: Install the operator scripts of the release (root-owned, not writable by others, executable where the source is)
+      ansible.builtin.copy:
+        src: "{{ operator_project.source }}/scripts/operator"
+        dest: "{{ operator_project_dir }}/scripts/"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "u=rwX,go=rX"
+        directory_mode: "0755"
+      become: "{{ ai_lab_become }}"
+
+    - name: Record the release (written last, so a half installation has no marker and the operator check fails)
+      ansible.builtin.copy:
+        dest: "{{ operator_project_dir }}/RELEASE"
+        content: "{{ operator_project_marker }}"
+        owner: root
+        group: root
+        mode: "0644"
+      become: "{{ ai_lab_become }}"
+
+    - name: The output directory of this project (mode 0700, the operator user's)
+      ansible.builtin.file:
+        path: "{{ operator_output_dir }}/{{ operator_project.name }}"
+        state: directory
+        owner: "{{ operator_user }}"
+        group: "{{ operator_tools_group.stdout | trim }}"
+        mode: "0700"
+      become: "{{ ai_lab_become }}"

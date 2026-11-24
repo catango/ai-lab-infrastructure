@@ -6,6 +6,13 @@
 | Implements | ADR-011 (operator tier), CR-18 design sections 3, 5.7, 6 |
 | Performed by | The approver, as the operator user, in a plain SSH terminal. Claude Code never runs, reaches, or probes these machines |
 
+> **Interim (CR-57 plan PR 4).** The procedure below is the CR-18 Ubuntu one and is rewritten in plan PR 9. `scripts/operator/setup` and
+> `facts --privileged` no longer exist, and the operator profile is now the Ansible playbook `ansible/operator.yml` for Debian 13
+> (ADR-012 decisions 7 and 12; its header lists the dry run, the apply, the second-login switch of sshd, and the project list). It is
+> run by the operator admin from a release tag, and it ends with the operator check, `operator-check`, which the operator user runs.
+> Read the steps below for what they check, not for the commands they name. Root-only facts are manual lines (sshd settings, the
+> sudoers files, the rights of the operator user).
+
 This runbook is for the approver. Operator scripts live in `scripts/operator/` and run only on an operator machine, from a
 release tag. Every script is a dry run unless it gets `--apply`. Read the dry run, then apply.
 

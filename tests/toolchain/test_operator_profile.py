@@ -1,4 +1,5 @@
-"""The operator profile in the manifest (ADR-005 decision 10, CR-18): allowed profile name and the apt membership."""
+"""The operator profile in the manifest (ADR-005 decision 10, CR-57 O-15, OC-6): allowed profile name and the apt membership,
+which is Python 3 and git only."""
 import json
 import subprocess
 import sys
@@ -9,8 +10,7 @@ from helpers import ROOT
 from test_manifest import check, good
 from toolchain_engine import manifest
 
-OPERATOR_APT = {"python3", "python3-apt", "python3-venv", "ansible-core", "git", "ca-certificates", "nftables", "openssh-server", "sudo",
-                "unattended-upgrades", "systemd-timesyncd"}
+OPERATOR_APT = {"python3", "git"}  # O-15, OC-6: Python 3 and git only; unattended-upgrades is installed by a shared Ansible role
 
 
 def engine(*argv):
@@ -35,21 +35,24 @@ class ProfileName(unittest.TestCase):
 
 
 class RealManifest(unittest.TestCase):
-    def test_the_operator_apt_packages_are_exactly_the_fixed_list(self):
+    def test_the_operator_apt_packages_are_python_3_and_git_only(self):
         done = engine("list", "--profile", "operator", "--source", "apt", "--format", "json")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual({item["package"] for item in json.loads(done.stdout)}, OPERATOR_APT)
 
-    def test_the_operator_profile_has_no_downloads_yet(self):
+    def test_the_operator_profile_installs_no_gate_tools_no_downloads_and_no_pip_tools(self):
         done = engine("list", "--profile", "operator", "--source", "download", "--format", "json")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(json.loads(done.stdout), [])
+        pip = engine("list", "--profile", "operator", "--source", "pip", "--format", "json")
+        self.assertEqual(json.loads(pip.stdout), [])
 
     def test_the_lab_profile_is_unchanged_and_builder_lists_the_same_tools(self):
         done = engine("list", "--profile", "lab", "--source", "apt", "--format", "json")
         names = {item["package"] for item in json.loads(done.stdout)}
         self.assertTrue({"python3", "git", "curl", "tmux", "jq", "ansible-core"} <= names)
         self.assertFalse(names & {"nftables", "openssh-server", "sudo", "unattended-upgrades", "systemd-timesyncd"})
+        self.assertFalse("[tools.unattended-upgrades]" in (ROOT / "toolchain" / "manifest.toml").read_text())
         alias = engine("list", "--profile", "builder", "--source", "apt", "--format", "json")
         self.assertEqual(alias.returncode, 0, alias.stderr)
         self.assertEqual(alias.stdout, done.stdout)

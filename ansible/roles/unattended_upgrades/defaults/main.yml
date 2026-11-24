@@ -1,0 +1,4 @@
+# The apt periodic settings that the lab check (LC-15) and the operator check (OC-12) read.
+unattended_upgrades_conf: /etc/apt/apt.conf.d/20auto-upgrades
+# The units that run them (systemd hosts only; a container has none and leaves the units to the approver check PA-A33).
+unattended_upgrades_timers: [apt-daily.timer, apt-daily-upgrade.timer]

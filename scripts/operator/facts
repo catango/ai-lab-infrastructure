@@ -4,8 +4,7 @@
 Scope host reads /proc and /etc, `git --version`, and a small local state file. Scope github reads repository settings,
 rulesets, and security features with GET calls only, without a token unless --use-token asks for T3. Without --apply a scope
 lists its checks and changes nothing. With --apply the host scope writes only its local state files (mode 600) in the
-operator's home, and the github scope writes nothing. --privileged runs a fixed list of read-only root commands, each asking for
-the sudo password.
+operator's home, and the github scope writes nothing. It never runs sudo: root-only facts are manual lines (CR-57 OC-9, O-9).
 """
 import os
 import sys
@@ -14,28 +13,17 @@ sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(HERE, "lib"))
 
-from operator_lib import credentials, download, exitcodes, github, githubfacts, hostfacts, modes, process, release, sanitize  # noqa: E402
+from operator_lib import credentials, exitcodes, github, githubfacts, hostfacts, modes, process, release, sanitize  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
-MANIFEST = os.path.join(ROOT, "toolchain", "manifest.toml")
 DESCRIPTION = "Gather facts about this operator machine (dry run by default; --apply runs the checks)."
 
-# The fixed list of read-only root commands of --privileged (design section 5.1, R4). Nothing else is ever run with sudo.
-PRIVILEGED = (
-    ("sshd", "-T"),
-    ("nft", "list", "ruleset"),
-    ("find", "/etc/sudoers.d", "-maxdepth", "1", "-type", "f"),
-)
-PROBE = ("sudo", "-n", "true")
-ALLOW_EXACT = frozenset({("sudo",) + command for command in PRIVILEGED} | {PROBE})
-
 MANUAL_LINES = (
+    "manual: root-only facts, as the operator admin: sshd -T, the sudoers files, and the rights of the operator user",
     "manual: provider firewall and access rules (read them in the provider's console)",
     "manual: the SSH path from Z0 to this machine (test it from the Windows laptop)",
     "manual: corporate approval for this machine and its network use",
 )
-BANDWIDTH_CAP = 16 * 1024 * 1024
-BANDWIDTH_TIMEOUT = 60
 
 
 def add_arguments(parser):
@@ -43,8 +31,6 @@ def add_arguments(parser):
     parser.add_argument("--owner", help="github scope: the account that owns the repositories")
     parser.add_argument("--repo", action="append", help="github scope: a repository to read (repeatable)")
     parser.add_argument("--use-token", action="store_true", help="github scope: ask for T3 (read-only) to read what needs a token")
-    parser.add_argument("--privileged", action="store_true", help="also run the fixed read-only root commands, each asking for the sudo password")
-    parser.add_argument("--measure-bandwidth", action="store_true", help="time one manifest download and discard it")
     parser.add_argument("--write-allowlist", action="store_true", help="write the current egress address to the operator-local allowlist file")
 
 
@@ -57,48 +43,9 @@ def plan_lines(args):
     lines = ["would: collect host facts (versions, memory, CPU, disk, time sync, account and sudo-group counts, listening port count, "
              "firewall service state, package count)",
              "would: record home persistence and egress stability in the local state file (mode 600)"]
-    if args.measure_bandwidth:
-        lines.append("would: download one manifest artifact once to time it, and discard it")
     if args.write_allowlist:
         lines.append("would: write the current egress address to the operator-local allowlist file (the address is not printed)")
-    if args.privileged:
-        for command in PRIVILEGED:
-            lines.append("would: run with sudo, asking for the password: " + " ".join(command))
-        lines.append("would: run " + " ".join(PROBE) + " (no password prompt)")
     return lines
-
-
-def collect_privileged(runner):
-    facts = {}
-    outputs = {}
-    for command in PRIVILEGED:
-        try:
-            result = runner(("sudo",) + command, allow_exact=ALLOW_EXACT, interactive=True, timeout=120)
-            outputs[command] = result.stdout if result.returncode == 0 else None
-        except (process.CommandMissing, process.CommandTimeout, process.PolicyViolation):
-            outputs[command] = None
-    facts.update(hostfacts.parse_sshd(outputs[PRIVILEGED[0]]))
-    if outputs[PRIVILEGED[1]] is None:
-        facts.update({"nft_tables": hostfacts.UNKNOWN, "nft_chains": hostfacts.UNKNOWN, "nft_input_policy_drop": hostfacts.UNKNOWN})
-    else:
-        facts.update(hostfacts.parse_nft(outputs[PRIVILEGED[1]]))
-    facts["sudoers_d_files"] = hostfacts.UNKNOWN if outputs[PRIVILEGED[2]] is None else hostfacts.count_sudoers_d(outputs[PRIVILEGED[2]])
-    try:
-        probe = runner(PROBE, allow_exact=ALLOW_EXACT, timeout=30)
-        facts["sudo_passwordless"] = hostfacts.yes_no(probe.returncode == 0)
-    except (process.CommandMissing, process.CommandTimeout, process.PolicyViolation):
-        facts["sudo_passwordless"] = hostfacts.UNKNOWN
-    return facts
-
-
-def measure_bandwidth(downloader, manifest):
-    try:
-        url = download.manifest_artifact_url(manifest)
-        timing = downloader(url, max_bytes=BANDWIDTH_CAP, timeout=BANDWIDTH_TIMEOUT)
-    except (download.DownloadError, ValueError):
-        return hostfacts.UNKNOWN
-    value = download.megabits_per_second(timing)
-    return hostfacts.UNKNOWN if value is None else value
 
 
 def check_arguments(args):
@@ -109,8 +56,8 @@ def check_arguments(args):
             problem = "--scope github needs --owner and at least one --repo"
         elif not github.valid_login(args.owner) or not all(github.valid_repo(r) for r in args.repo):
             problem = "--owner or --repo is not a valid GitHub name"
-        elif args.privileged or args.measure_bandwidth or args.write_allowlist:
-            problem = "--privileged, --measure-bandwidth, and --write-allowlist belong to the host scope"
+        elif args.write_allowlist:
+            problem = "--write-allowlist belongs to the host scope"
     elif args.owner or args.repo or args.use_token:
         problem = "--owner, --repo, and --use-token belong to --scope github"
     if problem:
@@ -137,7 +84,7 @@ def run_github(args, mode, out, opener, getpass_fn):
 
 
 def main(argv=None, *, system=None, environ=None, out=print, require_release=release.require_release_commit,
-         runner=process.run, downloader=download.timed_download, manifest=MANIFEST, opener=None, getpass_fn=credentials.getpass.getpass):
+         runner=process.run, opener=None, getpass_fn=credentials.getpass.getpass):
     mode, args = modes.parse_mode(sys.argv[1:] if argv is None else argv, "facts", DESCRIPTION, add_arguments)
     check_arguments(args)
     environ = os.environ if environ is None else environ
@@ -163,10 +110,6 @@ def main(argv=None, *, system=None, environ=None, out=print, require_release=rel
     facts = hostfacts.collect_host(system, runner)
     state = hostfacts.State(hostfacts.state_dir(home))
     facts.update(state.record(system, address))
-    if args.measure_bandwidth:
-        facts["bandwidth_mbit"] = measure_bandwidth(downloader, manifest)
-    if args.privileged:
-        facts.update(collect_privileged(runner))
     state.save()
     if args.write_allowlist:
         facts["allowlist_entries"] = hostfacts.write_allowlist(home, address)

@@ -7,6 +7,10 @@ github:
   owner: "catango"                 # personal GitHub account that owns the repository
   approver_login: "catango"        # only this account's reviews count as instructions and approval (ADR-003)
   machine_login: "catango-gh-bot"  # machine account used by Claude Code (ADR-001)
+  # The numeric GitHub id of the machine account. Lab setup writes the system-wide git identity from it, the form LC-8 checks:
+  # `<id>+<machine_login>@users.noreply.github.com`. Public data; the approver set it. Lab setup refuses to run while it is
+  # empty or not a positive integer, and nothing in the repository guesses it (CR-57 PR 4, LC-8).
+  machine_user_id: 357787378
 workflow:
   merge_method: squash
   change_classes: [1, 2, 3]
@@ -27,7 +31,8 @@ architectures:
 # change what judges it (SC-20); a missing or malformed key fails closed, an explicit `[]` makes PC-8 inactive (a newly
 # generated application repository). An entry is an exact path, a directory prefix when it ends with `/`, or a prefix when it
 # ends with `*/` (the star is dropped: `ansible/roles/operator_*/` is the prefix `ansible/roles/operator_`). Case-sensitive.
-# The set is the operator scripts, the operator profile, the lab profile, and the SSH hardening role both profiles share.
+# The set is the operator scripts, the operator profile, the lab profile, and the roles both profiles share (SSH hardening, the release
+# check, unattended security updates).
 operator_paths:
   - scripts/operator/
   - ansible/operator.yml
@@ -38,6 +43,8 @@ operator_paths:
   - ansible/roles/release_check/
   - ansible/roles/claude_managed_settings/
   - ansible/roles/lab_tools/
+  - ansible/roles/git_identity/
+  - ansible/roles/unattended_upgrades/
 # Hosts an operator script may call (ADR-009 decision 14, ADR-011 decision 11, CR-57 PA-22, C-6). Read from the BASE commit by
 # the operator code check that PR 4 of CR-57 adds, so it is on the base commit before that check reads it; the check fails
 # closed when the key is missing while `operator_paths` is not empty. One plain host name per line; no scheme, port, or path.

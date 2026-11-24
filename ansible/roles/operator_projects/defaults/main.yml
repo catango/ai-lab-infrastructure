@@ -1,0 +1,5 @@
+# The projects whose operator scripts are installed (PA-42): this repository by default. Another project is installed from a clone of that
+# project at its release tag: pass the whole list as -e @file (this repository included). Each name is plain, lower case, and unique.
+operator_projects:
+  - name: "{{ (lookup('ansible.builtin.file', repo_root ~ '/config/project.yaml') | from_yaml).project.name }}"
+    source: "{{ repo_root }}"

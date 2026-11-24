@@ -104,7 +104,8 @@ class Machine:
         """What lab setup records after it switched sshd: the settings and the digest of the configuration files."""
         path = self.root / "etc" / "ssh" / "ai-lab-sshd-effective.txt"
         path.unlink(missing_ok=True)
-        audit.write_snapshot(str(path), text or self.sshd_text(), audit.config_digest(str(self.root / "etc" / "ssh")))
+        ssh = str(self.root / "etc" / "ssh")
+        audit.write_snapshot(str(path), text or self.sshd_text(), audit.config_digest(ssh), stat_digest=audit.config_stat_digest(ssh))
 
     def repo(self, name, remote="https://github.com/owner/name.git", commit=True):
         path = self.home / "work" / name
@@ -228,8 +229,15 @@ class PerItem(Case):
         machine.lab.groups = ["ai"]
         machine.sudo = (0, "User ai may run the following commands: (ALL) ALL")
         self.assertFail(machine.check("LC-2"), "sudo allows")
+
+    def test_lc2_a_password_prompt_cannot_tell_a_rule_from_no_rule_so_it_is_a_warning(self):
+        machine = self.machine()
         machine.sudo = (1, "sudo: a password is required")
-        self.assertFail(machine.check("LC-2"), "password")
+        results = machine.check("LC-2")
+        self.assertEqual([status for status, _ in results], ["WARN"], results)
+        self.assertIn("sudo -l -U", results[0][1])
+        machine.lab.groups = ["ai", "sudo"]
+        self.assertFail(machine.check("LC-2"), "sudo")  # a root-equivalent group still fails whatever sudo answers
 
     def test_lc3_the_lab_admin_is_never_a_claude_target(self):
         machine = self.machine()
@@ -415,6 +423,27 @@ class Sshd(Case):
         machine = self.machine()
         (machine.root / "etc" / "ssh" / "sshd_config.d" / "00-ai-lab.conf").write_text("PasswordAuthentication yes\n")
         self.assertFail(machine.check("LC-13"), "changed after lab setup")
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    def test_a_config_file_this_account_cannot_read_is_a_warning_and_never_a_crash(self):
+        machine = self.machine()
+        provider = machine.root / "etc" / "ssh" / "sshd_config.d" / "60-provider.conf"
+        machine.write(provider, "# provider\n", 0o000)
+        machine.record_sshd()
+        results = machine.check("LC-13")
+        self.assertEqual(sorted(status for status, _ in results), ["PASS", "WARN"], results)
+        self.assertIn("60-provider.conf cannot be read by this account", " ".join(detail for _, detail in results))
+        # the record still catches a change of that file, by its size and time
+        provider.chmod(0o600)
+        provider.write_text("# provider\n# changed\n")
+        provider.chmod(0o000)
+        self.assertFail(machine.check("LC-13"), "changed after lab setup")
+        # a record without the size and time part cannot vouch for a file that cannot be read
+        path = machine.root / "etc" / "ssh" / "ai-lab-sshd-effective.txt"
+        path.unlink()
+        audit.write_snapshot(str(path), machine.sshd_text(), "0" * 64)
+        self.assertFail(machine.check("LC-13"), "no size and time record")
+        provider.chmod(0o600)
 
     def test_a_record_that_the_ai_user_could_write_fails(self):
         machine = self.machine()
