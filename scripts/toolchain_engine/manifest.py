@@ -10,6 +10,13 @@ from .errors import ManifestError
 SCHEMA_VERSION = 1
 ARCHES = ("amd64", "arm64")
 PROFILES = ("builder", "lab", "operator")
+# `builder` is the name the CR-2 profile had before CR-57 renamed it `lab`. It stays accepted, as a command-line value and as a
+# `profiles` entry, and means `lab`, until plan PR 7 removes it (design O-19).
+ALIASES = {"builder": "lab"}
+
+
+def canonical_profile(name):
+    return ALIASES.get(name, name)
 SOURCES = ("download", "apt", "pip")
 FORMATS = ("binary", "tar.gz", "tar.xz", "zip")
 MAX_BYTES_DEFAULT = 512 * 1024 * 1024
@@ -62,6 +69,7 @@ class Manifest:
     tools: Dict[str, Tool]
 
     def for_profile(self, profile):
+        profile = canonical_profile(profile)
         return [tool for tool in self.tools.values() if profile in tool.profiles]
 
 
@@ -90,7 +98,7 @@ def parse(raw):
     for name, entry in raw["tools"].items():
         artifacts = {arch: Artifact(a["url"], a["sha256"]) for arch, a in entry.get("artifacts", {}).items()}
         tools[name] = Tool(
-            name=name, source=entry["source"], profiles=tuple(entry["profiles"]), smoke=tuple(entry.get("smoke", ())),
+            name=name, source=entry["source"], profiles=tuple(canonical_profile(p) for p in entry["profiles"]), smoke=tuple(entry.get("smoke", ())),
             smoke_match=entry.get("smoke_match"), version=entry.get("version"), version_min=entry.get("version_min"),
             package=entry.get("package"), format=entry.get("format"), strip=entry.get("strip", 0),
             binaries=tuple(entry.get("binaries", ())), max_bytes=entry.get("max_bytes", MAX_BYTES_DEFAULT),
@@ -145,8 +153,8 @@ def _validate_tool(label, entry, root):
             errors.append(f"{label}.{key}: unknown key for source {source}")
     profiles = entry.get("profiles")
     if (not isinstance(profiles, list) or not profiles or any(p not in PROFILES for p in profiles)
-            or len(set(profiles)) != len(profiles)):
-        errors.append(f"{label}.profiles: must be a non-empty subset of builder, lab, operator")
+            or len({canonical_profile(p) for p in profiles}) != len(profiles)):
+        errors.append(f"{label}.profiles: must be a non-empty subset of lab, operator (builder is an alias of lab)")
     smoke = entry.get("smoke")
     if (not isinstance(smoke, list) or not smoke or any(not isinstance(a, str) or not a or _META.search(a) for a in smoke)):
         errors.append(f"{label}.smoke: must be a non-empty array of plain arguments (no shell strings)")

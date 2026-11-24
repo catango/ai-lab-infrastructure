@@ -36,7 +36,7 @@ class Base(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def install(self, *extra, arch="amd64"):
-        return self.run_cli("install", "--profile", "builder", "--prefix", str(self.prefix), "--arch", arch, *extra)
+        return self.run_cli("install", "--profile", "lab", "--prefix", str(self.prefix), "--arch", arch, *extra)
 
 
 class Install(Base):
@@ -213,7 +213,7 @@ class T5DryRun(Base):
 
 class Pip(Base):
     LOCK = "yamllint==1.0 \\\n    --hash=sha256:" + "a" * 64 + "\n"
-    PIP = '\n[tools.pylint]\nprofiles = ["builder"]\nsource = "pip"\nlockfile = "toolchain/python/builder.lock"\nbinaries = ["yamllint"]\nsmoke = ["yamllint", "--version"]\nsmoke_match = "yamllint"\n'
+    PIP = '\n[tools.pylint]\nprofiles = ["lab"]\nsource = "pip"\nlockfile = "toolchain/python/builder.lock"\nbinaries = ["yamllint"]\nsmoke = ["yamllint", "--version"]\nsmoke_match = "yamllint"\n'
 
     def setUp(self):
         super().setUp()
@@ -254,7 +254,7 @@ class Pip(Base):
     def test_pip_failure_is_reported(self):
         def failing(argv, env=None, timeout=None):
             return (1, "boom") if "install" in argv else (0, "")
-        code, out, err = super(Pip, self).run_cli("install", "--profile", "builder", "--prefix", str(self.prefix), "--arch", "amd64", "--only", "pylint", runner=failing)
+        code, out, err = super(Pip, self).run_cli("install", "--profile", "lab", "--prefix", str(self.prefix), "--arch", "amd64", "--only", "pylint", runner=failing)
         self.assertEqual(code, 1)
         self.assertNotIn("changed=", out.replace("changed=0", ""))
 

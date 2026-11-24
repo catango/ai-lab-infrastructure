@@ -14,7 +14,7 @@ LOCK = (
 )
 PIP = '''
 [tools.pylint]
-profiles = ["builder"]
+profiles = ["lab"]
 source = "pip"
 lockfile = "toolchain/python/builder.lock"
 binaries = ["yamllint"]
@@ -101,9 +101,14 @@ class Rejects(unittest.TestCase):
         self.assert_error(good(head='schema_version = "1"\n'), "schema_version")
 
     def test_profiles(self):
-        self.assert_error(good().replace('profiles = ["builder", "lab"]', "profiles = []"), "profiles")
-        self.assert_error(good().replace('profiles = ["builder", "lab"]', 'profiles = ["builder", "prod"]'), "profiles")
-        self.assert_error(good().replace('profiles = ["builder", "lab"]', 'profiles = "builder"'), "profiles")
+        self.assert_error(good().replace('profiles = ["lab"]', "profiles = []"), "profiles")
+        self.assert_error(good().replace('profiles = ["lab"]', 'profiles = ["lab", "prod"]'), "profiles")
+        self.assert_error(good().replace('profiles = ["lab"]', 'profiles = "lab"'), "profiles")
+
+    def test_builder_is_an_alias_of_lab_and_not_a_second_profile(self):
+        """CR-57 O-19: `builder` stays accepted until plan PR 7, and means `lab`."""
+        self.assertEqual(check(good().replace('profiles = ["lab"]', 'profiles = ["builder"]')), [])
+        self.assert_error(good().replace('profiles = ["lab"]', 'profiles = ["builder", "lab"]'), "profiles")
 
     def test_smoke_must_be_an_argument_array(self):
         self.assert_error(good().replace('smoke = ["alpha", "--version"]', 'smoke = "alpha --version"'), "smoke")
@@ -141,7 +146,7 @@ class Rejects(unittest.TestCase):
 
     def test_unknown_source_and_names(self):
         self.assert_error(good().replace('source = "download"', 'source = "curl"'), "source")
-        self.assert_error(good() + '\n[tools."Bad Name"]\nversion = "1"\nprofiles = ["builder"]\nsource = "apt"\npackage = "x"\nversion_min = "1"\nsmoke = ["x"]\n', "Bad Name")
+        self.assert_error(good() + '\n[tools."Bad Name"]\nversion = "1"\nprofiles = ["lab"]\nsource = "apt"\npackage = "x"\nversion_min = "1"\nsmoke = ["x"]\n', "Bad Name")
 
     def test_apt_fields(self):
         self.assert_error(good().replace('version_min = "1:2.0"\n', ""), "version_min")

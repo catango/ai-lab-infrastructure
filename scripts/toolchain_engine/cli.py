@@ -56,7 +56,7 @@ def _parser():
     ver.add_argument("--arch", choices=ARCHES)
     ver.add_argument("--download", action="store_true")
     ver.add_argument("--skip-smoke", action="store_true")
-    ver.add_argument("--skip-apt", action="store_true", help="leave apt tools to the builder-profile check")
+    ver.add_argument("--skip-apt", action="store_true", help="leave apt tools to the host-profiles job")
     return parser
 
 

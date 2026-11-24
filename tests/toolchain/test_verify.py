@@ -29,7 +29,7 @@ class Verify(Base):
         self.assertEqual(self.install()[0], 0)
 
     def verify(self, *extra):
-        return self.run_cli("verify", "--profile", "builder", "--prefix", str(self.prefix), *extra, runner=hybrid(self.calls))
+        return self.run_cli("verify", "--profile", "lab", "--prefix", str(self.prefix), *extra, runner=hybrid(self.calls))
 
     def test_smoke_passes_and_prints_versions(self):
         code, out, err = self.verify()
@@ -82,7 +82,7 @@ class Verify(Base):
 
 class VerifyDownload(Base):
     def verify(self, *extra, arch="amd64"):
-        return self.run_cli("verify", "--profile", "builder", "--prefix", str(self.prefix), "--download", "--arch", arch, *extra, runner=hybrid([]))
+        return self.run_cli("verify", "--profile", "lab", "--prefix", str(self.prefix), "--download", "--arch", arch, *extra, runner=hybrid([]))
 
     def test_checksums_match_and_nothing_is_written(self):
         before = tree(self.prefix)
