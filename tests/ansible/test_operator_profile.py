@@ -80,7 +80,8 @@ class Structure(unittest.TestCase):
         names = re.findall(r"^    - name: (.+)$", pre, re.M)
         self.assertEqual([n.split(",")[0] for n in names], [
             "Refuse a real run without the explicit apply variable", "Release check", "Preflight",
-            "The two managed accounts are named and differ", "Only the operator admin runs the operator configuration", "Key audit"])
+            "The two managed accounts are named and differ", "Only the operator admin runs the operator configuration", "Key audit",
+            "The project list is valid and every project's clone is a release"])
         self.assertIn("name: release_check", pre)
         self.assertIn("tasks_from: audit", pre)
         self.assertIn("operator_apply", pre[:pre.index("Release check")])
@@ -213,12 +214,19 @@ class Tools(unittest.TestCase):
         self.assertIn('owner: "{{ operator_user }}"', output)
         self.assertIn('mode: "0700"', output)
 
-    def test_every_project_passes_the_release_check_by_itself_with_no_when(self):
-        one = tasks("operator_projects", "one.yml")
-        block = one[:one.index("- name: Read the release of this project's clone")]
-        self.assertIn("name: release_check", block)
-        self.assertIn('repo_root: "{{ operator_project.source }}"', block)
-        self.assertNotIn("when:", block)
+    def test_every_project_passes_the_release_check_by_itself_as_a_pre_task_with_no_when(self):
+        release = tasks("operator_projects", "release.yml")
+        self.assertIn("name: release_check", release)
+        self.assertIn('repo_root: "{{ operator_project.source }}"', release)
+        self.assertNotIn("when:", release)
+        check = tasks("operator_projects", "check.yml")
+        self.assertIn("include_tasks: release.yml", check)
+        self.assertNotIn("when:", check)
+        self.assertNotIn("release_check", tasks("operator_projects", "one.yml"))
+        text = operator_yml()
+        block = text[text.index("- name: The project list is valid"):text.index("  roles:")]
+        self.assertIn("tasks_from: check", block)
+        self.assertIn("tags: [always]", block)
 
     def test_an_installation_of_another_release_is_taken_away_and_the_marker_is_written_last(self):
         one = tasks("operator_projects", "one.yml")
@@ -370,7 +378,8 @@ class ProjectList(unittest.TestCase):
             with self.subTest(projects=projects):
                 tmp = pathlib.Path(tempfile.mkdtemp())
                 self.addCleanup(shutil.rmtree, tmp)
-                (tmp / "play.yml").write_text("- hosts: all\n  connection: local\n  gather_facts: false\n  roles:\n    - operator_projects\n")
+                (tmp / "play.yml").write_text("- hosts: all\n  connection: local\n  gather_facts: false\n  tasks:\n    - ansible.builtin.import_role: "
+                                              "{name: operator_projects, tasks_from: check}\n")
                 (tmp / "vars.json").write_text(json.dumps({"operator_projects": projects}))
                 env = {"PATH": os.environ["PATH"], "HOME": str(tmp), "ANSIBLE_HOME": str(tmp), "ANSIBLE_LOCAL_TEMP": str(tmp),
                        "ANSIBLE_ROLES_PATH": str(ANSIBLE / "roles"), "ANSIBLE_NOCOLOR": "1", "LC_ALL": "C.UTF-8"}

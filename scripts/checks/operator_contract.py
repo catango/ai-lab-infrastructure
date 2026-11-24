@@ -11,11 +11,10 @@ passes it as --config FILE. The rules: a URL literal whose host is not listed fa
 `+`, `%`, or `.format` after a scheme) fails; `HttpClient(...)` takes a literal or a module constant that is a literal; and the network
 modules (urllib.request, http.client, socket, and the like) are imported only in operator_lib/httpclient.py, so one client is the one
 place an endpoint is used. The policy is enforced when `operator_paths` is not empty, and then a missing `operator_endpoints` fails
-closed. Without a configuration file nothing is enforced (a repository without operator paths: the generic default). The hosts that
+closed (a missing or empty `operator_paths` enforces nothing here; PC-8 judges that key). Without a configuration file nothing is enforced (a repository without operator paths: the generic default). The hosts that
 fail are never printed.
 """
 import ast
-import os
 import re
 import sys
 
@@ -250,24 +249,61 @@ def scan(path, text, allowed=None):
     return []
 
 
+_LIST_ITEM = re.compile(r"( +)- +([A-Za-z0-9_.][A-Za-z0-9_./*-]*)(?: +#.*)?")
+_HOST = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.-]*")
+
+
+def read_list(text, key):
+    """The items of a top-level list `key` of config/project.yaml, in the small subset that the file uses: `key: []`, or a block list of
+    plain strings. None when the key is absent; ValueError for anything else (a quoted item, flow style, a scalar, a repeated key, a tab,
+    an empty block). This check is self-contained: the policy runner of pr-contract carries the checks and nothing else."""
+    lines = text.splitlines()
+    hits = [i for i, line in enumerate(lines) if re.fullmatch(re.escape(key) + r":(?: .*)?", line)]
+    if not hits:
+        return None
+    if len(hits) > 1 or "\t" in text:
+        raise ValueError(key)
+    rest = re.sub(r"\s+#.*$", "", lines[hits[0]][len(key) + 1:]).strip()
+    if rest == "[]":
+        return ()
+    if rest:
+        raise ValueError(key)
+    items = []
+    for line in lines[hits[0] + 1:]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        found = _LIST_ITEM.fullmatch(line)
+        if found:
+            items.append(found.group(2))
+        elif line[0] == " ":
+            raise ValueError(key)
+        else:
+            break
+    if not items:
+        raise ValueError(key)
+    return tuple(items)
+
+
 def load_policy(config_file):
     """(allowed, problem): the set of hosts to enforce, or None when nothing is enforced; problem is a finding text when the policy
     cannot be read and the check fails closed. The file is the configuration of the BASE commit (or the working tree without one)."""
     if config_file is None:
         return None, None
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     try:
-        from pr_contract import config as policy_config
-        from pr_contract.errors import ConfigError
         with open(config_file, encoding="utf-8") as handle:
-            text = handle.read(policy_config.MAX_TEXT + 1)
-        parsed = policy_config.parse_yaml(text)
-        paths = policy_config.operator_paths(parsed)
-        hosts = policy_config.operator_endpoints(parsed)
-    except (OSError, UnicodeDecodeError, ImportError, ConfigError):
+            text = handle.read(65537)
+        if len(text) > 65536:
+            raise ValueError("size")
+        paths = read_list(text, "operator_paths")
+        hosts = read_list(text, "operator_endpoints")
+        if hosts is not None and not all(_HOST.fullmatch(host) for host in hosts):
+            raise ValueError("policy")
+    except (OSError, UnicodeDecodeError, ValueError):
         return None, "the policy input operator_paths or operator_endpoints cannot be read from the configuration; the endpoint check fails closed"
     if not paths:
-        return None, None  # an explicit empty operator_paths: no operator scripts are judged here
+        # An explicit empty operator_paths, or no such key (a generated repository: PC-8 judges that key and fails closed on its absence):
+        # no operator scripts are judged here, so the generic fixtures keep passing.
+        return None, None
     if hosts is None:
         return None, "operator_endpoints is missing while operator_paths is not empty; the endpoint check fails closed (I-10)"
     return {host.lower() for host in hosts}, None
@@ -291,9 +327,6 @@ def main(stdin=sys.stdin, out=sys.stdout, argv=()):
         problem = "the base commit cannot be read; the endpoint check fails closed"
     applicable = False
     bad = False
-    if problem:
-        out.write(f"{CONFIG_PATH}:1: {problem}\n")
-        bad = True
     for raw in stdin:
         path = raw.rstrip("\n")
         if not path.startswith(PREFIX):
@@ -312,8 +345,11 @@ def main(stdin=sys.stdin, out=sys.stdout, argv=()):
         for line, message in scan(path, text, allowed):
             out.write(f"{path}:{line}: {message}\n")
             bad = True
-    if not applicable and not bad:
-        return 77
+    if not applicable:
+        return 77  # no operator script: the policy is not needed, and a configuration without the keys is no finding here
+    if problem:
+        out.write(f"{CONFIG_PATH}:1: {problem}\n")
+        bad = True
     return 1 if bad else 0
 
 

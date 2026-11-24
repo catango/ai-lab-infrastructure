@@ -44,78 +44,82 @@ jobs:
         shell: bash
         run: ./scripts/quality-gate.sh --strict
 
-  # Applies the operator profile with scripts/operator/setup in a pinned Ubuntu 24.04 container, as root (so without sudo), twice,
-  # to prove that it converges and is idempotent (CR-18 acceptance P-1, P-2, P-3, P-5, P-8). The container has no systemd and no
-  # network namespace rights, so the firewall and service tasks are skipped there; they are checked by the approver (P-6).
-  # setup refuses to run outside a release tag, so the job makes a throw-away copy of the checkout that is tagged and marked as
-  # origin/main. Nothing is pushed and no tag leaves the job.
+  # The operator half of the PA-28 job (CR-57 PA-A14, PA-A18, PA-A21, PA-A26, PA-A27, PA-A29, PA-A30; design C-4, C-5): the operator
+  # configuration in a pinned Debian 13 container (as root, so no become) with two accounts and one key each, in a disposable clone whose
+  # local bare origin has main at the head of the pull request and an unpushed local v* test tag on that commit, so the release check of
+  # the playbook runs for real and has no bypass. It is a second job and not more steps of host-profiles because the lab profile and the
+  # operator profile own the same sshd drop-in and cannot share one machine; both halves use the same image, the same accounts-and-keys
+  # fixtures (tests/ansible/pa28-common.sh), and the same steps. The refusals, the first run, the second run (zero changes), the second
+  # project, the dry run (the tree hash is unchanged), and the operator check as the operator user (OC-8 and OC-12 shown) are steps of
+  # tests/ansible/pa28-operator.sh. The container has no systemd and no sudo: a real sshd restart after a second login, `sshd -T` of a
+  # running daemon, the unattended-upgrade units, and that the operator user cannot sudo on a real machine are the approver check PA-A33.
   operator-profile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     container:
-      image: ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8
+      image: debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    env:
+      AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
-      # What a minimal Ubuntu image lacks before the checkout and the release check can run (design VO-15).
-      - name: Bootstrap git, python3, and certificates
+      # What a fresh operator VM has before the operator configuration: Ansible, git, and an installed sshd (it is reached over SSH). git
+      # comes first: without it the checkout action downloads an archive and the workspace is not a repository.
+      - name: Bootstrap Ansible, git, and sshd from the Debian archive
         shell: bash
         run: |
           apt-get update -q
-          apt-get install -y --no-install-recommends git python3 ca-certificates
+          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Make a tagged throw-away copy for the release check
+      - name: Accounts, keys, and the disposable clones with a local bare origin and unpushed v* test tags
         shell: bash
-        run: |
-          git config --global --add safe.directory '*'
-          cp -a "$GITHUB_WORKSPACE" "$RUNNER_TEMP/release"
-          git -C "$RUNNER_TEMP/release" tag v0.0.0
-          git -C "$RUNNER_TEMP/release" update-ref refs/remotes/origin/main HEAD
+        run: tests/ansible/pa28-operator.sh prepare "$GITHUB_WORKSPACE"
 
-      - name: setup refuses to run outside a release tag (P-2)
+      - name: Refusals change nothing (untagged tree, tag outside origin/main, wrong user, project list, key rules, sshd settings)
         shell: bash
-        run: |
-          rc=0
-          "$GITHUB_WORKSPACE/scripts/operator/setup" --apply || rc=$?
-          test "$rc" -eq 1
-          ! command -v ansible-playbook
+        run: tests/ansible/pa28-operator.sh refusals
 
-      - name: A dry run installs nothing (P-1)
+      - name: The sshd step is refused without the confirmed second login
         shell: bash
-        run: |
-          "$RUNNER_TEMP/release/scripts/operator/setup" | tee "$RUNNER_TEMP/dry-run.txt"
-          grep -q 'apt-get install -y ansible-core' "$RUNNER_TEMP/dry-run.txt"
-          ! command -v ansible-playbook
+        run: tests/ansible/pa28-operator.sh unconfirmed
 
-      - name: Apply the operator profile
+      - name: Apply the operator profile (first run)
         shell: bash
-        run: '"$RUNNER_TEMP/release/scripts/operator/setup" --apply | tee "$RUNNER_TEMP/first-apply.txt"'
+        run: tests/ansible/pa28-operator.sh first-run
 
-      - name: Apply it again (must change nothing, P-5)
+      - name: Apply it again (second run, must change nothing)
         shell: bash
-        run: |
-          "$RUNNER_TEMP/release/scripts/operator/setup" --apply | tee "$RUNNER_TEMP/second-apply.txt"
-          grep -Eq 'changed=0 +unreachable=0 +failed=0' "$RUNNER_TEMP/second-apply.txt"
+        run: tests/ansible/pa28-operator.sh second-run
 
-      - name: A real playbook run without the apply variable is refused (P-3)
+      - name: A second project is installed beside the first, then nothing changes (PA-42, PA-A30)
         shell: bash
-        run: |
-          rc=0
-          (cd "$RUNNER_TEMP/release" && ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml) > "$RUNNER_TEMP/refused.txt" 2>&1 || rc=$?
-          test "$rc" -ne 0
-          grep -q operator_apply "$RUNNER_TEMP/refused.txt"
+        run: tests/ansible/pa28-operator.sh second-project
 
-      - name: A dry run after the apply changes nothing and passes
+      - name: Dry run (the tree hash must not change)
         shell: bash
-        run: '"$RUNNER_TEMP/release/scripts/operator/setup" | tee "$RUNNER_TEMP/check.txt"'
+        run: tests/ansible/pa28-operator.sh dry-run
 
-      - name: Verify the operator toolchain
+      - name: Verify the operator toolchain (Python 3 and git only)
         shell: bash
-        run: python3 -I "$RUNNER_TEMP/release/scripts/toolchain" verify --profile operator --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
+        run: python3 -I scripts/toolchain verify --profile operator --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
+
+      - name: Installed tools, write attempts as the operator user, no sudo, unattended updates, and the sshd settings in force
+        shell: bash
+        run: tests/ansible/pa28-operator.sh verify
+
+      - name: Operator check as the operator user, one fixture per failure, and the run lock (PA-A14, PA-A26, PA-A30)
+        shell: bash
+        run: tests/ansible/pa28-operator.sh operator-check
+
+      - name: The operator configuration takes the operator user out of the sudo group (OC-8)
+        shell: bash
+        run: tests/ansible/pa28-operator.sh unsudo
 
       - name: Job summary
         if: always()
@@ -125,12 +129,15 @@ jobs:
             echo "### operator-profile"
             echo
             echo '~~~~text'
-            echo "first apply:"
-            grep -E 'localhost +:|workspace +:' "$RUNNER_TEMP/first-apply.txt" 2>/dev/null || echo "  (no recap)"
-            echo "second apply (must show changed=0):"
-            grep -E 'localhost +:|workspace +:' "$RUNNER_TEMP/second-apply.txt" 2>/dev/null || echo "  (no recap)"
+            for step in unconfirmed first-apply second-apply second-project second-project-again dry-run; do
+              echo "$step:"
+              grep -E 'workspace +:' "/var/tmp/pa28/$step.txt" 2>/dev/null || echo "  (no recap)"
+            done
             echo
             cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
+            echo
+            echo "operator check:"
+            cat /var/tmp/pa28/operator-check.txt 2>/dev/null || echo "  (no output)"
             echo '~~~~'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -185,8 +192,8 @@ jobs:
   # become) with two accounts and one key each. It runs in a disposable clone whose local bare origin has main at the head of the
   # pull request and an unpushed local v* test tag on that commit, so the release check of the playbook runs for real and has no
   # bypass; an untagged tree is refused. The refusal fixtures, the first run, the second run (zero changes), and the dry run (the
-  # tree hash is unchanged) are steps of tests/ansible/pa28-lab.sh. This job replaces builder-profile; the operator profile stays
-  # in operator-profile until plan PR 4. The token step fixtures and both checks join this job in plan PR 3 and PR 4.
+  # tree hash is unchanged) are steps of tests/ansible/pa28-lab.sh. This job replaces builder-profile. The token step fixtures and the
+  # lab check are steps of it (plan PR 3); the operator half of the PA-28 job is the job operator-profile (plan PR 4).
   # The container has no systemd: a real sshd restart after a second login, `sshd -T` of a running daemon, and the
   # unattended-upgrade units are the approver check PA-A33.
   host-profiles:

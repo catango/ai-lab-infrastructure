@@ -1,0 +1,22 @@
+# The first half of the project role (CR-57 PA-42, PA-A30): the project list is valid and every project's clone is a release. It only
+# reads, so the playbook imports it as a pre-task: a refusal here happens before the toolchain, the tools, or sshd are touched. Every
+# project's clone passes the release check on its own: HEAD is a release tag contained in that clone's origin/main with no local change,
+# and the role has no way around it.
+- name: The project names are plain and unique
+  ansible.builtin.assert:
+    that:
+      - operator_projects | length > 0
+      - operator_projects | map(attribute='name') | unique | length == operator_projects | length
+      - operator_projects | map(attribute='name') | select('match', '^[a-z][a-z0-9-]{0,40}$') | list | length == operator_projects | length
+      - operator_projects | map(attribute='source') | select('match', '^/[A-Za-z0-9._/-]+$') | list | length == operator_projects | length
+    quiet: true
+    fail_msg: >-
+      operator_projects needs at least one project; each has a plain lower-case name (letters, digits, hyphens), unique in the list,
+      and an absolute source path of a clone at its release tag
+
+- name: Release check of every project's clone
+  ansible.builtin.include_tasks: release.yml
+  loop: "{{ operator_projects }}"
+  loop_control:
+    loop_var: operator_project
+    label: "{{ operator_project.name }}"

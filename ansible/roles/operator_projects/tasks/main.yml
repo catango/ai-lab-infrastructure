@@ -1,19 +1,7 @@
-# One root-owned installation directory and one output directory per project (CR-57 PA-42, OC-2, PA-A30; ADR-012 decision 12). Every
-# project's clone passes the release check on its own (HEAD is a release tag contained in that clone's origin/main, no local change; the
-# role has no way around it), then its operator scripts are copied into <tools>/projects/<name>/, with RELEASE recording the tag and the
+# One root-owned installation directory and one output directory per project (CR-57 PA-42, OC-2, PA-A30; ADR-012 decision 12). The
+# project list and the release check of every project's clone have already passed as a pre-task (tasks/check.yml: a refusal there
+# changes nothing). Each project's operator scripts are copied into <tools>/projects/<name>/, with RELEASE recording the tag and the
 # commit. An installation of another release is taken away before the new one is installed, so no script of an older tag stays.
-- name: The project names are plain and unique
-  ansible.builtin.assert:
-    that:
-      - operator_projects | length > 0
-      - operator_projects | map(attribute='name') | unique | length == operator_projects | length
-      - operator_projects | map(attribute='name') | select('match', '^[a-z][a-z0-9-]{0,40}$') | list | length == operator_projects | length
-      - operator_projects | map(attribute='source') | select('match', '^/[A-Za-z0-9._/-]+$') | list | length == operator_projects | length
-    quiet: true
-    fail_msg: >-
-      operator_projects needs at least one project; each has a plain lower-case name (letters, digits, hyphens), unique in the list,
-      and an absolute source path of a clone at its release tag
-
 - name: Install each project at its release tag
   ansible.builtin.include_tasks: one.yml
   loop: "{{ operator_projects }}"

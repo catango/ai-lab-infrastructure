@@ -143,7 +143,7 @@ class Endpoints(unittest.TestCase):
 
     def test_the_comparison_is_exact_and_case_insensitive(self):
         self.assertEqual(self.found("URL = 'https://API.GitHub.com/x'\n"), [])
-        for host in ("github.com", "api.github.com.evil.example", "evil-api.github.com", "user@api.github.com"):
+        for host in ("github.com", "api.github.com.evil.example", "evil-api.github.com", "user" + helpers.AT + "api.github.com"):
             self.assertTrue(self.found(f"URL = 'https://{host}/x'\n"), host)
 
     def test_a_host_built_at_run_time_fails(self):
@@ -225,8 +225,12 @@ class Policy(unittest.TestCase):
         self.assertEqual(self.load("operator_paths: []\n"), (None, None))
         self.assertEqual(self.load("operator_paths: []\noperator_endpoints:\n  - api.github.com\n"), (None, None))
 
-    def test_a_missing_or_malformed_operator_paths_fails_closed(self):
-        for text in ("schema_version: 1\n", "operator_paths: scripts/operator/\n", "operator_paths:\n  - 'quoted'\noperator_endpoints: []\n",
+    def test_a_missing_operator_paths_enforces_nothing_here_pc_8_judges_that_key(self):
+        self.assertEqual(self.load("schema_version: 1\n"), (None, None))
+        self.assertEqual(self.load("schema_version: 1\noperator_endpoints:\n  - api.github.com\n"), (None, None))
+
+    def test_a_malformed_operator_paths_or_endpoints_fails_closed(self):
+        for text in ("operator_paths: scripts/operator/\n", "operator_paths:\n  - 'quoted'\noperator_endpoints: []\n",
                      "operator_paths:\n  - a\noperator_endpoints:\n  - host with space\n", "operator_paths: [a]\n"):
             with self.subTest(text=text):
                 allowed, problem = self.load(text)

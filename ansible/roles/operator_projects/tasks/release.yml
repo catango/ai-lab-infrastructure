@@ -1,0 +1,6 @@
+# The release check of one project (the loop variable is operator_project: name and source).
+- name: Release check of this project's clone
+  ansible.builtin.include_role:
+    name: release_check
+  vars:
+    repo_root: "{{ operator_project.source }}"
