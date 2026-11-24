@@ -56,6 +56,20 @@
         directory_mode: "0755"
       become: "{{ ai_lab_become }}"
 
+    # The copy above applies mode and directory_mode to the top-level destination only: a recursive remote copy keeps the modes of the
+    # clone below it (664 and 775 under umask 002). This task sets them on everything below, so the installation does not depend on the
+    # umask of the clone. X keeps the execute bit where the source has it. follow: false never follows a link out of the tree.
+    - name: Set the modes of the whole installation (no group or other write bit, whatever the clone's modes were)
+      ansible.builtin.file:
+        path: "{{ operator_project_dir }}/scripts/operator"
+        state: directory
+        recurse: true
+        follow: false
+        owner: root
+        group: root
+        mode: "u=rwX,go=rX"
+      become: "{{ ai_lab_become }}"
+
     - name: Record the release (written last, so a half installation has no marker and the operator check fails)
       ansible.builtin.copy:
         dest: "{{ operator_project_dir }}/RELEASE"
