@@ -11,6 +11,7 @@ import os
 import pathlib
 import pty
 import select
+import shutil
 import stat
 import subprocess
 import sys
@@ -25,6 +26,8 @@ LAB_CHECK = pathlib.Path(os.environ.get("LAB_CHECK", TOOLS / "lab-check"))
 RUN_AS = os.environ.get("RUN_AS", "")
 INSTALLED = bool(os.environ.get("TOKEN_STEP") or os.environ.get("LAB_CHECK"))
 PLAIN_PATH = "/usr/bin:/bin"
+# runuser lives in /usr/sbin on Debian, which the callers' PATH (a plain user's) does not list.
+RUNUSER = shutil.which("runuser", path="/usr/sbin:/sbin:/usr/bin:/bin") or "runuser"
 
 
 def load(name, path):
@@ -38,7 +41,7 @@ def load(name, path):
 
 
 def as_user(argv):
-    return ["runuser", "-u", RUN_AS, "--", *argv] if RUN_AS else list(argv)
+    return [RUNUSER, "-u", RUN_AS, "--", *argv] if RUN_AS else list(argv)
 
 
 def scratch(test):
