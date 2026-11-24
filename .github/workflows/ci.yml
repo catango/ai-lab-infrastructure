@@ -181,60 +181,85 @@ jobs:
             echo '~~~~'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Applies the whole builder profile in a pinned Debian 13 container (as root, so no become), twice,
-  # to prove it converges and is idempotent, then runs the engine's verification.
-  builder-profile:
+  # The PA-28 job (CR-57 PA-A11, PA-A16, PA-A18, PA-A29; design C-4, C-5): lab setup in a pinned Debian 13 container (as root, so no
+  # become) with two accounts and one key each. It runs in a disposable clone whose local bare origin has main at the head of the
+  # pull request and an unpushed local v* test tag on that commit, so the release check of the playbook runs for real and has no
+  # bypass; an untagged tree is refused. The refusal fixtures, the first run, the second run (zero changes), and the dry run (the
+  # tree hash is unchanged) are steps of tests/ansible/pa28-lab.sh. This job replaces builder-profile; the operator profile stays
+  # in operator-profile until plan PR 4. The token step fixtures and both checks join this job in plan PR 3 and PR 4.
+  # The container has no systemd: a real sshd restart after a second login, `sshd -T` of a running daemon, and the
+  # unattended-upgrade units are the approver check PA-A33.
+  host-profiles:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     container:
       image: debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    env:
+      AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
-      # What workspace/restore.sh does first: Ansible must exist before it can apply a profile.
-      - name: Bootstrap Ansible from the Debian archive
+      # What a fresh lab VM has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH).
+      - name: Bootstrap Ansible, git, sshd, and jq from the Debian archive
         shell: bash
         run: |
           apt-get update -q
-          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates
+          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq
 
-      - name: Apply the builder profile
+      - name: Accounts, keys, and the disposable clones with a local bare origin and an unpushed v* test tag
         shell: bash
-        run: ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml | tee "$RUNNER_TEMP/first-apply.txt"
+        run: tests/ansible/pa28-lab.sh prepare "$GITHUB_WORKSPACE"
 
-      - name: Apply it again (must change nothing)
+      - name: Refusals change nothing (untagged tree, tag outside origin/main, key rules, sshd settings)
         shell: bash
-        run: |
-          ansible-playbook -i ansible/inventory/localhost.yml ansible/builder.yml | tee "$RUNNER_TEMP/second-apply.txt"
-          grep -Eq 'changed=0 +unreachable=0 +failed=0' "$RUNNER_TEMP/second-apply.txt"
+        run: tests/ansible/pa28-lab.sh refusals
 
+      - name: The sshd step is refused without the confirmed second login
+        shell: bash
+        run: tests/ansible/pa28-lab.sh unconfirmed
+
+      - name: Apply the lab profile (first run)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh first-run
+
+      - name: Apply it again (second run, must change nothing)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh second-run
+
+      - name: Dry run (the tree hash must not change)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh dry-run
+
+      # The alias of the CR-2 name: the engine still accepts `builder` and means `lab` (plan PR 7 removes it).
       - name: Verify the toolchain
         shell: bash
         run: python3 -I scripts/toolchain verify --profile builder --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
 
-      # The opt-in role: writes once, is idempotent, and refuses to replace a file it did not write.
-      - name: Opt-in role test
+      - name: Managed files, write attempts as the AI user, and the sshd settings in force
         shell: bash
-        env:
-          AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
-        run: tests/ansible/opt-in-role-test.sh
+        run: tests/ansible/pa28-lab.sh verify
+
+      - name: Managed settings and the managed instruction file are merged, never replaced
+        shell: bash
+        run: tests/ansible/pa28-lab.sh merge
 
       - name: Job summary
         if: always()
         shell: bash
         run: |
           {
-            echo "### builder-profile"
+            echo "### host-profiles"
             echo
             echo '~~~~text'
-            echo "first apply:"
-            grep -E 'workspace +:' "$RUNNER_TEMP/first-apply.txt" 2>/dev/null || echo "  (no recap)"
-            echo "second apply (must show changed=0):"
-            grep -E 'workspace +:' "$RUNNER_TEMP/second-apply.txt" 2>/dev/null || echo "  (no recap)"
+            for step in unconfirmed first-apply second-apply dry-run; do
+              echo "$step:"
+              grep -E 'workspace +:' "/var/tmp/pa28/$step.txt" 2>/dev/null || echo "  (no recap)"
+            done
             echo
             cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "no verification output (an earlier step failed)"
             echo '~~~~'
@@ -246,7 +271,7 @@ jobs:
   quality-gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [gate, operator-profile, toolchain, builder-profile]
+    needs: [gate, operator-profile, toolchain, host-profiles]
     if: always()
     permissions: {}
     steps:

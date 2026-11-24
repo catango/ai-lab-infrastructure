@@ -2,7 +2,7 @@
 repo_root: "{{ playbook_dir | dirname }}"
 toolchain_engine: "{{ repo_root }}/scripts/toolchain"
 toolchain_prefix: /opt/ai-lab
-toolchain_profile: builder
+toolchain_profile: lab
 
 # Host architecture (Ansible fact) to the manifest's architecture names.
 arch_map:
@@ -13,15 +13,13 @@ arch_map:
 ai_lab_become: "{{ ansible_facts['user_id'] != 'root' }}"
 
 # Preflight expectations (overridable with -e for the negative tests).
-builder_expected_os: Debian
-builder_expected_major: "13"
-builder_expected_arch: x86_64
-lab_expected_os: Ubuntu
-lab_expected_major: "24"
-lab_expected_arch: aarch64
+# The lab profile (ADR-012, ADR-005): the AI lab, Debian 13 on x86-64. `builder` was its CR-2 name.
+lab_expected_os: Debian
+lab_expected_major: "13"
+lab_expected_arch: x86_64
 
-# Opt-in (design 3.6, decision 5): not used in Stage 1.
-claude_managed_settings_enabled: false
+# The lab profile changes the machine, so a real run needs the explicit apply variable; --check always works (dry run by default).
+lab_apply: false
 
 # The operator profile (CR-18, ADR-011): Ubuntu 24.04, x86-64, the platform operator VM.
 # A real run needs the explicit apply variable, which `scripts/operator/setup --apply` sets (a dry run is the default).

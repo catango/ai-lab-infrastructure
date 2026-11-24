@@ -1,0 +1,105 @@
+# The apply half of the shared SSH hardening role (PA-16, LC-13, OC-10). The playbook has already run tasks/audit.yml as a pre-task.
+# Order: the root-owned key files first (sshd still reads the old location, so nothing changes for a login), then, only when a second
+# login with each managed account has been confirmed while the current session stayed open, the sshd drop-in. Nothing is written
+# into a user's home and nothing is removed.
+- name: Copy the provisioned keys to the root-owned location (one file per managed account, owned by root)
+  ssh_hardening_audit:
+    mode: install
+    accounts: "{{ ssh_hardening_accounts }}"
+    private_key_accounts: "{{ ssh_hardening_private_key_accounts }}"
+    key_options: "{{ ssh_hardening_key_options | items2dict(key_name='account', value_name='options') }}"
+    keys_dir: "{{ ssh_hardening_keys_dir }}"
+  become: "{{ ai_lab_become }}"
+
+- name: sshd is not switched without a confirmed second login
+  ansible.builtin.debug:
+    msg: >-
+      sshd was NOT switched. The keys are in the root-owned location, but sshd still reads its old settings. Log in a second time with
+      each managed account while this session stays open, then run again with -e ssh_second_login_confirmed=true.
+  when: not (ssh_second_login_confirmed | bool)
+
+- name: Switch sshd (LC-13, OC-10), confirmed by a second login with each managed account
+  when: ssh_second_login_confirmed | bool
+  block:
+    - name: The directories sshd needs exist (sshd -t needs both)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /etc/ssh/sshd_config.d
+        - /run/sshd
+      become: "{{ ai_lab_become }}"
+
+    - name: Write the sshd drop-in
+      ansible.builtin.copy:
+        dest: "{{ ssh_hardening_dropin }}"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: "{{ ssh_hardening_sshd }} -t -f %s"
+        content: |
+          # Managed by ai-lab-infrastructure (ssh_hardening). Do not edit.
+          # Public-key login only, for the managed accounts only; keys are read from a root-owned location and nowhere else;
+          # no forwarding, tunnels, or user rc file; no SHA-1 key exchange or MAC. Strict key exchange is always on in sshd 10.
+          PubkeyAuthentication yes
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitEmptyPasswords no
+          HostbasedAuthentication no
+          GSSAPIAuthentication no
+          PermitRootLogin no
+          AuthenticationMethods publickey
+          AllowUsers {{ ssh_hardening_accounts | join(' ') }}
+          MaxAuthTries 3
+          AuthorizedKeysFile {{ ssh_hardening_keys_dir }}/%u
+          AuthorizedKeysCommand none
+          TrustedUserCAKeys none
+          AuthorizedPrincipalsFile none
+          AllowAgentForwarding no
+          AllowTcpForwarding no
+          AllowStreamLocalForwarding no
+          GatewayPorts no
+          X11Forwarding no
+          PermitTunnel no
+          PermitUserRC no
+          PermitUserEnvironment no
+          KexAlgorithms -*-sha1
+          MACs -hmac-sha1*
+      notify: Reload ssh
+      become: "{{ ai_lab_become }}"
+
+    - name: Check the whole sshd configuration and what is in force now
+      when: not ansible_check_mode
+      block:
+        - name: The whole configuration is valid
+          ansible.builtin.command:
+            argv: ["{{ ssh_hardening_sshd }}", -t]
+          changed_when: false
+          become: "{{ ai_lab_become }}"
+
+        - name: Read the effective sshd settings
+          ansible.builtin.command:
+            argv: ["{{ ssh_hardening_sshd }}", -T]
+          register: ssh_hardening_sshd_after
+          changed_when: false
+          become: "{{ ai_lab_become }}"
+
+        - name: Audit sshd, LC-13 and OC-10 are in force
+          ssh_hardening_audit:
+            mode: sshd_after
+            accounts: "{{ ssh_hardening_accounts }}"
+            sshd_text: "{{ ssh_hardening_sshd_after.stdout }}"
+            keys_dir: "{{ ssh_hardening_keys_dir }}"
+      rescue:
+        - name: Take the drop-in away again, sshd is not switched
+          ansible.builtin.file:
+            path: "{{ ssh_hardening_dropin }}"
+            state: absent
+          become: "{{ ai_lab_become }}"
+
+        - name: Stop
+          ansible.builtin.fail:
+            msg: the sshd settings did not pass the check, so the drop-in was removed and sshd was not switched
