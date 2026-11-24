@@ -182,6 +182,59 @@ class SshHardeningRole(unittest.TestCase):
         self.assertIn("rescue:", self.apply)
         self.assertRegex(self.apply, r"path: \"\{\{ ssh_hardening_dropin \}\}\"\n\s+state: absent")
 
+    def at(self, needle, start=0):
+        self.assertIn(needle, self.apply[start:], needle)
+        return self.apply.index(needle, start)
+
+    def reload_task(self):
+        """The text of the task that reloads sshd, from its name to the next task of the same level."""
+        start = self.at("ansible.builtin.service:")
+        start = self.apply.rindex("\n- name:", 0, start) + 1
+        end = self.apply.find("\n- name:", start + 1)
+        return self.apply[start:end if end != -1 else len(self.apply)]
+
+    def test_a_written_dropin_is_reloaded_by_the_role_itself_not_by_a_handler_at_the_end_of_the_play(self):
+        # Handlers run at the end of the roles section and never for a failed play. operator_checks runs after this role in the same
+        # section and fails the play, so a handler would leave the dropin on disk and sshd on its old settings, with every check passing
+        # (the checks read files and the snapshot, never the running daemon).
+        self.assertNotIn("notify:", self.apply)
+        self.assertFalse((self.role / "handlers").exists(), "a handler for the reload is deferred past the checks that can fail the play")
+        self.assertIn("state: reloaded", self.apply)
+
+    def test_the_reload_comes_after_the_whole_check_and_the_snapshot_and_outside_the_rescue(self):
+        reload = self.at("state: reloaded")
+        self.assertGreater(reload, self.at("The whole configuration is valid"))
+        self.assertGreater(reload, self.at("mode: snapshot"))
+        # rescue removes the drop-in again: a reload before it could load settings that are then taken away
+        self.assertGreater(reload, self.at("the sshd settings did not pass the check"))
+
+    def test_the_reload_needs_the_confirmed_second_login_and_systemd_and_is_not_made_in_a_dry_run(self):
+        # the reload sits in a block of its own after the switch block: that block and the reload must both be gated
+        gate = self.apply[self.at("the sshd settings did not pass the check"):self.at("state: reloaded")]
+        self.assertIn("ssh_second_login_confirmed | bool", gate)
+        self.assertIn("not ansible_check_mode", gate)
+        self.assertIn("ansible_facts['service_mgr'] == 'systemd'", gate)
+
+    def test_a_rerun_reloads_when_the_dropin_is_in_place_but_the_daemon_has_not_read_it(self):
+        # The reload is decided by comparing the drop-in with the record of what sshd last loaded, not by whether this run changed the
+        # drop-in: a run that failed before the reload leaves the drop-in correct, so the next run reports no change.
+        reload = self.reload_task()
+        self.assertIn("ssh_hardening_loaded", reload)
+        self.assertIn("checksum", reload)
+        self.assertNotIn(".changed", reload)
+        record = self.apply[self.at("state: reloaded"):]
+        self.assertIn("src: \"{{ ssh_hardening_dropin }}\"", record)
+        self.assertIn("dest: \"{{ ssh_hardening_loaded }}\"", record)
+        self.assertIn("remote_src: true", record)
+        # the record is written only after the reload worked (it follows the reload task), so a failed reload is retried by the next run
+        self.assertRegex((self.role / "defaults" / "main.yml").read_text(), r"(?m)^ssh_hardening_loaded: /etc/ssh/")
+
+    def test_the_profiles_apply_the_role_with_nothing_that_depends_on_handlers(self):
+        for playbook in ("lab.yml", "operator.yml"):
+            code = "\n".join(line for line in (ANSIBLE / playbook).read_text().splitlines() if not line.lstrip().startswith("#"))
+            self.assertNotIn("flush_handlers", code, playbook)
+            self.assertIn("ssh_hardening", code, playbook)
+
     def test_the_profile_sets_accounts_only(self):
         lab = (ANSIBLE / "lab.yml").read_text()
         for setting in ("PasswordAuthentication", "AuthorizedKeysFile", "AllowUsers"):
