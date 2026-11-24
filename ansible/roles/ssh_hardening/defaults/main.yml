@@ -17,5 +17,9 @@ ssh_hardening_sshd: /usr/sbin/sshd
 # so the read-only checks that run as an ordinary user (the lab check) read this file instead and fail when the digest no longer matches.
 ssh_hardening_snapshot: /etc/ssh/ai-lab-sshd-effective.txt
 
+# A copy of the drop-in as sshd last loaded it, made after a successful reload. The next run reloads when the drop-in differs from it
+# or it is missing, so a drop-in that was written by a run that then failed is still loaded by the next run.
+ssh_hardening_loaded: /etc/ssh/ai-lab-sshd-loaded.txt
+
 # sshd is switched only after a second login with each managed account worked while the current session stayed open (PA-16).
 ssh_second_login_confirmed: false
