@@ -8,13 +8,13 @@ from operator_lib import profiles
 GOOD = """
 [machines.alpha]
 arch = "x86-64"
-os = "ubuntu-24.04-minimal"
+os = "debian-13"
 memory_mb = 2048
 cpu_threads = 2
 
 [machines.beta]
 arch = "x86-64"
-os = "ubuntu-24.04-minimal"
+os = "debian-13"
 memory_mb = 1024
 cpu_threads = 1
 disk_gb = 47
@@ -34,7 +34,7 @@ class Profiles(unittest.TestCase):
         self.assertEqual(set(data), {"platform_operator"})
         for entry in data.values():
             self.assertEqual(entry["arch"], "x86-64")
-            self.assertTrue(entry["os"].startswith("ubuntu-24.04"))
+            self.assertEqual(entry["os"], "debian-13")  # OC-6, ADR-012 section 1
 
     def test_strictest_takes_the_smallest_limits(self):
         strictest = profiles.strictest(load(GOOD))
@@ -56,7 +56,7 @@ class Profiles(unittest.TestCase):
     def test_identifiers_in_values_are_refused(self):
         for value in ("192.0.2.1", "2001:db8::1", "a" + helpers.AT + "example.org", helpers.OCID + ".instance.oc1..aaaabbbbccccdddd", "host-01.example.org"):
             with self.subTest(value=value), self.assertRaises(profiles.ProfileError):
-                load(GOOD.replace('os = "ubuntu-24.04-minimal"', f'os = "{value}"', 1))
+                load(GOOD.replace('os = "debian-13"', f'os = "{value}"', 1))
 
     def test_wrong_types_and_ranges_are_refused(self):
         for old, new in (("memory_mb = 2048", 'memory_mb = "2048"'), ("memory_mb = 2048", "memory_mb = 0"), ("memory_mb = 2048", "memory_mb = -1"),

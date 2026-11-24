@@ -1,0 +1,19 @@
+# The system-wide git identity of the AI lab (CR-57 LC-8; ADR-012 decision 5): user.name is the machine account's login and user.email
+# its noreply address, `<numeric id>+<login>` at the noreply domain. It goes to the root-owned /etc/gitconfig, inside markers, so that a
+# file that already exists keeps every other line (the block comes last, so its values win). The AI user cannot change it, and nothing
+# is written into a user's home. tasks/assert.yml has already checked the two values as a pre-task.
+- name: Write the system-wide git identity inside markers, keeping every other line of an existing file
+  vars:
+    git_identity_github: "{{ (lookup('ansible.builtin.file', git_identity_project_config) | from_yaml).github }}"
+  ansible.builtin.blockinfile:
+    path: "{{ git_identity_file }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "# {mark} ai-lab-infrastructure machine identity"
+    block: |
+      [user]
+          name = {{ git_identity_github.machine_login }}
+          email = {{ git_identity_github.machine_user_id }}+{{ git_identity_github.machine_login }}@{{ git_identity_noreply_domain }}
+  become: "{{ ai_lab_become }}"

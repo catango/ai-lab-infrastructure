@@ -1,0 +1,102 @@
+#!/usr/bin/python3 -I
+"""The one way a project's operator script is started on the operator machine (ADR-012 decision 12, CR-57 PA-42, PA-A30, OC-2).
+
+  Usage: operator-run PROJECT SCRIPT [ARGUMENT...]      (test seam: --prefix DIR before PROJECT)
+It runs only from the root-owned installation of the operator configuration, takes a project that is installed there at a release tag,
+and a script that lies inside that project's installation and is root-owned. Runs are one at a time: it takes a non-blocking lock first
+and refuses a second run while the first is in progress. The script starts in the project's own output directory (mode 0700) with a
+clean environment: the environment of the caller, and so any credential in it, is not passed on (a script prompts for its own
+credentials, OC-4). It reads and writes no credential itself.
+Exit status: the script's own; 1 for a refusal of the run (lock, project, script); 2 for a usage error or a run from anywhere but the
+installation.
+"""
+import fcntl
+import importlib.machinery
+import importlib.util
+import os
+import re
+import stat
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.realpath(__file__))
+
+
+def load_module(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def acquire(lock_path):
+    """The open lock file with an exclusive lock, or None when another run holds it."""
+    fd = os.open(lock_path, os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def script_path(project_dir, script, trusted=(0,)):
+    """(path, None) of the script when it lies inside project_dir, is a regular root-owned executable file, else (None, reason)."""
+    if os.path.isabs(script) or ".." in script.split("/") or not re.fullmatch(r"[A-Za-z0-9._/-]+", script):
+        return None, "the script must be a plain relative path inside the project's installation"
+    full = os.path.join(project_dir, script)
+    if os.path.realpath(full) != os.path.join(os.path.realpath(project_dir), script):
+        return None, "the script is not inside the project's installation (a link?)"
+    try:
+        info = os.lstat(full)
+    except FileNotFoundError:
+        return None, "the script does not exist"
+    if not stat.S_ISREG(info.st_mode) or info.st_uid not in trusted or info.st_mode & 0o022 or not info.st_mode & 0o100:
+        return None, "the script is not a root-owned executable file that others cannot write"
+    return full, None
+
+
+def main(argv, here=HERE, trusted=(0,), chain_top="/", state="/var/lib/ai-lab/operator"):
+    args = list(argv)
+    prefix = "/opt/ai-lab"
+    if args[:1] == ["--prefix"] and len(args) > 1:
+        prefix = args[1]
+        args = args[2:]
+    if len(args) < 2:
+        print("usage: operator-run PROJECT SCRIPT [ARGUMENT...]", file=sys.stderr)
+        return 2
+    project, script, rest = args[0], args[1], args[2:]
+    check = load_module("operator_check", os.path.join(here, "operator-check"))
+    problem = check.require_installation(here, prefix, trusted, chain_top)
+    if problem:
+        print(f"operator-run: refused: {problem}", file=sys.stderr)
+        return 2
+    if not check.NAME.fullmatch(project) or project not in check.installed_projects(os.path.join(prefix, "operator", "projects")):
+        print("operator-run: refused: no such project is installed", file=sys.stderr)
+        return 1
+    project_dir = os.path.join(prefix, "operator", "projects", project)
+    full, reason = script_path(project_dir, script, trusted)
+    if reason:
+        print(f"operator-run: refused: {reason}", file=sys.stderr)
+        return 1
+    output = os.path.join(state, "output", project)
+    lock = acquire(os.path.join(state, "run.lock"))
+    if lock is None:
+        print("operator-run: refused: another operator run is in progress", file=sys.stderr)
+        return 1
+    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "HOME": output, "OPERATOR_PROJECT": project, "OPERATOR_OUTPUT_DIR": output}
+    if os.environ.get("TERM"):
+        env["TERM"] = os.environ["TERM"]
+    try:
+        return subprocess.run([full, *rest], cwd=output, env=env, check=False).returncode  # the lock is held until the script ends
+    except OSError:
+        print("operator-run: the script could not be started", file=sys.stderr)
+        return 1
+    finally:
+        os.close(lock)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

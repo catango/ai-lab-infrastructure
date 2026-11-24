@@ -1,0 +1,2 @@
+# Groups that are root-equivalent: the operator user is in none of them (OC-8). The same list as the lab check and the operator check.
+operator_user_privileged_groups: [sudo, wheel, admin, docker, lxd, lxc, disk, shadow, kmem, libvirt]

@@ -1,4 +1,4 @@
-"""CR-57 plan PR 3: the lab_tools role (the root-owned token step and lab check, LC-14), the sshd snapshot, and the PC-8 path.
+"""CR-57 plan PR 3 and PR 4: the lab_tools role (the root-owned token step and lab check, LC-14), the sshd snapshot, and the PC-8 paths.
 
 Nothing here needs root. The role is read in text and run in check mode against a temporary prefix; what needs root (ownership,
 the links in /usr/local/bin, the AI user unable to write) is the PA-28 job (tests/ansible/pa28-lab.sh, job `host-profiles`).
@@ -49,10 +49,22 @@ class Role(unittest.TestCase):
         self.assertLess(roles.index("lab_tools"), roles.index("ssh_hardening"))
         self.assertEqual(roles[-1], "ssh_hardening")
 
-    def test_the_new_role_is_an_operator_path_for_the_next_pr(self):
-        """PC-8 reads the base commit, so this PR states the path in its body; the file lists it for every PR after this one."""
+    def test_lab_setup_applies_what_lc8_and_lc15_read_so_only_lc7_is_left_to_the_user(self):
+        """Plan PR 4, first extension: the git identity and the unattended updates are part of lab setup (they had no owner before)."""
+        text = (ROOT / "ansible" / "lab.yml").read_text()
+        roles = re.findall(r"^    - (?:role: )?([a-z_]+)$", text[text.index("  roles:"):], re.M)
+        for role in ("git_identity", "unattended_upgrades"):
+            self.assertLess(roles.index(role), roles.index("ssh_hardening"), role)
+        check = (ROLE / "files" / "lab-check").read_text()
+        self.assertIn("APT::Periodic::Unattended-Upgrade", check)
+        self.assertIn("def lc8", check)
+
+    def test_the_roles_are_operator_paths(self):
+        """PC-8 reads the base commit, so a PR that adds a path states it in its body; the file lists it for every PR after that."""
         config = (ROOT / "config" / "project.yaml").read_text()
-        self.assertIn("  - ansible/roles/lab_tools/\n", config)
+        for path in ("lab_tools", "git_identity", "unattended_upgrades", "ssh_hardening", "release_check", "claude_managed_settings"):
+            self.assertIn(f"  - ansible/roles/{path}/\n", config, path)
+        self.assertIn("  - ansible/roles/operator_*/\n", config)
 
     def test_a_check_mode_run_renders_the_lab_configuration_from_the_project_configuration(self):
         if shutil.which("ansible-playbook") is None:
@@ -130,6 +142,44 @@ class Snapshot(unittest.TestCase):
         self.path.chmod(0o666)
         _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
         self.assertTrue(any("writable by others" in problem for problem in problems))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    def test_an_unreadable_file_gives_no_content_digest_and_the_stat_record_stands_in(self):
+        provider = self.ssh / "sshd_config.d" / "60-provider.conf"
+        provider.write_text("# provider\n")
+        provider.chmod(0o000)
+        self.assertIsNone(audit.config_digest(str(self.ssh)))
+        self.assertEqual(audit.unreadable_config_files(str(self.ssh)), ["sshd_config.d/60-provider.conf"])
+        # recorded as root would: the content digest is the one of a reader that can see every file
+        provider.chmod(0o600)
+        content_digest = audit.config_digest(str(self.ssh))
+        provider.chmod(0o000)
+        audit.write_snapshot(str(self.path), "passwordauthentication no\n", content_digest, stat_digest=audit.config_stat_digest(str(self.ssh)))
+        text, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertEqual(problems, [])
+        self.assertIn("passwordauthentication no", text)
+        provider.chmod(0o600)
+        provider.write_text("# provider\n# edited\n")
+        provider.chmod(0o000)
+        _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertTrue(any("changed after lab setup" in problem for problem in problems), problems)
+        self.assertEqual(audit.audit_sshd_files(str(self.ssh)), ["sshd: sshd_config.d/60-provider.conf cannot be read"])
+        self.assertEqual(audit.audit_sshd_files(str(self.ssh), skip_unreadable=True), [])
+        provider.chmod(0o600)
+
+    def test_the_stat_record_changes_with_a_new_file_or_a_new_size_and_a_record_without_it_still_reads_while_all_files_are_readable(self):
+        before = audit.config_stat_digest(str(self.ssh))
+        (self.ssh / "sshd_config.d" / "10-new.conf").write_text("# x\n")
+        self.assertNotEqual(audit.config_stat_digest(str(self.ssh)), before)
+        (self.ssh / "sshd_config.d" / "10-new.conf").unlink()
+        self.assertEqual(audit.config_stat_digest(str(self.ssh)), before)
+        audit.write_snapshot(str(self.path), "passwordauthentication no\n", audit.config_digest(str(self.ssh)))
+        _, problems = audit.read_snapshot(str(self.path), str(self.ssh), (self.uid,))
+        self.assertEqual(problems, [])
+
+    def test_the_module_records_the_stat_digest_with_the_snapshot(self):
+        text = (ROOT / "ansible" / "roles" / "ssh_hardening" / "library" / "ssh_hardening_audit.py").read_text()
+        self.assertIn("config_stat_digest(params[\"ssh_dir\"])", text)
 
     def test_the_role_records_the_snapshot_only_after_the_audit_of_the_switched_settings(self):
         text = (ROOT / "ansible" / "roles" / "ssh_hardening" / "tasks" / "main.yml").read_text()

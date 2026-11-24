@@ -1,0 +1,10 @@
+# One root-owned installation directory and one output directory per project (CR-57 PA-42, OC-2, PA-A30; ADR-012 decision 12). The
+# project list and the release check of every project's clone have already passed as a pre-task (tasks/check.yml: a refusal there
+# changes nothing). Each project's operator scripts are copied into <tools>/projects/<name>/, with RELEASE recording the tag and the
+# commit. An installation of another release is taken away before the new one is installed, so no script of an older tag stays.
+- name: Install each project at its release tag
+  ansible.builtin.include_tasks: one.yml
+  loop: "{{ operator_projects }}"
+  loop_control:
+    loop_var: operator_project
+    label: "{{ operator_project.name }}"

@@ -12,7 +12,7 @@ from contextlib import redirect_stderr
 
 import helpers
 import fakes
-from operator_lib import download, exitcodes, process, profiles, release
+from operator_lib import exitcodes, process, profiles, release
 
 SCRIPT = helpers.OPERATOR_DIR / "facts"
 
@@ -36,21 +36,16 @@ class Base(unittest.TestCase):
         self.system = fakes.FakeSystem()
         self.runner = fakes.FakeRunner()
         self.lines = []
-        self.downloads = []
         self.environ = {"HOME": str(self.home), "SSH_CLIENT": f"{fakes.ADDRESS} 50000 22"}
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def downloader(self, url, **kw):
-        self.downloads.append(url)
-        return download.Timing(bytes=12_500_000, seconds=1.0, capped=False)
-
     def run_facts(self, *argv, environ=None, system=None, runner=None):
         self.lines = []
         code = facts.main(list(argv), system=system or self.system, environ=environ if environ is not None else self.environ,
                           out=self.lines.append, require_release=lambda repo, out=print: self.lines.append("release ok"),
-                          runner=runner or self.runner, downloader=self.downloader)
+                          runner=runner or self.runner)
         return code
 
     @property
@@ -80,7 +75,6 @@ class DryRun(Base):
         self.assertEqual(self.system.reads, [])
         self.assertEqual(self.runner.calls, [])
         self.assertEqual(self.tree(), [])
-        self.assertEqual(self.downloads, [])
 
     def test_the_dry_run_lists_the_checks_and_says_how_to_apply(self):
         self.run_facts()
@@ -99,17 +93,17 @@ class DryRun(Base):
             raise SystemExit(exitcodes.FAILED)
         with self.assertRaises(SystemExit) as caught:
             facts.main(["--apply"], system=self.system, environ=self.environ, out=self.lines.append, require_release=refuse,
-                       runner=self.runner, downloader=self.downloader)
+                       runner=self.runner)
         self.assertEqual(caught.exception.code, 1)
         self.assertEqual((self.system.reads, self.runner.calls, self.tree()), ([], [], []))
 
-    def test_privileged_and_allowlist_and_bandwidth_dry_runs_only_list(self):
-        self.run_facts("--privileged", "--write-allowlist", "--measure-bandwidth")
+    def test_the_allowlist_dry_run_only_lists(self):
+        self.run_facts("--write-allowlist")
         self.assertEqual(self.runner.calls, [])
-        self.assertEqual(self.downloads, [])
         self.assertEqual(self.tree(), [])
-        for word in ("sshd -T", "nft list ruleset", "/etc/sudoers.d", "sudo -n true", "allowlist", "download"):
-            self.assertIn(word, self.text)
+        self.assertIn("allowlist", self.text)
+        for word in ("sshd -T", "nft list ruleset", "sudo -n true", "download"):
+            self.assertNotIn(word, self.text)
         self.assertNotIn(fakes.ADDRESS, self.text)
 
 
@@ -135,7 +129,7 @@ class Apply(Base):
         self.assertEqual(stat.S_IMODE(os.stat(state_dir / "state.json").st_mode), 0o600)
         self.assertNotIn(fakes.ADDRESS, (state_dir / "state.json").read_text())
 
-    def test_without_privileged_sudo_is_never_called_and_only_git_runs(self):
+    def test_sudo_is_never_called_and_only_git_runs(self):
         self.run_facts("--apply")
         self.assertEqual([c for c, _ in self.runner.calls], [("git", "--version")])
 
@@ -185,7 +179,7 @@ class Apply(Base):
         self.assertEqual(self.values()["runs"], "1")
 
     def test_the_machine_profile_entry_is_valid_and_has_safe_values_only(self):
-        self.run_facts("--apply", "--measure-bandwidth")
+        self.run_facts("--apply")
         start = self.lines.index("== machine profile entry ==")
         block = self.lines[start + 1:]
         end = next(i for i, line in enumerate(block) if line.startswith("=="))
@@ -193,31 +187,15 @@ class Apply(Base):
         path = self.home / "entry.toml"
         path.write_text(toml)
         entry = profiles.load_profiles(path)["example"]
-        self.assertEqual(entry, {"arch": "x86-64", "os": "ubuntu-24.04", "memory_mb": 983, "cpu_threads": 2, "disk_gb": 50, "bandwidth_mbit": 100})
+        self.assertEqual(entry, {"arch": "x86-64", "os": "debian-13", "memory_mb": 983, "cpu_threads": 2, "disk_gb": 50})
         self.assertNoCanary()
 
     def test_off_host_facts_are_manual_lines(self):
         self.run_facts("--apply")
         manual = [line for line in self.lines if line.startswith("manual: ")]
         joined = " ".join(manual)
-        for topic in ("provider firewall", "SSH path from Z0", "corporate approval"):
+        for topic in ("root-only facts", "provider firewall", "SSH path from Z0", "corporate approval"):
             self.assertIn(topic, joined)
-
-    def test_bandwidth_downloads_one_manifest_artifact_once(self):
-        self.run_facts("--apply", "--measure-bandwidth")
-        self.assertEqual(len(self.downloads), 1)
-        self.assertTrue(self.downloads[0].startswith("https://"))
-        self.assertEqual(self.values()["bandwidth_mbit"], "100")
-        self.run_facts("--apply")
-        self.assertNotIn("bandwidth_mbit", self.values())
-
-    def test_a_failed_download_is_reported_as_unknown(self):
-        def broken(url, **kw):
-            raise download.DownloadError("download failed")
-        self.lines = []
-        facts.main(["--apply", "--measure-bandwidth"], system=self.system, environ=self.environ, out=self.lines.append,
-                   require_release=lambda repo, out=print: None, runner=self.runner, downloader=broken)
-        self.assertEqual(self.values()["bandwidth_mbit"], "unknown")
 
 
 class Allowlist(Base):
@@ -249,55 +227,32 @@ class Allowlist(Base):
         self.assertFalse((self.home / self.PATH).exists())
 
 
-class Privileged(Base):
-    def test_exactly_the_listed_commands_run_and_each_asks_for_the_password(self):
-        self.run_facts("--apply", "--privileged")
-        self.assertEqual(self.runner.privileged(), [("sudo", "sshd", "-T"), ("sudo", "nft", "list", "ruleset"),
-                                                    ("sudo", "find", "/etc/sudoers.d", "-maxdepth", "1", "-type", "f"), ("sudo", "-n", "true")])
-        for argv, kw in self.runner.calls:
-            if argv[0] == "sudo":
-                self.assertTrue(kw.get("interactive") or argv == ("sudo", "-n", "true"), argv)
-                self.assertEqual(kw["allow_exact"], facts.ALLOW_EXACT)
+class NoPrivilege(Base):
+    """CR-57 OC-8, OC-9, O-9: `facts --privileged` is gone, and nothing in facts or the process module runs with sudo."""
 
-    def test_the_results_are_yes_no_and_counts(self):
-        self.run_facts("--apply", "--privileged")
-        v = self.values()
-        expected = {"sshd_password_auth_off": "yes", "sshd_root_login_off": "no", "sshd_pubkey_auth_on": "yes", "sshd_port_count": "1",
-                    "nft_tables": "2", "nft_chains": "3", "nft_input_policy_drop": "yes", "sudoers_d_files": "2", "sudo_passwordless": "no"}
-        for key, value in expected.items():
-            self.assertEqual(v.get(key), value, key)
-        self.assertNoCanary()
+    def test_the_removed_flags_are_usage_errors(self):
+        for flag in ("--privileged", "--measure-bandwidth"):
+            with self.subTest(flag=flag), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+                self.run_facts("--apply", flag)
+            self.assertEqual(caught.exception.code, exitcodes.USAGE)
 
-    def test_a_refused_or_failing_command_gives_unknown(self):
-        runner = fakes.FakeRunner(canned={("sudo", "sshd", "-T"): (1, ""), ("sudo", "nft", "list", "ruleset"): (1, "")})
-        self.assertEqual(self.run_facts("--apply", "--privileged", runner=runner), 0)
-        v = self.values()
-        self.assertEqual((v["sshd_password_auth_off"], v["nft_tables"]), ("unknown", "unknown"))
+    def test_no_run_starts_sudo(self):
+        for argv in (["--apply"], ["--apply", "--write-allowlist"], ["--write-allowlist"], []):
+            self.run_facts(*argv)
+        self.assertEqual(self.runner.sudo_calls(), [])
 
-    def test_a_missing_sudo_gives_unknown(self):
-        runner = fakes.FakeRunner()
-        for key in list(runner.canned):
-            if key[0] == "sudo":
-                del runner.canned[key]
-        self.assertEqual(self.run_facts("--apply", "--privileged", runner=runner), 0)
-        self.assertEqual(self.values()["sudo_passwordless"], "unknown")
+    def test_the_fixed_list_and_the_exact_command_exception_are_gone(self):
+        for name in ("PRIVILEGED", "PROBE", "ALLOW_EXACT", "collect_privileged", "measure_bandwidth", "MANIFEST"):
+            self.assertFalse(hasattr(facts, name), name)
+        self.assertNotIn("allow_exact", process.run.__code__.co_varnames)
+        self.assertNotIn("interactive", process.run.__code__.co_varnames)
 
-    def test_passwordless_sudo_is_reported(self):
-        runner = fakes.FakeRunner(canned={("sudo", "-n", "true"): (0, "")})
-        self.run_facts("--apply", "--privileged", runner=runner)
-        self.assertEqual(self.values()["sudo_passwordless"], "yes")
-
-    def test_the_fixed_list_matches_the_design(self):
-        self.assertEqual(facts.PRIVILEGED, (("sshd", "-T"), ("nft", "list", "ruleset"), ("find", "/etc/sudoers.d", "-maxdepth", "1", "-type", "f")))
-        self.assertEqual(facts.PROBE, ("sudo", "-n", "true"))
-        self.assertEqual(len(facts.ALLOW_EXACT), 4)
-
-    def test_every_allowed_tuple_passes_the_process_policy_and_nothing_else_does(self):
-        for argv in facts.ALLOW_EXACT:
-            process._check(list(argv), process.DEFAULT_ALLOW, facts.ALLOW_EXACT, (), None)
-        for argv in (["sudo", "sh"], ["sudo", "-n", "true", "x"], ["sudo", "sshd", "-T", "-f", "x"], ["sudo", "find", "/", "-delete"]):
-            with self.assertRaises(process.PolicyViolation):
-                process._check(argv, process.DEFAULT_ALLOW, facts.ALLOW_EXACT, (), None)
+    def test_sudo_is_not_on_the_process_allowlist_and_cannot_be_allowed_by_an_exact_tuple(self):
+        self.assertNotIn("sudo", process.DEFAULT_ALLOW)
+        with self.assertRaises(TypeError):
+            process.run(["sudo", "-n", "true"], allow_exact=frozenset({("sudo", "-n", "true")}))
+        with self.assertRaises(process.PolicyViolation):
+            process.run(["sudo", "-n", "true"])
 
 
 class Script(unittest.TestCase):

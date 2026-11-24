@@ -1,8 +1,8 @@
 """Host facts (design section 5.1, scope host): what a machine can say about itself, as yes/no, counts, sizes, and versions.
 
 Everything is read from /proc and /etc through a System object (so that tests can supply files), or from `git --version`.
-Nothing here prints an address, account name, hostname, or key. The privileged facts are parsed from command output that the
-facts script obtains, and only counts and yes/no leave this module.
+Nothing here prints an address, account name, hostname, or key. Nothing here runs with sudo: root-only facts are manual lines
+(CR-57 OC-9), so no privileged command output is parsed in this module.
 """
 import hashlib
 import ipaddress
@@ -218,42 +218,10 @@ class State:
         self.dir.write(STATE_NAME, json.dumps(self.data, sort_keys=True).encode("utf-8"))
 
 
-def parse_sshd(text):
-    """From `sshd -T` output: only yes/no and a count. Addresses and user lists are never read out."""
-    settings = {}
-    ports = 0
-    for line in (text or "").splitlines():
-        key, _, value = line.partition(" ")
-        if key == "port":
-            ports += 1
-        elif key in ("passwordauthentication", "permitrootlogin", "pubkeyauthentication"):
-            settings[key] = value.strip()
-    return {
-        "sshd_password_auth_off": yes_no(settings["passwordauthentication"] == "no") if "passwordauthentication" in settings else UNKNOWN,
-        "sshd_root_login_off": yes_no(settings["permitrootlogin"] == "no") if "permitrootlogin" in settings else UNKNOWN,
-        "sshd_pubkey_auth_on": yes_no(settings["pubkeyauthentication"] == "yes") if "pubkeyauthentication" in settings else UNKNOWN,
-        "sshd_port_count": ports if ports else UNKNOWN,
-    }
-
-
-def parse_nft(text):
-    """From `nft list ruleset`: counts of tables and chains, and whether an input chain drops by default."""
-    lines = [line.strip() for line in (text or "").splitlines()]
-    return {
-        "nft_tables": sum(1 for line in lines if line.startswith("table ")),
-        "nft_chains": sum(1 for line in lines if line.startswith("chain ")),
-        "nft_input_policy_drop": yes_no(any(re.search(r"hook input\b[^;]*;\s*policy drop", line) for line in lines)),
-    }
-
-
-def count_sudoers_d(text):
-    return sum(1 for line in (text or "").splitlines() if line.startswith("/etc/sudoers.d/"))
-
-
 def profile_entry(system, facts):
     """The machine-profile entry (design section 3.3): only keys whose values pass the profile validation."""
     candidate = {"arch": arch_name(system), "os": os_name(system), "memory_mb": facts.get("memory_mb"), "cpu_threads": facts.get("cpu_threads"),
-                 "disk_gb": facts.get("disk_gb_total"), "bandwidth_mbit": facts.get("bandwidth_mbit")}
+                 "disk_gb": facts.get("disk_gb_total")}
     entry = {}
     for key, value in candidate.items():
         if value is None or value == UNKNOWN:

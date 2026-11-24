@@ -1,0 +1,511 @@
+#!/usr/bin/python3 -I
+"""The operator check of the operator machine (ADR-012 section 5, CR-57 PA-A14, PA-A18, PA-A26, PA-A30).
+
+The operator configuration installs it root-owned; the operator user runs it by its absolute path. It refuses to run except from that
+root-owned release installation. It is read-only: it reads files, runs `git`, `sudo -n`, `apt-config`, `dpkg-query`, and `systemctl`,
+and writes nothing. It prints one line per item, `PASS|FAIL|WARN <id>: <detail>`: names and rules only, never a token, a key, or the
+value of an environment variable. Exit 0 when nothing failed, 1 when something failed, 2 for a usage error, a run from anywhere but the
+installation, or the wrong account.
+  Usage: operator-check            (test seam: --prefix DIR)
+Items: OC-1, OC-2, OC-6, OC-8, OC-10, OC-11, OC-12, PA-42 (output directories and the run lock), PA-13 (no credential outside a script
+process). OC-3, OC-4, OC-5, OC-7, and OC-9 are declared in ADR-012 and have no check; PA-A26 is supporting evidence for OC-4.
+The logic is in plain functions of the class Operator, so tests/operator can run every item against a fake machine without root.
+"""
+import importlib.machinery
+import importlib.util
+import os
+import platform
+import pwd
+import re
+import stat
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+PRIVILEGED_GROUPS = frozenset({"root", "sudo", "wheel", "admin", "docker", "lxd", "lxc", "disk", "shadow", "kmem", "libvirt"})
+SHARED_FILESYSTEMS = frozenset({"nfs", "nfs4", "cifs", "smb3", "fuse.sshfs", "9p", "virtiofs", "vboxsf", "vmhgfs"})
+CREDENTIAL_ENV = re.compile(r"^(GH|GITHUB)[A-Z_]*TOKEN$")
+TOKEN_TEXT = re.compile(rb"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}")
+PERSISTED_CREDENTIALS = (".git-credentials", ".netrc", os.path.join(".config", "gh", "hosts.yml"))
+SSH_KEYS = "/etc/ssh/authorized_keys"
+SNAPSHOT = "/etc/ssh/ai-lab-sshd-effective.txt"
+STATE = "/var/lib/ai-lab/operator"
+TAG = re.compile(r"v[0-9]+([.][0-9]+)*([-+][0-9A-Za-z.]+)?")
+NAME = re.compile(r"[a-z][a-z0-9-]{0,40}")
+SCAN_FILES, SCAN_BYTES = 200, 65536
+
+
+def load_module(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def read_conf(path):
+    """key=value lines of operator.conf (written by the operator configuration); only plain values are kept."""
+    values = {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                found = re.match(r"^([a-z_]+)=([A-Za-z0-9._,+-]*)$", line.strip())
+                if found:
+                    values[found.group(1)] = found.group(2)
+    except OSError:
+        pass
+    return values
+
+
+def mode_of(info):
+    return stat.S_IMODE(info.st_mode)
+
+
+def root_owned(path, trusted=(0,), *, directory=False):
+    """None when path is a root-owned regular file (or directory) that others cannot write, else the reason."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return "does not exist"
+    if stat.S_ISLNK(info.st_mode):
+        return "is a link"
+    if directory != stat.S_ISDIR(info.st_mode):
+        return "is not a directory" if directory else "is not a regular file"
+    if info.st_uid not in trusted:
+        return "is not owned by root"
+    if mode_of(info) & 0o022:
+        return "is writable by others"
+    return None
+
+
+def installed_projects(projects_dir):
+    try:
+        return sorted(name for name in os.listdir(projects_dir) if not name.startswith("."))
+    except OSError:
+        return []
+
+
+def require_installation(here, prefix, trusted=(0,), chain_top="/"):
+    """None when `here` is the root-owned release installation under <prefix>/operator, else why not. Every directory up to chain_top
+    must be root-owned and not writable by others, and operator.conf must name a release tag: a run from a tree the user owns, or
+    from a clone, is refused (PA-A14)."""
+    tools = os.path.join(prefix, "operator")
+    if os.path.realpath(here) != os.path.realpath(tools):
+        return "it runs only from the installation of the operator configuration"
+    current = os.path.realpath(tools)
+    while True:
+        reason = root_owned(current, trusted, directory=True)
+        if reason:
+            return f"the installation is not root-owned ({os.path.basename(current) or '/'} {reason})"
+        if current in (chain_top, "/"):
+            break
+        current = os.path.dirname(current)
+    conf_path = os.path.join(tools, "operator.conf")
+    reason = root_owned(conf_path, trusted)
+    if reason:
+        return f"operator.conf {reason}"
+    if not TAG.fullmatch(read_conf(conf_path).get("release_tag", "")):
+        return "operator.conf does not name a release tag"
+    return None
+
+
+class Operator:
+    """One machine as the check sees it. Tests pass another root, home, environment, process table, and command runner."""
+
+    def __init__(self, ssh_audit, conf, user, home, root="", prefix="/opt/ai-lab", state=STATE, environ=None, run=None, machine=None,
+                 trusted_uids=(0,), groups=None, home_of=None, homes=None, systemd=None, proc="/proc", own_pid=None):
+        self.audit = ssh_audit
+        self.conf = conf
+        self.user = user
+        self.home = home
+        self.root = root
+        self.prefix = prefix
+        self.state = state
+        self.environ = dict(os.environ if environ is None else environ)
+        self.run = run or self._run
+        self.machine = machine or platform.machine()
+        self.trusted = tuple(trusted_uids)
+        self.groups = groups
+        self.home_of = home_of or self._home_of
+        self.homes = homes or self._homes
+        self.systemd = os.path.isdir(self.p("/run/systemd/system")) if systemd is None else systemd
+        self.proc = proc
+        self.own_pid = os.getpid() if own_pid is None else own_pid
+        self.tools = os.path.join(prefix, "operator")
+        self.projects_dir = os.path.join(self.tools, "projects")
+        self.output_dir = os.path.join(state, "output")
+
+    # ------------------------------------------------------------------ plumbing
+    def p(self, path):
+        return self.root + path if self.root else path
+
+    @staticmethod
+    def _home_of(name):
+        return pwd.getpwnam(name).pw_dir
+
+    @staticmethod
+    def _homes():
+        return {e.pw_name: e.pw_dir for e in pwd.getpwall() if 1000 <= e.pw_uid < 60000}
+
+    def _run(self, argv, env=None, cwd="/", timeout=120):
+        base = {"PATH": "/usr/bin:/bin", "HOME": self.home, "LC_ALL": "C.UTF-8", "NO_COLOR": "1", "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_TERMINAL_PROMPT": "0"}
+        base.update(env or {})
+        try:
+            done = subprocess.run(argv, env=base, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return 127, type(error).__name__
+        return done.returncode, done.stdout + done.stderr
+
+    def lstat(self, path):
+        try:
+            return os.lstat(path)
+        except FileNotFoundError:
+            return None
+
+    def root_owned(self, path, *, directory=False):
+        return root_owned(path, self.trusted, directory=directory)
+
+    def read(self, path, limit=262144, follow=False):
+        """The text of a regular file. A link at the last component is refused unless follow is set (only /etc/os-release)."""
+        fd = os.open(path, os.O_RDONLY | (0 if follow else os.O_NOFOLLOW))
+        with os.fdopen(fd, "rb") as handle:
+            return handle.read(limit).decode("utf-8", "replace")
+
+    def installed_projects(self):
+        return installed_projects(self.projects_dir)
+
+    # ------------------------------------------------------------------ the items
+    def oc1(self):
+        problems, warnings = [], []
+        homes = dict(self.homes())
+        for name in (self.user, self.conf.get("admin_user", "")):
+            if name:
+                try:
+                    homes.setdefault(name, self.home_of(name))
+                except KeyError:
+                    problems.append(f"the account {name} does not exist")
+        for name, home in sorted(homes.items()):
+            try:
+                found = self.lstat(os.path.join(home, ".claude")) is not None
+            except PermissionError:
+                warnings.append(f"the home of {name} is private, so this account cannot show it has no ~/.claude/")
+                continue
+            if found:
+                problems.append(f"{name} has a ~/.claude/ (the operator machine is never a Claude Desktop target)")
+        try:
+            mounts = self.read(self.p("/proc/mounts"), follow=True).splitlines()  # /proc/mounts is a link to the process
+        except OSError:
+            mounts = []
+            warnings.append("the mounts cannot be read")
+        shared = sorted({line.split()[2] for line in mounts if len(line.split()) > 2 and line.split()[2] in SHARED_FILESYSTEMS})
+        if shared:
+            problems.append("a network or host-shared mount is present (" + ", ".join(shared) + ")")
+        results = []
+        if problems:
+            results.append(("FAIL", "; ".join(problems)))
+        else:
+            results.append(("PASS", "no ~/.claude/ in a readable home and no network or host-shared mount (a shared key or route with the AI "
+                                    "lab cannot be seen from this machine: the approver's check)"))
+        results += [("WARN", text) for text in warnings]
+        return results
+
+    def oc2(self):
+        names = self.installed_projects()
+        if not names:
+            return [("FAIL", "no project is installed (the operator configuration installs each project's scripts at its release tag)")]
+        problems = []
+        for name in names:
+            path = os.path.join(self.projects_dir, name)
+            reason = self.root_owned(path, directory=True)
+            if reason or not NAME.fullmatch(name):
+                problems.append(f"{name}: the installation directory {reason or 'has an unusual name'}")
+                continue
+            release = os.path.join(path, "RELEASE")
+            reason = self.root_owned(release)
+            if reason:
+                problems.append(f"{name}: RELEASE {reason}")
+                continue
+            values = read_conf(release)
+            if values.get("project") != name:
+                problems.append(f"{name}: RELEASE names another project")
+            if not TAG.fullmatch(values.get("release_tag", "")):
+                problems.append(f"{name}: RELEASE names no release tag")
+            if not re.fullmatch(r"[0-9a-f]{40}", values.get("release_commit", "")):
+                problems.append(f"{name}: RELEASE names no commit")
+            if values.get("contained_in_origin_main") != "yes":
+                problems.append(f"{name}: the release is not recorded as contained in the project's origin/main")
+            problems += [f"{name}: {line}" for line in self._writable_below(path)]
+        if problems:
+            return [("FAIL", "; ".join(problems))]
+        return [("PASS", f"{len(names)} project(s) installed root-owned at a release tag contained in origin/main: " + ", ".join(names))]
+
+    def _writable_below(self, path):
+        found = []
+        for current, dirs, files in os.walk(path):
+            for entry in dirs + files:
+                full = os.path.join(current, entry)
+                info = self.lstat(full)
+                if info is None:
+                    continue
+                if info.st_uid not in self.trusted:
+                    found.append(f"{os.path.relpath(full, path)} is not owned by root")
+                elif not stat.S_ISLNK(info.st_mode) and mode_of(info) & 0o022:
+                    found.append(f"{os.path.relpath(full, path)} is writable by others")
+                if len(found) >= 3:
+                    return found
+        return found
+
+    def oc6(self):
+        info = {}
+        try:
+            for line in self.read(self.p("/etc/os-release"), follow=True).splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    info[key] = value.strip().strip('"')
+        except OSError:
+            return [("FAIL", "no readable /etc/os-release")]
+        version = info.get("VERSION_ID", "").split(".")[0]
+        problems = []
+        if info.get("ID") != "debian" or version != "13" or self.machine != "x86_64":
+            problems.append(f"this machine needs Debian 13 on x86_64 (found {info.get('ID', '?')} {version or '?'} on {self.machine})")
+        if sys.version_info[0] != 3:
+            problems.append("Python 3 is required")
+        rc, _ = self.run(["git", "--version"])
+        if rc != 0:
+            problems.append("git is not installed")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "Debian 13 on x86_64 with Python 3 and git")]
+
+    def _group_names(self):
+        import grp
+        names = []
+        for gid in os.getgroups():
+            try:
+                names.append(grp.getgrgid(gid).gr_name)
+            except KeyError:
+                continue
+        return names
+
+    def oc8(self):
+        problems = []
+        groups = self.groups if self.groups is not None else self._group_names()
+        bad = sorted(PRIVILEGED_GROUPS.intersection(groups))
+        if bad:
+            problems.append("the operator user is in the group(s) " + ", ".join(bad))
+        rc, out = self.run(["sudo", "-n", "true"])
+        if rc == 0:
+            problems.append("sudo -n true succeeds for the operator user")
+        rc, out = self.run(["sudo", "-n", "-l"])
+        if rc == 0:
+            problems.append("sudo allows the operator user to run commands")
+        if problems:
+            return [("FAIL", "; ".join(problems))]
+        if rc != 0 and "password is required" in out:
+            # Sudo prints this line for an account with a rule that needs a password and for an account with no rule at all (it asks
+            # for the password before it answers), so an ordinary account cannot tell the two apart. The operator configuration
+            # refuses a sudoers rule that names the operator user and removes the account from every root-equivalent group.
+            return [("WARN", "sudo asks this account for a password, which it also does for an account with no sudo rule, so this check "
+                             "cannot tell; no root-equivalent group (the operator admin confirms with `sudo -l -U <this account>`)")]
+        return [("PASS", "the operator user has no sudo and no root-equivalent group")]
+
+    def _key_file(self, account):
+        """The Key of an account in the root-owned location, or (None, problem)."""
+        path = os.path.join(self.p(SSH_KEYS), account)
+        reason = self.root_owned(path)
+        if reason:
+            return None, f"{account}: the key file in the root-owned location {reason}"
+        try:
+            keys = [key for key in (self.audit.parse_key_line(line) for line in self.read(path).splitlines()) if key]
+        except (OSError, ValueError):
+            return None, f"{account}: the key file is unusable"
+        if len(keys) != 1:
+            return None, f"{account}: the key file must hold exactly one key"
+        return keys[0], None
+
+    def oc11(self):
+        mine, problem = self._key_file(self.user)
+        theirs, other = self._key_file(self.conf.get("admin_user", ""))
+        if problem or other:
+            return [("FAIL", problem or other)]
+        if (mine.type, mine.blob) == (theirs.type, theirs.blob):
+            return [("FAIL", "the operator user and the operator admin share one key")]
+        return [("PASS", "the operator user and the operator admin have different keys")]
+
+    def effective_sshd(self):
+        """(text, source, problems): the output of `sshd -T` when it works for this account, else the recorded snapshot."""
+        rc, out = self.run([self.p("/usr/sbin/sshd"), "-T"])
+        if rc == 0 and out.strip():
+            return out, "sshd -T", []
+        text, problems = self.audit.read_snapshot(self.p(SNAPSHOT), self.p("/etc/ssh"), self.trusted)
+        return text, "the recorded settings", problems
+
+    def oc10(self):
+        accounts = [self.user, self.conf.get("admin_user", "")]
+        text, source, problems = self.effective_sshd()
+        results = []
+        if problems:
+            results.append(("FAIL", "; ".join(problems)))
+        else:
+            found = self.audit.audit_lc13(text, accounts, self.p(SSH_KEYS))
+            found += self.audit.audit_sshd_files(self.p("/etc/ssh"), skip_unreadable=True)
+            if found:
+                results.append(("FAIL", "; ".join(sorted(set(found)))))
+            else:
+                results.append(("PASS", f"sshd settings are the LC-13 settings for both accounts ({source})"))
+            for name in self.audit.unreadable_config_files(self.p("/etc/ssh")):
+                results.append(("WARN", f"{name} cannot be read by this account: it is compared by size and time with the record of the "
+                                        "operator configuration, and a Match block or a setting in it is not audited here (read it as root)"))
+        for name in sorted({self.user, accounts[1]} - {""}):
+            try:
+                present = self.lstat(os.path.join(self.home_of(name), ".ssh", "authorized_keys")) is not None
+            except (KeyError, PermissionError):
+                continue
+            if present:
+                results.append(("WARN", f"{name}: an inert authorized_keys file is left in its home (sshd reads the root-owned location)"))
+        return results
+
+    def oc12(self):
+        problems = []
+        rc, out = self.run(["dpkg-query", "-W", "-f=${Status}", "unattended-upgrades"])
+        if rc != 0 or "install ok installed" not in out:
+            problems.append("the unattended-upgrades package is not installed")
+        rc, out = self.run(["apt-config", "dump"])
+        for key in ("APT::Periodic::Update-Package-Lists", "APT::Periodic::Unattended-Upgrade"):
+            if not re.search(r'^' + re.escape(key) + r' "1";$', out, re.M):
+                problems.append(f"{key} is not 1")
+        if self.systemd:
+            rc, out = self.run(["systemctl", "is-enabled", "apt-daily-upgrade.timer"])
+            if out.strip() != "enabled":
+                problems.append("apt-daily-upgrade.timer is not enabled")
+        if problems:
+            return [("FAIL", "; ".join(problems))]
+        return [("PASS", "unattended security updates are configured; the operator admin schedules reboots"
+                 + ("" if self.systemd else " (the units are left to PA-A33: no systemd here)"))]
+
+    def pa42(self):
+        """One output directory per project (mode 0700, the operator user's) and the lock that lets one run at a time."""
+        problems = []
+        for name in self.installed_projects():
+            path = os.path.join(self.output_dir, name)
+            info = self.lstat(path)
+            if info is None:
+                problems.append(f"{name}: no output directory")
+            elif stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                problems.append(f"{name}: the output directory is not a directory")
+            elif mode_of(info) != 0o700:
+                problems.append(f"{name}: the output directory is not mode 0700")
+            elif info.st_uid != os.getuid() and info.st_uid not in self.trusted:
+                problems.append(f"{name}: the output directory belongs to another account")
+        lock = os.path.join(self.state, "run.lock")
+        info = self.lstat(lock)
+        if info is None or stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            problems.append("the run lock file is missing")
+        elif mode_of(info) & 0o077:
+            problems.append("the run lock file is accessible to others")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "one output directory (0700) per project and the run lock are in place")]
+
+    def pa13(self):
+        """T2 and T3 live only inside script processes: no token in this environment, in a file of the output directories, in a
+        credential file of the home, or in the environment of a process of this account that is not a script."""
+        problems = []
+        names = sorted(name for name in self.environ if CREDENTIAL_ENV.match(name))
+        if names:
+            problems.append(f"a token is in the environment ({', '.join(names)})")
+        for relative in PERSISTED_CREDENTIALS:
+            info = self.lstat(os.path.join(self.home, relative))
+            if info is not None:
+                problems.append(f"~/{relative} exists (the operator machine holds no persisted credential)")
+        hits = 0
+        for current, _, files in os.walk(self.output_dir):
+            for entry in sorted(files)[:SCAN_FILES]:
+                full = os.path.join(current, entry)
+                try:
+                    with open(full, "rb") as handle:
+                        if TOKEN_TEXT.search(handle.read(SCAN_BYTES)):
+                            hits += 1
+                except OSError:
+                    continue
+        if hits:
+            problems.append(f"{hits} file(s) in the output directories hold a token")
+        for pid in self._own_other_processes():
+            problems.append(f"process {pid} outside a script holds a credential in its environment")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "no token outside a script process")]
+
+    def _own_other_processes(self):
+        """pids of processes of this account, other than this check and the script processes, with a token variable."""
+        found = []
+        try:
+            entries = sorted(name for name in os.listdir(self.proc) if name.isdigit())
+        except OSError:
+            return found
+        for entry in entries:
+            if int(entry) == self.own_pid:
+                continue
+            base = os.path.join(self.proc, entry)
+            try:
+                with open(os.path.join(base, "environ"), "rb") as handle:
+                    names = {part.split(b"=", 1)[0].decode("utf-8", "replace") for part in handle.read(262144).split(b"\0") if b"=" in part}
+                with open(os.path.join(base, "cmdline"), "rb") as handle:
+                    command = handle.read(8192).replace(b"\0", b" ").decode("utf-8", "replace")
+            except OSError:
+                continue
+            if any(CREDENTIAL_ENV.match(name) for name in names) and self.projects_dir + "/" not in command:
+                found.append(int(entry))
+        return found
+
+    ITEMS = (("OC-1", "oc1"), ("OC-2", "oc2"), ("OC-6", "oc6"), ("OC-8", "oc8"), ("OC-10", "oc10"), ("OC-11", "oc11"), ("OC-12", "oc12"),
+             ("PA-42", "pa42"), ("PA-13", "pa13"))
+
+    def check_all(self):
+        results = []
+        for item, method in self.ITEMS:
+            try:
+                for status, detail in getattr(self, method)():
+                    results.append((status, item, detail))
+            except Exception as error:  # a check that breaks is a failure, never a pass
+                results.append(("FAIL", item, f"the check stopped ({type(error).__name__})"))
+        return results
+
+
+def build(prefix):
+    tools = os.path.join(prefix, "operator")
+    conf = read_conf(os.path.join(tools, "operator.conf"))
+    audit = load_module("ssh_hardening_audit", os.path.join(tools, "ssh_hardening_audit.py"))
+    entry = pwd.getpwuid(os.getuid())  # the account database, not the environment: LOGNAME and USER are not trusted
+    return Operator(audit, conf, entry.pw_name, entry.pw_dir, prefix=prefix, state=STATE)
+
+
+def main(argv, here=HERE, trusted=(0,), chain_top="/"):
+    prefix = "/opt/ai-lab"
+    args = list(argv)
+    while args:
+        flag = args.pop(0)
+        if flag == "--prefix" and args:
+            prefix = args.pop(0)
+        else:
+            print("usage: operator-check", file=sys.stderr)
+            return 2
+    problem = require_installation(here, prefix, trusted, chain_top)
+    if problem:
+        print(f"operator-check: refused: {problem}", file=sys.stderr)
+        return 2
+    try:
+        machine = build(prefix)
+    except (OSError, KeyError, SyntaxError):
+        print("operator-check: the operator configuration has not installed the operator tools", file=sys.stderr)
+        return 2
+    if machine.conf.get("operator_user") != machine.user:
+        print("operator-check: run this as the operator user", file=sys.stderr)
+        return 2
+    counts = {"PASS": 0, "FAIL": 0, "WARN": 0}
+    for status, item, detail in machine.check_all():
+        counts[status] += 1
+        print(f"{status} {item}: {detail}")
+    print(f"operator-check: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['WARN']} warnings")
+    return 1 if counts["FAIL"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

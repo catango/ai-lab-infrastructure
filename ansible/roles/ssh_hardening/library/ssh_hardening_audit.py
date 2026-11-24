@@ -337,7 +337,9 @@ def _config_files(ssh_dir):
 
 
 def config_digest(ssh_dir="/etc/ssh"):
-    """A digest of sshd_config and sshd_config.d/*.conf (names and contents): it changes when any sshd setting file changes."""
+    """A digest of sshd_config and sshd_config.d/*.conf (names and contents): it changes when any sshd setting file changes.
+    None when a file exists and this account cannot read it (a provider drop-in may be mode 0600): the contents cannot be hashed
+    then, and config_stat_digest is the record that an ordinary account can compare."""
     digest = hashlib.sha256()
     for path in _config_files(ssh_dir):
         try:
@@ -345,17 +347,53 @@ def config_digest(ssh_dir="/etc/ssh"):
                 content = handle.read(MAX_BYTES)
         except FileNotFoundError:
             continue
+        except OSError:
+            return None
         digest.update(os.path.relpath(path, ssh_dir).encode() + b"\0" + content + b"\0")
     return digest.hexdigest()
 
 
-def audit_sshd_files(ssh_dir="/etc/ssh"):
-    """Problems for any setting in the sshd configuration files outside LC-13 and the Debian defaults, and for any Match block."""
+def config_stat_digest(ssh_dir="/etc/ssh"):
+    """A digest of the names, sizes, modification times, modes, and owners of the same files. Reading it needs no read right on the
+    files, so any account can recompute it; it detects an edit of a file made by anyone but not one that keeps size and time."""
+    digest = hashlib.sha256()
+    for path in _config_files(ssh_dir):
+        try:
+            info = os.stat(path)
+        except OSError:
+            continue
+        digest.update(f"{os.path.relpath(path, ssh_dir)}\0{info.st_size}\0{info.st_mtime_ns}\0{info.st_mode}\0{info.st_uid}\0"
+                      f"{info.st_gid}\0".encode())
+    return digest.hexdigest()
+
+
+def unreadable_config_files(ssh_dir="/etc/ssh"):
+    """The sshd configuration files that exist but that this account cannot read (relative names)."""
+    names = []
+    for path in _config_files(ssh_dir):
+        try:
+            with open(path, "rb") as handle:
+                handle.read(1)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            names.append(os.path.relpath(path, ssh_dir))
+    return names
+
+
+def audit_sshd_files(ssh_dir="/etc/ssh", skip_unreadable=False):
+    """Problems for any setting in the sshd configuration files outside LC-13 and the Debian defaults, and for any Match block.
+    A file this account cannot read is a problem, unless skip_unreadable is set: the read-only checks of an ordinary account set it
+    and report such a file as a warning themselves (unreadable_config_files); the run of lab setup as root never skips."""
     problems = []
     for path in _config_files(ssh_dir):
         try:
             text = _read(path)
         except FileNotFoundError:
+            continue
+        except PermissionError:
+            if not skip_unreadable:
+                problems.append(f"sshd: {os.path.relpath(path, ssh_dir)} cannot be read")
             continue
         except (OSError, ValueError):
             problems.append(f"sshd: {os.path.relpath(path, ssh_dir)} cannot be read")
@@ -383,9 +421,11 @@ def audit_lc13(text, accounts, keys_dir="/etc/ssh/authorized_keys"):
     return problems
 
 
-def write_snapshot(path, text, digest, check_mode=False):
-    """Write the sshd -T text with the digest of the configuration it came from (root-owned, 0644). True when the file differs."""
-    content = f"# sshd -T of this machine at lab setup; config-sha256: {digest}\n{text.rstrip()}\n"
+def write_snapshot(path, text, digest, check_mode=False, stat_digest=""):
+    """Write the sshd -T text with the digest of the configuration it came from (root-owned, 0644). True when the file differs.
+    stat_digest (config_stat_digest) is recorded beside it for the accounts that cannot read every configuration file."""
+    head = f"# sshd -T of this machine at lab setup; config-sha256: {digest}" + (f"; config-stat: {stat_digest}" if stat_digest else "")
+    content = f"{head}\n{text.rstrip()}\n"
     info = _lstat(path)
     if info is not None and stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o644:
         try:
@@ -415,8 +455,21 @@ def read_snapshot(path, ssh_dir="/etc/ssh", trusted_uids=(0,)):
         head, _, body = _read(path).partition("\n")
     except (OSError, ValueError):
         return "", ["sshd: the recorded settings cannot be read"]
-    recorded = head.rsplit("config-sha256: ", 1)[-1].strip() if "config-sha256: " in head else ""
-    if recorded != config_digest(ssh_dir):
+    found = re.search(r"config-sha256: ([0-9a-f]+)", head)
+    recorded = found.group(1) if found else ""
+    found = re.search(r"config-stat: ([0-9a-f]+)", head)
+    recorded_stat = found.group(1) if found else ""
+    current = config_digest(ssh_dir)
+    if current is None:
+        # A configuration file is not readable for this account: compare what any account can see (names, sizes, times, modes).
+        if not recorded_stat:
+            return "", ["sshd: a configuration file is not readable by this account and the recorded settings carry no size and time "
+                        "record of it (run lab setup again)"]
+        current_stat = config_stat_digest(ssh_dir)
+        if recorded_stat != current_stat:
+            return "", ["sshd: the configuration files changed after lab setup recorded the settings (run lab setup again)"]
+        return body, []
+    if recorded != current:
         return "", ["sshd: the configuration files changed after lab setup recorded the settings (run lab setup again)"]
     return body, []
 
@@ -452,7 +505,8 @@ def main():
     if params["mode"] == "install":
         changed = install_files(result["files"], params["keys_dir"], module.check_mode)
     elif params["mode"] == "snapshot":
-        changed = write_snapshot(params["snapshot_path"], params["sshd_text"], config_digest(params["ssh_dir"]), module.check_mode)
+        changed = write_snapshot(params["snapshot_path"], params["sshd_text"], config_digest(params["ssh_dir"]), module.check_mode,
+                                 config_stat_digest(params["ssh_dir"]))
     module.exit_json(changed=changed)
 
 

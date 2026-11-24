@@ -1,0 +1,15 @@
+# The first half of the git identity role (CR-57 LC-8, first extension of plan PR 4): the configuration names the machine account and
+# its numeric id. It only reads, so the playbook imports it as a pre-task and a refusal happens before anything is changed. Nothing here
+# looks the id up on the network and nothing guesses it: `github.machine_user_id` of config/project.yaml is the one source.
+- name: The configuration names the machine account and its numeric GitHub id
+  vars:
+    git_identity_github: "{{ (lookup('ansible.builtin.file', git_identity_project_config) | from_yaml).github | default({}) }}"
+  ansible.builtin.assert:
+    that:
+      - (git_identity_github.machine_login | default('', true) | string) is match('^[A-Za-z0-9][A-Za-z0-9-]{0,38}$')
+      - (git_identity_github.machine_user_id | default('', true) | string) is match('^[1-9][0-9]{0,15}$')
+    quiet: true
+    fail_msg: >-
+      config/project.yaml must name the machine account (github.machine_login) and its numeric GitHub id (github.machine_user_id, a
+      positive integer): the system-wide git identity is <id>+<login> at the noreply domain (LC-8). The approver sets the id; lab setup
+      does not look it up and does not guess it

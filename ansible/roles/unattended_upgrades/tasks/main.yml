@@ -1,0 +1,34 @@
+# Unattended Debian security updates, shared by the lab and the operator profile (CR-57 PA-36, LC-15, OC-12; ADR-012 decision 10).
+# The package comes from the signed Debian archive through the apt module, not through the toolchain manifest: the operator profile
+# takes manifest membership for Python 3 and git only (O-15). The package's own defaults update from the Debian security origin only;
+# this role does not add an origin. Reboots: the operator admin schedules them (OC-12), so no automatic reboot is configured.
+- name: Install unattended-upgrades from the Debian archive
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: "{{ ai_lab_become }}"
+
+- name: Enable the daily package list update and the unattended upgrades (the settings LC-15 and OC-12 read)
+  ansible.builtin.copy:
+    dest: "{{ unattended_upgrades_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by ai-lab-infrastructure (unattended_upgrades). Do not edit.
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  become: "{{ ai_lab_become }}"
+
+- name: Enable the timers that run them (systemd hosts only)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ unattended_upgrades_timers }}"
+  when: ansible_facts['service_mgr'] == 'systemd'
+  # A dry run on a fresh machine has not installed the package, so its units do not exist yet.
+  ignore_errors: "{{ ansible_check_mode }}"
+  become: "{{ ai_lab_become }}"
