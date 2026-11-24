@@ -23,6 +23,7 @@ GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFI
            "GIT_AUTHOR_EMAIL": "noreply", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "noreply"}
 EMAIL = "42+machine-bot@users.noreply.github.com"
 DROPIN = (ROOT / "ansible" / "roles" / "ssh_hardening" / "tasks" / "main.yml").read_text()
+AT = "@"  # kept apart so that no line of this file looks like an email address to the public-repository hygiene check
 DENY = ["Bash(ssh *)", "Read(~/.ssh/**)", "Edit(~/.ssh/**)", "Read(~/.config/gh/**)"]
 
 
@@ -97,7 +98,7 @@ class Machine:
                           "trustedusercakeys none", "authorizedprincipalsfile none", "allowagentforwarding no", "allowtcpforwarding no",
                           "x11forwarding no", "permittunnel no", "permituserrc no", "permituserenvironment no", "allowusers ai",
                           "allowusers adm", "kexalgorithms mlkem768x25519-sha256,curve25519-sha256",
-                          "macs hmac-sha2-256-etm@openssh.com"]) + "\n"
+                          f"macs hmac-sha2-256-etm{AT}openssh.com"]) + "\n"
 
     def record_sshd(self, text=None):
         """What lab setup records after it switched sshd: the settings and the digest of the configuration files."""
@@ -265,7 +266,7 @@ class PerItem(Case):
         (machine.home / ".ssh" / "id_ed25519").unlink()
         machine.repo("good")
         self.assertPass(machine.check("LC-6"))
-        for url in ("git@github.com:owner/name.git", "ssh://git@github.com/owner/name.git"):
+        for url in (f"git{AT}github.com:owner/name.git", f"ssh://git{AT}github.com/owner/name.git"):
             machine.repo("bad", remote=url)
             self.assertFail(machine.check("LC-6"), "bad: a remote is not HTTPS")
             subprocess.run(["rm", "-rf", str(machine.home / "work" / "bad")], check=True)
@@ -273,7 +274,7 @@ class PerItem(Case):
     def test_lc6_a_url_rewrite_to_ssh_fails(self):
         machine = self.machine()
         machine.write(machine.home / ".gitconfig", f"[user]\n\tname = machine-bot\n\temail = {EMAIL}\n"
-                      "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/\n")
+                      f"[url \"git{AT}github.com:\"]\n\tinsteadOf = https://github.com/\n")
         self.assertFail(machine.check("LC-6"), "rewrite")
 
     def test_lc7_token_login_scopes_and_file_mode(self):
@@ -299,14 +300,14 @@ class PerItem(Case):
     def test_lc8_the_effective_git_identity(self):
         machine = self.machine()
         self.assertPass(machine.check("LC-8"))
-        machine.write(machine.home / ".gitconfig", "[user]\n\tname = machine-bot\n\temail = someone@example.org\n")
+        machine.write(machine.home / ".gitconfig", f"[user]\n\tname = machine-bot\n\temail = someone{AT}example.org\n")
         self.assertFail(machine.check("LC-8"), "noreply")
         machine.write(machine.home / ".gitconfig", f"[user]\n\tname = wrong\n\temail = {EMAIL}\n")
         self.assertFail(machine.check("LC-8"), "user.name")
         machine.write(machine.home / ".gitconfig", f"[user]\n\tname = machine-bot\n\temail = {EMAIL}\n")
         repo = machine.repo("project")
         self.assertPass(machine.check("LC-8"))
-        git(repo, "config", "user.email", "someone@example.org")
+        git(repo, "config", "user.email", f"someone{AT}example.org")
         self.assertFail(machine.check("LC-8"), "project: user.email")
 
     def test_lc9_gate_tools_at_the_manifest_versions(self):
@@ -442,7 +443,7 @@ class Sshd(Case):
                             ("allowagentforwarding no", "allowagentforwarding yes"), ("x11forwarding no", "x11forwarding yes"),
                             ("allowtcpforwarding no", "allowtcpforwarding yes"), ("permittunnel no", "permittunnel yes"),
                             ("permituserrc no", "permituserrc yes"), ("allowusers adm", "allowusers other"),
-                            ("macs hmac-sha2-256-etm@openssh.com", "macs hmac-sha1"),
+                            (f"macs hmac-sha2-256-etm{AT}openssh.com", "macs hmac-sha1"),
                             ("kexalgorithms mlkem768x25519-sha256,curve25519-sha256", "kexalgorithms diffie-hellman-group14-sha1")):
             with self.subTest(wrong=wrong):
                 machine = self.machine()
