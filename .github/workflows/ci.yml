@@ -199,17 +199,18 @@ jobs:
     env:
       AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      # What a fresh lab VM has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH).
+      # What a fresh lab VM has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH). git comes first:
+      # without it the checkout action downloads an archive and the workspace is not a repository.
       - name: Bootstrap Ansible, git, sshd, and jq from the Debian archive
         shell: bash
         run: |
           apt-get update -q
           apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Accounts, keys, and the disposable clones with a local bare origin and an unpushed v* test tag
         shell: bash

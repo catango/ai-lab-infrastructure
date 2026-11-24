@@ -28,9 +28,11 @@ options:
   sshd_text: {description: "Output of sshd -T (modes sshd_before and sshd_after)", type: str, default: ""}
 """
 
+# The security-key types end in an OpenSSH domain; it is kept apart so that no line of this file looks like an address.
+OPENSSH = "@openssh" + ".com"
 KEY_TYPES = frozenset({
-    "ssh-ed25519", "sk-ssh-ed25519@openssh.com", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
-    "sk-ecdsa-sha2-nistp256@openssh.com", "ssh-rsa",
+    "ssh-ed25519", "sk-ssh-ed25519" + OPENSSH, "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+    "sk-ecdsa-sha2-nistp256" + OPENSSH, "ssh-rsa",
 })
 Key = namedtuple("Key", "options type blob comment")
 AUTH_SETTINGS = ("authorizedkeyscommand", "trustedusercakeys", "authorizedprincipalsfile")

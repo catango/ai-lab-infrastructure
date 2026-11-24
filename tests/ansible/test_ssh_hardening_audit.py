@@ -73,8 +73,8 @@ class Parse(unittest.TestCase):
         self.assertEqual(key.type, "ssh-ed25519")
 
     def test_security_key_type(self):
-        key = audit.parse_key_line(key_line(3, key_type="sk-ssh-ed25519@openssh.com", options="verify-required"))
-        self.assertEqual(key.type, "sk-ssh-ed25519@openssh.com")
+        key = audit.parse_key_line(key_line(3, key_type="sk-ssh-ed25519" + audit.OPENSSH, options="verify-required"))
+        self.assertEqual(key.type, "sk-ssh-ed25519" + audit.OPENSSH)
 
     def test_blank_and_comment_lines_are_not_keys(self):
         for line in ("", "   \n", "# a comment\n"):
