@@ -358,7 +358,9 @@ class Gates(unittest.TestCase):
     def test_the_lab_accounts_are_not_the_operator_accounts(self):
         """A lab invocation does not satisfy the operator profile: the variable names differ, so a mixed-up call is refused."""
         repo = clone_of_this_tree(self, tag="v1.0.0")
-        code, out = run("operator.yml", "--check", extra_vars=LAB_ACCOUNTS, root=repo)
+        name, major, arch = host_facts()
+        host = {"operator_expected_os": name, "operator_expected_major": major, "operator_expected_arch": arch}
+        code, out = run("operator.yml", "--check", extra_vars={**host, **LAB_ACCOUNTS}, root=repo)
         self.assertNotEqual(code, 0)
         self.assertIn("name the two managed accounts", out)
 

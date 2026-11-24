@@ -196,7 +196,7 @@ class Operator:
             if found:
                 problems.append(f"{name} has a ~/.claude/ (the operator machine is never a Claude Desktop target)")
         try:
-            mounts = self.read(self.p("/proc/mounts")).splitlines()
+            mounts = self.read(self.p("/proc/mounts"), follow=True).splitlines()  # /proc/mounts is a link to the process
         except OSError:
             mounts = []
             warnings.append("the mounts cannot be read")

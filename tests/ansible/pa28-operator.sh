@@ -129,7 +129,7 @@ unconfirmed() {
 
 first_run() {
   # Symbolic links the operator user could plant: the configuration follows none of them and writes into no home directory.
-  ln -s /etc/ssh "/home/$AI/.claude"
+  ln -s /var/lib/ai-lab "/home/$AI/state"
   ln -s "$KEYS" "/home/$AI/keys"
   ln -s /opt/ai-lab "/home/$ADMIN/tools"
   local before after
@@ -137,8 +137,8 @@ first_run() {
   playbook "$CLONE" -e operator_apply=true -e ssh_second_login_confirmed=true | tee "$WORK/first-apply.txt"
   after=$(home_hash)
   [[ $before == "$after" ]] || fail "the operator configuration wrote into a user's home directory"
-  [[ $(readlink "/home/$AI/.claude") == /etc/ssh ]] || fail "a planted link was changed"
-  rm -f "/home/$AI/.claude" "/home/$AI/keys" "/home/$ADMIN/tools"
+  [[ $(readlink "/home/$AI/state") == /var/lib/ai-lab ]] || fail "a planted link was changed"
+  rm -f "/home/$AI/state" "/home/$AI/keys" "/home/$ADMIN/tools"
   grep -q 'operator-check' "$WORK/first-apply.txt" || fail "the run does not end with the operator check"
   ok "first run: home directories unchanged, planted links not followed, the run ends with the operator check"
 }
