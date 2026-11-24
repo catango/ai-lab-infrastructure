@@ -5,7 +5,8 @@
 #   Apply:              the same without --check, with -e lab_apply=true
 #   Switch sshd:        only after a second login with each account worked while this session stayed open, add
 #                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
-# Order: the gates and the key audit first (a refusal changes nothing), the toolchain and the managed files next, sshd last.
+# Order: the gates and the key audit first (a refusal changes nothing), the toolchain, the managed files, and the root-owned token step
+# and lab check next, sshd last.
 - name: Apply the lab profile
   hosts: all
   connection: local
@@ -74,5 +75,7 @@
     - verify
     - role: claude_managed_settings
       tags: [claude_managed_settings]
+    - role: lab_tools
+      tags: [lab_tools]
     - role: ssh_hardening
       tags: [ssh_hardening]

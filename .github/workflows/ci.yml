@@ -250,6 +250,16 @@ jobs:
         shell: bash
         run: tests/ansible/pa28-lab.sh merge
 
+      # The fixtures of tests/lab run against the files lab setup installed, as the AI user. The first AC1-7 timing and the lab check
+      # on a real lab are not taken here: they come from the first real lab setup (CR-57 C-3, O-26).
+      - name: Token step fixtures against the installed, root-owned step (PA-A8, PA-A25, LC-14)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh token-step
+
+      - name: Lab check as the AI user, one fixture per failure, and the pre-disposal mode (PA-A8, PA-A13, PA-A18, PA-A26, PA-A31, PA-A32)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh lab-check
+
       - name: Job summary
         if: always()
         shell: bash

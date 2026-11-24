@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
-# The lab half of the PA-28 job (CR-57 PA-A11, PA-A16, PA-A18, PA-A29; design C-4, C-5): lab setup in a disposable Debian 13
-# container with two accounts and one key each. The CI job `host-profiles` calls one subcommand per step:
-#   prepare SOURCE   accounts, keys, and three clones of SOURCE with a local bare origin whose main is at SOURCE's HEAD: one with an
-#                    unpushed local v* test tag on that commit, one without a tag, one whose tag is not contained in origin/main
-#   refusals         every refusal fixture: the run fails with the stated reason and the machine is unchanged
-#   unconfirmed      the sshd step is refused without the confirmed second login (keys copied, sshd not switched)
-#   first-run        the real run (home directories unchanged, planted symbolic links not followed)
-#   second-run       the same run again: zero changes
-#   dry-run          check mode: the tree hash is unchanged
-#   verify           what the AI user cannot change, the managed files, and the sshd settings in force
-#   merge            a foreign managed-settings file and CLAUDE.md are merged, never replaced; a second run changes nothing
-# What a container cannot prove (a real sshd restart after a second login, `sshd -T` of a running daemon, the unattended-upgrade
-# units) is left to the approver check PA-A33. The script changes /etc, so it runs only as root on a disposable host.
+# The lab half of the PA-28 job (CR-57 PA-A8, PA-A11, PA-A13, PA-A16, PA-A18, PA-A25, PA-A26, PA-A29, PA-A31, PA-A32; design C-4, C-5):
+# lab setup in a disposable Debian 13 container with two accounts and one key each. The CI job `host-profiles` calls one subcommand
+# per step: prepare SOURCE (accounts, keys, three clones of SOURCE with a local bare origin at its HEAD: one with an unpushed local v*
+# test tag, one without a tag, one whose tag origin/main does not contain), refusals, unconfirmed (the sshd step without the second
+# login), first-run, second-run, dry-run, verify (what the AI user cannot change, sshd settings in force), merge (foreign managed files
+# merged, never replaced), token-step (the tests/lab token step fixtures against the installed step, as the AI user), lab-check (the
+# installed lab check as the AI user: the gap lab setup still leaves, a complete lab, failures a container can show, the pre-disposal
+# mode; the tree hash is unchanged). A real sshd restart, `sshd -T` of a running daemon, and the unattended-upgrade units are PA-A33.
+# The script changes /etc, so it runs only as root on a disposable host.
 set -euo pipefail
 
 if [[ ${AI_LAB_ALLOW_SYSTEM_CHANGES:-} != 1 || $(id -u) -ne 0 ]]; then
@@ -42,6 +38,18 @@ tree_hash() {
     find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
     find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
   } | LC_ALL=C sort | sha256sum | cut -d' ' -f1
+}
+
+# The names behind tree_hash, to show what changed when two hashes differ.
+tree_list() {
+  local roots=() root
+  for root in /etc /opt/ai-lab /usr/local /home; do
+    if [[ -e $root ]]; then roots+=("$root"); fi
+  done
+  {
+    find "${roots[@]}" -xdev -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -printf '%p %y %m %U %G %l\n'
+    find "${roots[@]}" -xdev -type f -not -path /etc/resolv.conf -not -path /etc/hosts -not -path /etc/hostname -print0 | xargs -0 -r sha256sum
+  } | LC_ALL=C sort
 }
 
 # The same for the two managed accounts' home directories only: lab setup writes nothing into a user's home (PA-16).
@@ -252,6 +260,170 @@ merge() {
   ok "foreign managed settings and CLAUDE.md are merged, never replaced, and a second run changes nothing"
 }
 
+readonly TOOLS=/opt/ai-lab/lab
+readonly TESTS=$WORK/lab-tests
+
+token_step() {
+  # The same fixtures as the gate runs (tests/lab/test_token_step.py), against the file lab setup installed and as the AI user, so
+  # that ownership, the real account database, and a real second user are in play. The container has no terminal: the fixtures
+  # make their own pseudo-terminal.
+  local repo
+  repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+  install -d -m 0777 "$TESTS"
+  (cd "$repo/tests/lab" && TOKEN_STEP=$TOOLS/token-step RUN_AS=$AI LAB_TEST_TMP=$TESTS python3 -I -B -m unittest discover -v -s . -p 'test_token_step.py') ||
+    fail "the token step fixtures failed"
+  ok "token step: refusals before any input, clean environment, no startup file, here-string only (installed file, as the AI user)"
+}
+
+# lab_run ARGUMENT...: the installed lab check as the AI user; its output goes to $WORK/lab-check.txt, its status to $LAB_RC.
+lab_run() {
+  LAB_RC=0
+  runuser -u "$AI" -- "$TOOLS/lab-check" "$@" >"$WORK/lab-check.txt" 2>&1 || LAB_RC=$?
+}
+lab_run_env() { # lab_run_env NAME=VALUE ARGUMENT...
+  local assignment=$1
+  shift
+  LAB_RC=0
+  runuser -u "$AI" -- env "$assignment" "$TOOLS/lab-check" "$@" >"$WORK/lab-check.txt" 2>&1 || LAB_RC=$?
+}
+failing_items() { sed -n -E 's/^FAIL ([A-Z0-9-]+):.*/\1/p' "$WORK/lab-check.txt" | sort | tr '\n' ' '; }
+expect_failing() { # expect_failing NAME ITEMS: exactly these items fail (space separated, sorted)
+  local got
+  got=$(failing_items)
+  if [[ $got != "$2 " && -n $2 ]] || [[ -z $2 && -n $got ]]; then
+    cat "$WORK/lab-check.txt"
+    fail "$1: the lab check fails '${got% }', expected '$2'"
+  fi
+  if [[ -z $2 && $LAB_RC -ne 0 ]] || [[ -n $2 && $LAB_RC -ne 1 ]]; then fail "$1: exit status $LAB_RC"; fi
+  ok "$1"
+}
+
+# What lab setup does not apply yet (no plan PR owns it: the system-wide git identity LC-8, unattended security updates LC-15) and
+# what only the user can do (T1, LC-7) are put in place by fixtures, so the rest of the check is shown on a complete lab.
+complete_lab() {
+  local login
+  login=$(sed -n 's/^machine_login=//p' "$TOOLS/lab.conf")
+  [[ -n $login ]] || fail "lab.conf has no machine_login"
+  printf '[user]\n\tname = %s\n\temail = 42+%s@users.noreply.github.com\n' "$login" "$login" >/etc/gitconfig
+  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' >/etc/apt/apt.conf.d/20auto-upgrades
+  LAB_GH=$WORK/stub-gh
+  cat >"$LAB_GH" <<'STUB'
+#!/bin/sh
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "api -i")
+    printf 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: repo, workflow\r\n\r\n{"login":"%s","id":42}\n' "$(sed -n 's/^machine_login=//p' /opt/ai-lab/lab/lab.conf)"
+    ;;
+  *) exit 1 ;;
+esac
+STUB
+  chmod 0755 "$LAB_GH"
+}
+incomplete_lab() { rm -f /etc/gitconfig /etc/apt/apt.conf.d/20auto-upgrades; }
+
+# as_ai COMMAND...: a command as the AI user; the command strings below are for that user's shell, so $HOME and ~ are its own.
+as_ai() { runuser -u "$AI" -- "$@"; }
+mentions() { # mentions FILE TEXT...: the file has every text
+  local text
+  for text in "${@:2}"; do grep -qF -- "$text" "$1" || return 1; done
+}
+
+lab_check() {
+  local before after homes_before homes_after
+  dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null | grep -q 'install ok installed' ||
+    apt-get install -y --no-install-recommends unattended-upgrades >/dev/null
+  rm -f /etc/apt/apt.conf.d/20auto-upgrades # the package may enable itself; LC-15 is shown failing and passing by fixtures below
+  [[ $(stat -c '%U:%G %a' "$TOOLS/lab-check" "$TOOLS/token-step" | sort -u) == 'root:root 755' ]] || fail "the installed tools are not root-owned 0755"
+  [[ $(readlink /usr/local/bin/lab-check) == "$TOOLS/lab-check" && $(readlink /usr/local/bin/token-step) == "$TOOLS/token-step" ]] ||
+    fail "the commands are not links to the root-owned files"
+  grep -qx "ai_user=$AI" "$TOOLS/lab.conf" || fail "lab.conf does not name the AI user"
+
+  # 1. Read-only: the tree and the homes are the same after a run.
+  before=$(tree_hash)
+  homes_before=$(home_hash)
+  tree_list >"$WORK/tree-before.txt"
+  # 2. The gap today: lab setup applies neither LC-8 nor LC-15 (no plan PR owns them), and T1 is entered by the user (LC-7). Every
+  #    other item passes on the lab that lab setup produced. When a PR adds the git identity or the security updates to lab setup,
+  #    this list shrinks and this line changes with it.
+  lab_run
+  cat "$WORK/lab-check.txt"
+  incomplete_lab
+  expect_failing "a lab as lab setup leaves it: only LC-7 (no token yet), LC-8 and LC-15 (not applied yet) fail" "LC-15 LC-7 LC-8"
+  grep -q '^WARN LC-13: .*inert authorized_keys' "$WORK/lab-check.txt" || fail "the inert authorized_keys file in the AI user's home is not a warning"
+
+  # 3. A complete lab passes (fixtures stand in for what lab setup does not do yet).
+  complete_lab
+  lab_run --gh "$LAB_GH"
+  cat "$WORK/lab-check.txt"
+  expect_failing "a complete lab passes every item" ""
+  lab_run --pre-disposal
+  [[ $LAB_RC -eq 0 ]] || fail "the pre-disposal mode lists unsaved work on a lab with no repository"
+
+  # 4. One fixture per failure that a container can show.
+  lab_run_env SSH_AUTH_SOCK=/tmp/agent.fixture --gh "$LAB_GH"
+  expect_failing "an agent socket fails LC-6" "LC-6"
+  install -m 0600 -o "$AI" -g "$AI" "$WORK/key-ai" "/home/$AI/.ssh/id_ed25519"
+  lab_run --gh "$LAB_GH"
+  rm -f "/home/$AI/.ssh/id_ed25519"
+  expect_failing "a private key in the AI user's ~/.ssh fails LC-6" "LC-6"
+  # shellcheck disable=SC2016 # the at sign is passed as an argument so that no line looks like an email address to the hygiene check
+  as_ai bash -c 'mkdir -p ~/work/ssh-remote && git -C ~/work/ssh-remote init -q && git -C ~/work/ssh-remote remote add origin "git$1host.invalid:o/n.git"' _ @
+  lab_run --gh "$LAB_GH"
+  rm -rf "/home/$AI/work/ssh-remote"
+  expect_failing "an SSH remote in a clone fails LC-6" "LC-6"
+  install -d -m 0700 -o "$AI" -g "$AI" "/home/$AI/.aws"
+  lab_run --gh "$LAB_GH"
+  rmdir "/home/$AI/.aws"
+  expect_failing "a credential directory by name fails LC-10" "LC-10"
+  cp "/etc/ssh/authorized_keys/$AI" "$WORK/ai-key-file"
+  install -m 0644 "$KEYS/$ADMIN" "$KEYS/$AI"
+  lab_run --gh "$LAB_GH"
+  install -m 0644 "$WORK/ai-key-file" "$KEYS/$AI"
+  expect_failing "one key on two accounts fails LC-11 and LC-12" "LC-11 LC-12"
+  printf 'ClientAliveInterval 5\n' >/etc/ssh/sshd_config.d/50-stray.conf
+  lab_run --gh "$LAB_GH"
+  rm -f /etc/ssh/sshd_config.d/50-stray.conf
+  expect_failing "a stray sshd option fails LC-13" "LC-13"
+  grep -q 'outside LC-13\|changed after lab setup' "$WORK/lab-check.txt" || fail "the LC-13 failure does not name the cause"
+  # shellcheck disable=SC2016
+  as_ai bash -c 'mkdir -p ~/work/project/docs && git -C ~/work/project init -q && printf "## Credential paths\n\n- \`~/.config/svc/one\` - a test credential\n- \`~/.config/svc/two\` - another\n" >~/work/project/docs/PROJECT.md && mkdir -p ~/.config/svc && : >~/.config/svc/one && chmod 0644 ~/.config/svc/one'
+  lab_run --gh "$LAB_GH"
+  expect_failing "a credential file with mode 0644 and a path no deny rule covers fail PA-43" "PA-43"
+  mentions "$WORK/lab-check.txt" 'one is not mode 0600' 'two is not covered' || fail "PA-43 does not name both causes"
+
+  # 5. The pre-disposal mode: one dirty and one unpushed repository are listed, a saved one is not, and nothing changes.
+  as_ai bash -c 'rm -rf ~/work/project ~/.config/svc'
+  # shellcheck disable=SC2016
+  as_ai bash -c 'for name in dirty unpushed saved; do mkdir -p ~/work/$name && git -C ~/work/$name init -q -b main && git -C ~/work/$name -c user.name=ci -c user.email=noreply commit -q --allow-empty -m first; done
+    git -C ~/work/saved update-ref refs/remotes/origin/main HEAD
+    git -C ~/work/unpushed update-ref refs/remotes/origin/main HEAD
+    git -C ~/work/unpushed -c user.name=ci -c user.email=noreply commit -q --allow-empty -m second
+    : >~/work/dirty/notes.txt'
+  local state
+  # shellcheck disable=SC2016
+  state=$(as_ai bash -c 'cd ~/work && find . -type f -print0 | sort -z | xargs -0 sha256sum; find . | sort | xargs stat -c "%n %a %Y"' | sha256sum)
+  lab_run --pre-disposal
+  [[ $LAB_RC -eq 1 ]] || fail "the pre-disposal mode did not report unsaved work"
+  cat "$WORK/lab-check.txt"
+  mentions "$WORK/lab-check.txt" 'UNSAVED dirty: ' 'UNSAVED unpushed: ' || fail "the pre-disposal mode does not list both repositories"
+  ! grep -q '^UNSAVED saved' "$WORK/lab-check.txt" || fail "the pre-disposal mode lists a saved repository"
+  # shellcheck disable=SC2016
+  [[ $state == "$(as_ai bash -c 'cd ~/work && find . -type f -print0 | sort -z | xargs -0 sha256sum; find . | sort | xargs stat -c "%n %a %Y"' | sha256sum)" ]] ||
+    fail "the pre-disposal mode changed a repository"
+  as_ai bash -c 'rm -rf ~/work'
+  rmdir "/home/$AI/.config" 2>/dev/null || true
+  rm -f "$WORK/ai-key-file"
+  incomplete_lab
+  after=$(tree_hash)
+  homes_after=$(home_hash)
+  if [[ $before != "$after" ]]; then
+    tree_list | diff "$WORK/tree-before.txt" - || true
+    fail "the lab check or its fixtures left the machine changed"
+  fi
+  [[ $homes_before == "$homes_after" ]] || fail "the home directories changed"
+  ok "lab check: the gap, a complete lab, six failures a container can show, the pre-disposal mode; the tree hash is unchanged"
+}
+
 case ${1:-} in
   prepare) prepare "${2:-}" ;;
   refusals) refusals ;;
@@ -261,8 +433,10 @@ case ${1:-} in
   dry-run) dry_run ;;
   verify) verify ;;
   merge) merge ;;
+  token-step) token_step ;;
+  lab-check) lab_check ;;
   *)
-    echo "usage: pa28-lab.sh prepare SOURCE | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge" >&2
+    echo "usage: pa28-lab.sh prepare SOURCE | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check" >&2
     exit 2
     ;;
 esac

@@ -13,6 +13,9 @@ ssh_hardening_keys_dir: /etc/ssh/authorized_keys
 # The drop-in sorts before the files of the cloud images (the first value of a keyword wins).
 ssh_hardening_dropin: /etc/ssh/sshd_config.d/00-ai-lab.conf
 ssh_hardening_sshd: /usr/sbin/sshd
+# What `sshd -T` showed once the drop-in was in force, with the digest of the configuration files it came from. `sshd -T` needs root,
+# so the read-only checks that run as an ordinary user (the lab check) read this file instead and fail when the digest no longer matches.
+ssh_hardening_snapshot: /etc/ssh/ai-lab-sshd-effective.txt
 
 # sshd is switched only after a second login with each managed account worked while the current session stayed open (PA-16).
 ssh_second_login_confirmed: false

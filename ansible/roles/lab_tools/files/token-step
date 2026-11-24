@@ -1,0 +1,146 @@
+#!/bin/bash -p
+# The token step of the AI lab (ADR-012 decision 6, CR-57 LC-14, PA-17, PA-A8, PA-A25). Lab setup installs it root-owned; the user
+# runs it as the AI user, by its absolute path, in a plain SSH terminal. It logs `gh` in with token T1 and nothing else.
+#   Usage: token-step [--reauth] [--help]            (test seams: --prefix DIR, --home DIR)
+#   Exit:  0 token accepted; 2 refused before anything was read; 3 the token was not accepted (and was removed again).
+# It refuses, before it reads anything, without a terminal, as root, with a trace on, and inside a Claude Code session (an
+# environment marker or a Claude process among its ancestors). It then runs again in a clean environment (`env -i`, no shell startup
+# file, fixed PATH), so nothing the AI user planted in its profile or environment reaches it, and refuses if that environment holds
+# anything else. The token is read with echo off, never an argument, never in the environment, never in a file or a log: `gh`
+# receives it on its standard input through a here-string.
+# `bash -p` (the shebang) makes the first stage ignore BASH_ENV, ENV, SHELLOPTS, and functions imported from the environment, which
+# an ordinary bash reads before the first line runs; so run it by its absolute path, never as `bash token-step`.
+set -euo pipefail
+# Stage 1 starts from a fixed PATH too, so a program planted early on the caller's PATH cannot stand in for the commands used here.
+[[ ${1:-} == --clean-stage ]] || PATH=/usr/bin:/bin
+
+readonly ALLOWED_ENV='^(PATH|HOME|USER|LOGNAME|TERM|LC_ALL|PWD|OLDPWD|SHLVL|_|GH_PROMPT_DISABLED|GH_SPINNER_DISABLED|GH_NO_UPDATE_NOTIFIER|GH_NO_EXTENSION_UPDATE_NOTIFIER|NO_COLOR)$'
+
+refuse() { # refuse MESSAGE: nothing has been read or changed
+  printf 'token-step: refused: %s\n' "$1" >&2
+  exit 2
+}
+
+# A Claude Code process among the ancestors (names only; /proc is read, nothing else).
+claude_ancestor() {
+  local pid=$PPID comm cmdline depth=0
+  while [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1 && depth < 64)); do
+    { comm=$(<"/proc/$pid/comm"); } 2>/dev/null || break
+    cmdline=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+    if [[ $comm == claude* || $cmdline =~ (^|/)claude([[:space:]]|$) || $cmdline == *@anthropic-ai/claude-code* ]]; then return 0; fi
+    pid=$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/$pid/status" 2>/dev/null) || break
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+# The checks that need no environment: used by both stages.
+common_refusals() {
+  if [[ $- == *x* || ${SHELLOPTS:-} == *xtrace* ]]; then refuse "a trace is on and would print the token"; fi
+  if [[ $(id -u) -eq 0 ]]; then refuse "run this as the AI user, not as root"; fi
+  if [[ ! -t 0 || ! -t 2 ]]; then refuse "stdin and stderr are not a terminal; run this from a plain SSH terminal"; fi
+  if claude_ancestor; then refuse "a Claude Code process is running this; run it from a plain SSH terminal outside any Claude session"; fi
+}
+
+PREFIX=/opt/ai-lab
+HOME_SEAM=""
+REAUTH=0
+STAGE=1
+args=("$@")
+if [[ ${1:-} == --clean-stage ]]; then
+  STAGE=2
+  shift
+fi
+while (($# > 0)); do
+  case $1 in
+    --reauth) REAUTH=1 ;;
+    --prefix | --home)
+      [[ $# -ge 2 ]] || refuse "$1 needs a value"
+      if [[ $1 == --prefix ]]; then PREFIX=$2; else HOME_SEAM=$2; fi
+      shift
+      ;;
+    --help | -h)
+      printf 'usage: token-step [--reauth] [--help]\n'
+      exit 0
+      ;;
+    *)
+      printf 'usage: token-step [--reauth] [--help]\n' >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+if [[ $STAGE -eq 1 ]]; then
+  # Stage 1 looks at the caller's environment, then starts stage 2 with nothing of it: a fixed PATH, the account's own home from
+  # the account database, and no shell startup file (`--noprofile --norc`; the environment holds no BASH_ENV or ENV either).
+  unset HISTFILE
+  names=$(compgen -e || true)
+  if grep -qE '^(CLAUDECODE|CLAUDE_CODE_[A-Z0-9_]*)$' <<<"$names"; then
+    refuse "this looks like a Claude Code session; run this from a plain SSH terminal (the token must never reach a session)"
+  fi
+  common_refusals
+  account=$(id -un)
+  home=$HOME_SEAM
+  if [[ -z $home ]]; then home=$(getent passwd "$account" | cut -d: -f6); fi
+  [[ $home == /* && -d $home ]] || refuse "the home directory of this account is not usable"
+  term=${TERM:-dumb}
+  [[ $term =~ ^[A-Za-z0-9._+-]{1,40}$ ]] || term=dumb
+  self=$(readlink -f -- "${BASH_SOURCE[0]}")
+  exec /usr/bin/env -i "PATH=$PREFIX/bin:/usr/local/bin:/usr/bin:/bin" "HOME=$home" "USER=$account" "LOGNAME=$account" "TERM=$term" \
+    LC_ALL=C.UTF-8 GH_PROMPT_DISABLED=1 GH_SPINNER_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 GH_NO_EXTENSION_UPDATE_NOTIFIER=1 NO_COLOR=1 \
+    /bin/bash --noprofile --norc -p "$self" --clean-stage "${args[@]}"
+fi
+
+# ---------------------------------------------------------------- stage 2: clean environment
+set +o history 2>/dev/null || true
+common_refusals
+names=$(compgen -e || true)
+extra=$(grep -vE "$ALLOWED_ENV" <<<"$names" || true)
+if [[ -n $extra ]]; then refuse "the environment is not clean (stage 2 was not started by stage 1)"; fi
+cd /
+
+fail() { # fail MESSAGE: the token was not accepted
+  printf 'token-step: %s\n' "$1" >&2
+  exit 3
+}
+sanitize() { printf '%s' "$1" | LC_ALL=C tr -cd '[:print:]' | cut -c1-120; }
+config_get() { sed -n "s/^$1=\([A-Za-z0-9._-]*\)\$/\1/p;T;q" "$PREFIX/lab/lab.conf" 2>/dev/null || true; }
+
+MACHINE_LOGIN=$(config_get machine_login)
+[[ -n $MACHINE_LOGIN ]] || refuse "lab setup has not installed the lab configuration ($PREFIX/lab/lab.conf has no machine_login)"
+command -v gh >/dev/null 2>&1 || refuse "gh is not installed (lab setup installs it)"
+
+if [[ $REAUTH -eq 0 ]] && gh auth status >/dev/null 2>&1; then
+  printf 'token-step: gh is already logged in; not asking for the token (use --reauth to replace it)\n'
+else
+  token=""
+  IFS= read -rs -p 'Token T1: ' token || true
+  printf '\n' >&2
+  [[ -n $token ]] || fail "no token was entered"
+  if ! gh auth login --hostname github.com --with-token <<<"$token" >/dev/null 2>&1; then
+    unset token
+    fail "gh rejected the token"
+  fi
+  unset token
+fi
+
+response=$(gh api -i user 2>/dev/null) || fail "the API call with the token failed"
+headers=$(sed -n '1,/^\r\{0,1\}$/p' <<<"$response")
+body=$(sed '1,/^\r\{0,1\}$/d' <<<"$response")
+# The first "login" key of the user object (no jq on the lab: it is not a gate tool).
+login=$(sanitize "$(sed -n 's/^[^"]*"login"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9-]*\)".*/\1/p;T;q' <<<"$body" || true)")
+scopes=$(grep -i '^x-oauth-scopes:' <<<"$headers" | sed 's/^[^:]*:[[:space:]]*//; s/\r$//' || true)
+unset response body
+if [[ $login != "$MACHINE_LOGIN" ]]; then
+  gh auth logout --hostname github.com >/dev/null 2>&1 || true
+  fail "the token belongs to another account; it was removed (use the machine account's token)"
+fi
+for scope in repo workflow; do
+  if ! grep -qE "(^|, )$scope(,|\$)" <<<"$scopes"; then
+    gh auth logout --hostname github.com >/dev/null 2>&1 || true
+    fail "the token lacks the $scope scope (a classic token with repo and workflow is required); it was removed"
+  fi
+done
+gh auth setup-git >/dev/null 2>&1 || fail "gh auth setup-git failed"
+printf 'token-step: token accepted for the machine account. Next: run the lab check by its absolute path.\n'

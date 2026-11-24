@@ -23,7 +23,7 @@ YAML = helpers.FIXTURES / "operator_paths"
 PATHS_TODAY = ("scripts/operator/", "ansible/operator.yml", "ansible/roles/operator_*/", "toolchain/python/operator.lock",
                "ansible/lab.yml", "ansible/roles/ssh_hardening/")
 # This repository's own file: the paths above plus the other roles of the lab profile (CR-57 plan PR 2).
-OWN_PATHS = PATHS_TODAY + ("ansible/roles/release_check/", "ansible/roles/claude_managed_settings/")
+OWN_PATHS = PATHS_TODAY + ("ansible/roles/release_check/", "ansible/roles/claude_managed_settings/", "ansible/roles/lab_tools/")
 
 GOOD = {
     "block paths": "operator_paths:\n  - scripts/operator/\n  - ansible/operator.yml\n  - ansible/roles/operator_*/\n",
