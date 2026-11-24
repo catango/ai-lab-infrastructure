@@ -125,8 +125,10 @@ class Lab:
             return "is writable by others"
         return None
 
-    def read(self, path, limit=262144):
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    def read(self, path, limit=262144, follow=False):
+        """The text of a regular file. A link at the last component is refused unless follow is set (only /etc/os-release, which
+        Debian makes a link to its root-owned copy under /usr/lib)."""
+        fd = os.open(path, os.O_RDONLY | (0 if follow else os.O_NOFOLLOW))
         with os.fdopen(fd, "rb") as handle:
             return handle.read(limit).decode("utf-8", "replace")
 
@@ -145,7 +147,7 @@ class Lab:
     def lc1(self):
         info = {}
         try:
-            for line in self.read(self.p("/etc/os-release")).splitlines():
+            for line in self.read(self.p("/etc/os-release"), follow=True).splitlines():
                 if "=" in line:
                     key, value = line.split("=", 1)
                     info[key] = value.strip().strip('"')
@@ -188,8 +190,8 @@ class Lab:
         try:
             info = self.lstat(os.path.join(home, ".claude"))
         except PermissionError:
-            return [("WARN", "the lab admin's home is private, so this account cannot show it has no ~/.claude/ (run the check as the "
-                             "lab admin's reviewer or look as root)")]
+            return [("WARN", "the lab admin's home is private, so this account cannot show it has no ~/.claude/ (look as root or as "
+                             "the lab admin)")]
         if info is not None:
             return [("FAIL", "the lab admin has a ~/.claude/ (the lab admin is never a Claude Desktop target)")]
         return [("PASS", "the lab admin has no ~/.claude/")]

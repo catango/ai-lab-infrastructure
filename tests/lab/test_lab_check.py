@@ -211,6 +211,14 @@ class PerItem(Case):
         machine.write(machine.root / "etc" / "os-release", 'ID=ubuntu\nVERSION_ID="24.04"\n')
         self.assertFail(machine.check("LC-1"), "Debian 13")
 
+    def test_lc1_follows_the_os_release_link_that_debian_ships(self):
+        machine = self.machine()
+        target = machine.root / "usr" / "lib" / "os-release"
+        machine.write(target, 'ID=debian\nVERSION_ID="13"\n')
+        (machine.root / "etc" / "os-release").unlink()
+        (machine.root / "etc" / "os-release").symlink_to("../usr/lib/os-release")
+        self.assertPass(machine.check("LC-1"))
+
     def test_lc2_no_sudo_and_no_root_equivalent_group(self):
         machine = self.machine()
         self.assertPass(machine.check("LC-2"))
