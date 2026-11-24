@@ -1,0 +1,562 @@
+#!/usr/bin/python3 -I
+"""The lab check of the AI lab (ADR-012 section 4, CR-57 PA-A8, PA-A13, PA-A18, PA-A26, PA-A31, PA-A32).
+
+Lab setup installs it root-owned; the user runs it as the AI user, by its absolute path. It is read-only: it reads files, runs
+`git`, `gh`, `apt-config`, `dpkg-query`, and the toolchain engine's `verify`, and writes nothing (git runs with --no-optional-locks).
+It prints one line per item, `PASS|FAIL|WARN <id>: <detail>`, names and rules only: never a token, a key, or the value of an
+environment variable. Exit 0 when nothing failed, 1 when something failed, 2 for a usage error or the wrong account.
+  Usage: lab-check [--pre-disposal]        (test seams: --prefix DIR, --gh FILE)
+`--pre-disposal` (PA-44) only lists every repository under ~/work with uncommitted changes or commits no remote branch has; run it
+before a lab is discarded. It reads the remote branches as of the last fetch and changes nothing.
+The logic is in plain functions of the class Lab, so tests/lab can run every item against a fake machine without root or sshd.
+"""
+import getpass
+import importlib.machinery
+import importlib.util
+import json
+import os
+import platform
+import pwd
+import re
+import stat
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+PRIVILEGED_GROUPS = frozenset({"root", "sudo", "wheel", "admin", "docker", "lxd", "lxc", "disk", "shadow", "kmem", "libvirt"})
+CREDENTIAL_DIRS = (".oci", ".aws", ".azure", ".config/gcloud", ".kube", ".terraform.d/credentials.tfrc.json")
+CREDENTIAL_ENV = re.compile(
+    r"^(OCI_[A-Z0-9_]*|AWS_[A-Z0-9_]*|AZURE_[A-Z0-9_]*|ARM_(CLIENT|SUBSCRIPTION|TENANT)_[A-Z0-9_]*|GOOGLE_APPLICATION_CREDENTIALS|"
+    r"CLOUDSDK_[A-Z0-9_]*|TF_TOKEN_[A-Za-z0-9_]*|KUBECONFIG|HCLOUD_TOKEN|DIGITALOCEAN_ACCESS_TOKEN|VAULT_TOKEN)$")
+TOKEN_ENV = re.compile(r"^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)$")
+AGENT_ENV = re.compile(r"^(SSH_AUTH_SOCK|SSH_AGENT_PID)$")
+TOKEN_STEP_MARKERS = ("env -i", "--noprofile --norc")
+MARKER = "ai-lab-infrastructure managed rules"
+SSH_KEYS = "/etc/ssh/authorized_keys"
+SNAPSHOT = "/etc/ssh/ai-lab-sshd-effective.txt"
+CREDENTIAL_SECTION = re.compile(r"^#{1,6}\s*credential paths\s*$", re.I)
+
+
+def load_module(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def read_conf(path):
+    """key=value lines of lab.conf (written by lab setup); only plain values are kept."""
+    values = {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                found = re.match(r"^([a-z_]+)=([A-Za-z0-9._-]*)$", line.strip())
+                if found:
+                    values[found.group(1)] = found.group(2)
+    except OSError:
+        pass
+    return values
+
+
+def mode_of(info):
+    return stat.S_IMODE(info.st_mode)
+
+
+class Lab:
+    """One machine as the check sees it. Tests pass another root, home, environment, and command runner."""
+
+    def __init__(self, ssh_audit, conf, user, home, root="", prefix="/opt/ai-lab", environ=None, run=None, gh=None, machine=None,
+                 trusted_uids=(0,), groups=None, home_of=None, systemd=None, chain_top="/"):
+        self.audit = ssh_audit
+        self.conf = conf
+        self.user = user
+        self.home = home
+        self.root = root
+        self.prefix = prefix
+        self.environ = dict(os.environ if environ is None else environ)
+        self.run = run or self._run
+        self.gh = gh or os.path.join(prefix, "bin", "gh")
+        self.machine = machine or platform.machine()
+        self.trusted = tuple(trusted_uids)
+        self.groups = groups
+        self.home_of = home_of or self._home_of
+        self.systemd = os.path.isdir(self.p("/run/systemd/system")) if systemd is None else systemd
+        self.work = os.path.join(home, "work")
+        self.chain_top = chain_top
+
+    # ------------------------------------------------------------------ plumbing
+    def p(self, path):
+        return self.root + path if self.root else path
+
+    @staticmethod
+    def _home_of(name):
+        return pwd.getpwnam(name).pw_dir
+
+    def _run(self, argv, env=None, cwd="/", timeout=120):
+        base = {"PATH": f"{self.prefix}/bin:/usr/bin:/bin", "HOME": self.home, "LC_ALL": "C.UTF-8", "GH_PROMPT_DISABLED": "1",
+                "NO_COLOR": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
+        base.update(env or {})
+        try:
+            done = subprocess.run(argv, env=base, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return 127, type(error).__name__
+        return done.returncode, done.stdout + done.stderr
+
+    def lstat(self, path):
+        try:
+            return os.lstat(path)
+        except FileNotFoundError:
+            return None
+
+    def root_owned(self, path, *, directory=False):
+        """None when path is a root-owned regular file (or directory) that others cannot write, else the reason."""
+        info = self.lstat(path)
+        if info is None:
+            return "does not exist"
+        if stat.S_ISLNK(info.st_mode):
+            return "is a link"
+        if directory != stat.S_ISDIR(info.st_mode):
+            return "is not a directory" if directory else "is not a regular file"
+        if info.st_uid not in self.trusted:
+            return "is not owned by root"
+        if mode_of(info) & 0o022:
+            return "is writable by others"
+        return None
+
+    def read(self, path, limit=262144):
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as handle:
+            return handle.read(limit).decode("utf-8", "replace")
+
+    def repos(self):
+        """The clones under ~/work (directories with a .git entry), by name."""
+        try:
+            names = sorted(os.listdir(self.work))
+        except OSError:
+            return []
+        return [(name, os.path.join(self.work, name)) for name in names if os.path.exists(os.path.join(self.work, name, ".git"))]
+
+    def git(self, *argv, cwd="/"):
+        return self.run(["git", "--no-optional-locks", *argv], cwd=cwd)
+
+    # ------------------------------------------------------------------ the items
+    def lc1(self):
+        info = {}
+        try:
+            for line in self.read(self.p("/etc/os-release")).splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    info[key] = value.strip().strip('"')
+        except OSError:
+            return [("FAIL", "no readable /etc/os-release")]
+        version = info.get("VERSION_ID", "").split(".")[0]
+        if info.get("ID") != "debian" or version != "13" or self.machine != "x86_64":
+            return [("FAIL", f"this lab needs Debian 13 on x86_64 (found {info.get('ID', '?')} {version or '?'} on {self.machine})")]
+        return [("PASS", "Debian 13 on x86_64")]
+
+    def lc2(self):
+        problems = []
+        groups = self.groups if self.groups is not None else self._groups()
+        bad = sorted(PRIVILEGED_GROUPS.intersection(groups))
+        if bad:
+            problems.append("the AI user is in the group(s) " + ", ".join(bad))
+        rc, out = self.run(["sudo", "-n", "-l"])
+        if rc == 0:
+            problems.append("sudo allows the AI user to run commands")
+        elif "password is required" in out:
+            problems.append("sudo asks the AI user for a password, so the account has sudo rights")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "no sudo and no root-equivalent group")]
+
+    def _groups(self):
+        import grp
+        names = []
+        for gid in os.getgroups():
+            try:
+                names.append(grp.getgrgid(gid).gr_name)
+            except KeyError:
+                continue
+        return names
+
+    def lc3(self):
+        admin = self.conf.get("admin_user", "")
+        try:
+            home = self.home_of(admin)
+        except KeyError:
+            return [("FAIL", "the lab admin account named by lab setup does not exist")]
+        try:
+            info = self.lstat(os.path.join(home, ".claude"))
+        except PermissionError:
+            return [("WARN", "the lab admin's home is private, so this account cannot show it has no ~/.claude/ (run the check as the "
+                             "lab admin's reviewer or look as root)")]
+        if info is not None:
+            return [("FAIL", "the lab admin has a ~/.claude/ (the lab admin is never a Claude Desktop target)")]
+        return [("PASS", "the lab admin has no ~/.claude/")]
+
+    def lc4(self):
+        problems = []
+        directory = self.p("/etc/claude-code")
+        reason = self.root_owned(directory, directory=True)
+        if reason:
+            problems.append(f"/etc/claude-code {reason}")
+        settings = os.path.join(directory, "managed-settings.json")
+        reason = self.root_owned(settings)
+        if reason:
+            problems.append(f"managed settings {reason}")
+        else:
+            try:
+                data = json.loads(self.read(settings))
+                if not isinstance(data, dict) or not isinstance(data.get("permissions", {}).get("deny"), list) or not data["permissions"]["deny"]:
+                    problems.append("managed settings hold no deny list")
+            except (OSError, ValueError, AttributeError):
+                problems.append("managed settings are not a JSON object")
+        claude_md = os.path.join(directory, "CLAUDE.md")
+        reason = self.root_owned(claude_md)
+        if reason:
+            problems.append(f"managed CLAUDE.md {reason}")
+        else:
+            try:
+                if MARKER not in self.read(claude_md):
+                    problems.append("managed CLAUDE.md lacks the managed rules")
+            except OSError:
+                problems.append("managed CLAUDE.md cannot be read")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "root-owned managed settings and managed CLAUDE.md present")]
+
+    def lc6(self):
+        problems = [f"{name} is set in the environment (an agent socket)" for name in sorted(self.environ) if AGENT_ENV.match(name)]
+        try:
+            problems.extend(self.audit._private_key_findings(self.user, self.home))
+        except PermissionError:
+            problems.append("the AI user's ~/.ssh cannot be read")
+        for name, path in self.repos():
+            rc, out = self.git("config", "--local", "--get-regexp", r"^remote\..*\.(url|pushurl)$", cwd=path)
+            for line in out.splitlines():
+                parts = line.split(None, 1)
+                if len(parts) == 2 and not parts[1].startswith("https://"):
+                    problems.append(f"{name}: a remote is not HTTPS ({parts[0].split('.')[1]})")
+        rc, out = self.git("config", "--get-regexp", r"^url\..*\.(insteadof|pushinsteadof)$")
+        for line in out.splitlines():
+            key = line.split(None, 1)[0]
+            replacement = key[len("url."):key.rfind(".")]
+            if not replacement.startswith("https://"):
+                problems.append("a git url rewrite points away from HTTPS")
+        problems = sorted(set(problems))
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "no agent socket, no private key, clone remotes are HTTPS")]
+
+    def lc7(self):
+        names = sorted(name for name in self.environ if TOKEN_ENV.match(name))
+        if names:
+            return [("FAIL", f"a token is in the environment ({', '.join(names)}): T1 lives only in gh's store")]
+        rc, _ = self.run([self.gh, "auth", "status"])
+        if rc != 0:
+            return [("FAIL", "gh is not logged in (run the token step)")]
+        rc, out = self.run([self.gh, "api", "-i", "user"])
+        if rc != 0:
+            return [("FAIL", "the API call with the stored token failed")]
+        head, _, body = out.replace("\r\n", "\n").partition("\n\n")
+        found = re.search(r'"login"\s*:\s*"([A-Za-z0-9-]*)"', body)
+        scopes = next((line.split(":", 1)[1].strip() for line in head.splitlines() if line.lower().startswith("x-oauth-scopes:")), "")
+        if not found or found.group(1) != self.conf.get("machine_login"):
+            return [("FAIL", "the token belongs to another account (expected the machine account)")]
+        have = {scope.strip() for scope in scopes.split(",")}
+        if not {"repo", "workflow"} <= have:
+            return [("FAIL", "token scopes must include repo and workflow")]
+        hosts = os.path.join(self.home, ".config", "gh", "hosts.yml")
+        info = self.lstat(hosts)
+        if info is not None:
+            try:
+                holds = "oauth_token" in self.read(hosts)
+            except OSError:
+                holds = True
+            if holds and mode_of(info) != 0o600:
+                return [("FAIL", "the token is stored in a file that is not mode 0600")]
+        return [("PASS", "login, scopes, and storage are as expected")]
+
+    def _identity(self, cwd):
+        name = self.run(["git", "config", "--get", "user.name"], cwd=cwd)[1].strip()
+        email = self.run(["git", "config", "--get", "user.email"], cwd=cwd)[1].strip()
+        return name, email
+
+    def lc8(self):
+        login = self.conf.get("machine_login", "")
+        problems = []
+        places = [("the global and system configuration", "/")] + [(name, path) for name, path in self.repos()]
+        for place, cwd in places:
+            name, email = self._identity(cwd)
+            if name != login:
+                problems.append(f"{place}: user.name is not the machine account")
+            elif not re.fullmatch(r"[0-9]+\+" + re.escape(login) + r"@users\.noreply\.github\.com", email):
+                problems.append(f"{place}: user.email is not the machine account's noreply address")
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "the effective git identity is the machine account's noreply address")]
+
+    def lc9(self):
+        engine = os.path.join(self.prefix, "lab", "engine", "scripts", "toolchain")
+        if not os.path.isfile(engine):
+            return [("FAIL", "the toolchain engine copy that lab setup installs is missing")]
+        rc, out = self.run(["/usr/bin/python3", "-I", "-B", engine, "verify", "--profile", "lab", "--prefix", self.prefix], timeout=300)
+        if rc == 0:
+            return [("PASS", out.strip().splitlines()[-1] if out.strip() else "the gate tools are at the manifest versions")]
+        failed = [line.strip() for line in out.splitlines() if "FAILED" in line][:3]
+        return [("FAIL", "; ".join(failed)[:200] or "the gate tools do not match the manifest")]
+
+    def lc10(self):
+        found = [path for path in CREDENTIAL_DIRS if self.lstat(os.path.join(self.home, path)) is not None]
+        found += [f"${name}" for name in sorted(self.environ) if CREDENTIAL_ENV.match(name)]
+        if found:
+            return [("FAIL", "a production or infrastructure credential is present by name: " + ", ".join(found))]
+        return [("PASS", "no production or infrastructure credential by name")]
+
+    def _key_file(self, account):
+        """The Key of an account in the root-owned location, or (None, problem)."""
+        path = os.path.join(self.p(SSH_KEYS), account)
+        reason = self.root_owned(path)
+        if reason:
+            return None, f"{account}: the key file in the root-owned location {reason}"
+        try:
+            keys = [key for key in (self.audit.parse_key_line(line) for line in self.read(path).splitlines()) if key]
+        except (OSError, ValueError):
+            return None, f"{account}: the key file is unusable"
+        if len(keys) != 1:
+            return None, f"{account}: the key file must hold exactly one key"
+        return keys[0], None
+
+    def lc11(self):
+        key, problem = self._key_file(self.user)
+        if problem:
+            return [("FAIL", problem)]
+        options = {part for part in key.options.split(",") if part}
+        if not {"restrict", "pty"} <= options:
+            return [("FAIL", "the AI user's key does not carry restrict,pty")]
+        return [("PASS", "the AI user's key carries restrict,pty")]
+
+    def lc12(self):
+        mine, problem = self._key_file(self.user)
+        theirs, other = self._key_file(self.conf.get("admin_user", ""))
+        if problem or other:
+            return [("FAIL", problem or other)]
+        if (mine.type, mine.blob) == (theirs.type, theirs.blob):
+            return [("FAIL", "the AI user and the lab admin share one key")]
+        return [("PASS", "the AI user and the lab admin have different keys")]
+
+    def effective_sshd(self):
+        """(text, source, problems): the output of `sshd -T` when it works for this account, else the recorded snapshot."""
+        sshd = self.p("/usr/sbin/sshd")
+        rc, out = self.run([sshd, "-T"])
+        if rc == 0 and out.strip():
+            return out, "sshd -T", []
+        text, problems = self.audit.read_snapshot(self.p(SNAPSHOT), self.p("/etc/ssh"), self.trusted)
+        return text, "the recorded settings", problems
+
+    def lc13(self):
+        accounts = [self.user, self.conf.get("admin_user", "")]
+        text, source, problems = self.effective_sshd()
+        results = []
+        if problems:
+            results.append(("FAIL", "; ".join(problems)))
+        else:
+            found = self.audit.audit_lc13(text, accounts, self.p(SSH_KEYS))
+            found += self.audit.audit_sshd_files(self.p("/etc/ssh"))
+            if found:
+                results.append(("FAIL", "; ".join(sorted(set(found)))))
+            else:
+                results.append(("PASS", f"sshd settings are LC-13 ({source})"))
+        for name in sorted({self.user, accounts[1]} - {""}):
+            try:
+                home = self.home_of(name)
+                present = self.lstat(os.path.join(home, ".ssh", "authorized_keys")) is not None
+            except (KeyError, PermissionError):
+                continue
+            if present:
+                results.append(("WARN", f"{name}: an inert authorized_keys file is left in its home (sshd reads the root-owned location)"))
+        return results
+
+    def lc14(self):
+        path = os.path.join(self.prefix, "lab", "token-step")
+        problems = []
+        reason = self.root_owned(path)
+        if reason:
+            problems.append(f"the token step {reason}")
+        else:
+            try:
+                text = self.read(path)
+                problems += [f"the token step lacks {marker}" for marker in TOKEN_STEP_MARKERS if marker not in text]
+            except OSError:
+                problems.append("the token step cannot be read")
+        current = os.path.realpath(os.path.dirname(path))
+        while True:
+            reason = self.root_owned(current, directory=True)
+            if reason:
+                problems.append(f"{os.path.basename(current) or '/'} {reason}")
+            if current in (self.chain_top, "/"):
+                break
+            current = os.path.dirname(current)
+        return [("FAIL", "; ".join(problems))] if problems else [("PASS", "the token step is in a root-owned path, with a clean environment and no startup files")]
+
+    def lc15(self):
+        problems = []
+        rc, out = self.run(["dpkg-query", "-W", "-f=${Status}", "unattended-upgrades"])
+        if rc != 0 or "install ok installed" not in out:
+            problems.append("the unattended-upgrades package is not installed")
+        rc, out = self.run(["apt-config", "dump"])
+        for key in ("APT::Periodic::Update-Package-Lists", "APT::Periodic::Unattended-Upgrade"):
+            if not re.search(r'^' + re.escape(key) + r' "1";$', out, re.M):
+                problems.append(f"{key} is not 1")
+        if self.systemd:
+            rc, out = self.run(["systemctl", "is-enabled", "apt-daily-upgrade.timer"])
+            if out.strip() != "enabled":
+                problems.append("apt-daily-upgrade.timer is not enabled")
+        if problems:
+            return [("FAIL", "; ".join(problems))]
+        return [("PASS", "unattended security updates are configured" + ("" if self.systemd else " (the units are left to PA-A33: no systemd here)"))]
+
+    # ------------------------------------------------------------------ PA-43: project credential paths
+    def credential_paths(self):
+        """(name, path) for the paths under a `Credential paths` heading of PROJECT.md or docs/PROJECT.md of each clone."""
+        found = []
+        for name, path in self.repos():
+            for relative in ("PROJECT.md", os.path.join("docs", "PROJECT.md")):
+                try:
+                    text = self.read(os.path.join(path, relative))
+                except OSError:
+                    continue
+                inside = False
+                for line in text.splitlines():
+                    if re.match(r"^#{1,6}\s", line):
+                        inside = bool(CREDENTIAL_SECTION.match(line.strip()))
+                    elif inside:
+                        found.append((name, line))
+        paths = []
+        for name, line in found:
+            entry = re.match(r"^\s*[-*]\s+`([^`]+)`", line)
+            if entry and (entry.group(1).startswith("~/") or entry.group(1).startswith("/")):
+                paths.append((name, entry.group(1)))
+        return paths
+
+    def deny_rules(self):
+        try:
+            data = json.loads(self.read(self.p("/etc/claude-code/managed-settings.json")))
+            return [rule for rule in data["permissions"]["deny"] if isinstance(rule, str)]
+        except (OSError, ValueError, KeyError, TypeError):
+            return []
+
+    def covered(self, path, rules):
+        trimmed = path.rstrip("/")
+        for rule in rules:
+            found = re.fullmatch(r"Read\((.*)\)", rule)
+            if not found:
+                continue
+            target = found.group(1)
+            if target in (trimmed, trimmed + "/**", trimmed + "/*"):
+                return True
+            if target.endswith("/**") and trimmed.startswith(target[:-2]):
+                return True
+        return False
+
+    def pa43(self):
+        listed = self.credential_paths()
+        if not listed:
+            return [("PASS", "no project credential path is listed")]
+        rules = self.deny_rules()
+        problems = []
+        for name, path in listed:
+            real = os.path.join(self.home, path[2:]) if path.startswith("~/") else self.p(path)
+            info = self.lstat(real)
+            if info is not None:
+                if stat.S_ISDIR(info.st_mode):
+                    if mode_of(info) != 0o700:
+                        problems.append(f"{name}: {path} is not mode 0700")
+                    for current, _, files in os.walk(real):
+                        for entry in files:
+                            if mode_of(os.lstat(os.path.join(current, entry))) != 0o600:
+                                problems.append(f"{name}: a file under {path} is not mode 0600")
+                elif mode_of(info) != 0o600:
+                    problems.append(f"{name}: {path} is not mode 0600")
+            if not self.covered(path, rules):
+                problems.append(f"{name}: {path} is not covered by a Read deny rule in the managed settings")
+        return [("FAIL", "; ".join(sorted(set(problems))))] if problems else [("PASS", f"{len(listed)} listed credential path(s): mode 0600 and denied")]
+
+    # ------------------------------------------------------------------ the whole check and the pre-disposal mode
+    ITEMS = (("LC-1", "lc1"), ("LC-2", "lc2"), ("LC-3", "lc3"), ("LC-4", "lc4"), ("LC-6", "lc6"), ("LC-7", "lc7"), ("LC-8", "lc8"),
+             ("LC-9", "lc9"), ("LC-10", "lc10"), ("LC-11", "lc11"), ("LC-12", "lc12"), ("LC-13", "lc13"), ("LC-14", "lc14"),
+             ("LC-15", "lc15"), ("PA-43", "pa43"))
+
+    def check_all(self):
+        results = []
+        for item, method in self.ITEMS:
+            try:
+                for status, detail in getattr(self, method)():
+                    results.append((status, item, detail))
+            except Exception as error:  # a check that breaks is a failure, never a pass
+                results.append(("FAIL", item, f"the check stopped ({type(error).__name__})"))
+        return results
+
+    def pre_disposal(self):
+        """(name, reasons) for every clone under ~/work with uncommitted changes, a stash, or commits no remote branch has."""
+        listing = []
+        for name, path in self.repos():
+            reasons = []
+            rc, out = self.git("status", "--porcelain", "--untracked-files=all", cwd=path)
+            if rc != 0:
+                reasons.append("its state cannot be read")
+            elif out.strip():
+                reasons.append(f"{len(out.splitlines())} uncommitted change(s)")
+            rc, out = self.git("stash", "list", cwd=path)
+            if rc == 0 and out.strip():
+                reasons.append(f"{len(out.splitlines())} stash entr(y/ies)")
+            rc, out = self.git("rev-list", "--count", "--branches", "--not", "--remotes", cwd=path)
+            if rc == 0 and out.strip().isdigit() and int(out.strip()) > 0:
+                reasons.append(f"{out.strip()} commit(s) no remote branch has")
+            if reasons:
+                listing.append((name, reasons))
+        return listing
+
+
+def build(prefix, gh=None):
+    conf = read_conf(os.path.join(prefix, "lab", "lab.conf"))
+    audit = load_module("ssh_hardening_audit", os.path.join(prefix, "lab", "ssh_hardening_audit.py"))
+    user = getpass.getuser()
+    return Lab(audit, conf, user, pwd.getpwnam(user).pw_dir, prefix=prefix, gh=gh)
+
+
+def main(argv):
+    prefix, gh, pre = "/opt/ai-lab", None, False
+    args = list(argv)
+    while args:
+        flag = args.pop(0)
+        if flag == "--pre-disposal":
+            pre = True
+        elif flag in ("--prefix", "--gh") and args:
+            value = args.pop(0)
+            if flag == "--prefix":
+                prefix = value
+            else:
+                gh = value
+        else:
+            print("usage: lab-check [--pre-disposal]", file=sys.stderr)
+            return 2
+    try:
+        lab = build(prefix, gh)
+    except (OSError, KeyError, SyntaxError):
+        print("lab-check: lab setup has not installed the lab tools", file=sys.stderr)
+        return 2
+    if lab.conf.get("ai_user") != lab.user:
+        print("lab-check: run this as the AI user", file=sys.stderr)
+        return 2
+    if pre:
+        listing = lab.pre_disposal()
+        for name, reasons in listing:
+            print(f"UNSAVED {name}: {'; '.join(reasons)}")
+        print(f"lab-check: {len(listing)} repositor{'y' if len(listing) == 1 else 'ies'} with unsaved work (remote branches as of the last fetch)")
+        return 1 if listing else 0
+    counts = {"PASS": 0, "FAIL": 0, "WARN": 0}
+    for status, item, detail in lab.check_all():
+        counts[status] += 1
+        print(f"{status} {item}: {detail}")
+    print(f"lab-check: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['WARN']} warnings")
+    return 1 if counts["FAIL"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

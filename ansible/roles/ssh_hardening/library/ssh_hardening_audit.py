@@ -5,6 +5,8 @@
 # The logic is in plain functions so that tests/ansible/test_ssh_hardening_audit.py can run it without Ansible, root, or sshd.
 import base64
 import binascii
+import glob
+import hashlib
 import os
 import re
 import stat
@@ -18,14 +20,17 @@ options:
   mode:
     description: >-
       keys (audit the provisioned keys), install (audit them, then write the root-owned key files), sshd_before (sshd -T before the
-      drop-in), sshd_after (sshd -T with it).
+      drop-in), sshd_after (sshd -T with it), snapshot (record the sshd -T text and the digest of the sshd configuration files, for the
+      read-only checks that run without privileges: sshd -T needs root).
     required: true
-    choices: [keys, install, sshd_before, sshd_after]
+    choices: [keys, install, sshd_before, sshd_after, snapshot]
   accounts: {description: The managed accounts, type: list, elements: str, default: []}
   private_key_accounts: {description: Accounts whose ~/.ssh must hold no private key, type: list, elements: str, default: []}
   key_options: {description: "Options put in front of the key of an account, as {account: options}", type: dict, default: {}}
   keys_dir: {description: The root-owned location sshd reads keys from, type: path, default: /etc/ssh/authorized_keys}
-  sshd_text: {description: "Output of sshd -T (modes sshd_before and sshd_after)", type: str, default: ""}
+  sshd_text: {description: "Output of sshd -T (modes sshd_before, sshd_after, and snapshot)", type: str, default: ""}
+  ssh_dir: {description: The sshd configuration directory (mode snapshot), type: path, default: /etc/ssh}
+  snapshot_path: {description: Where the snapshot is written (mode snapshot), type: path, default: /etc/ssh/ai-lab-sshd-effective.txt}
 """
 
 # The security-key types end in an OpenSSH domain; it is kept apart so that no line of this file looks like an address.
@@ -314,18 +319,122 @@ def audit_sshd(text, mode, accounts=(), keys_dir="/etc/ssh/authorized_keys"):
     return problems
 
 
+# The keywords the managed drop-in sets (LC-13, OC-10), and the ones the Debian default sshd_config carries. A keyword in any
+# configuration file outside these is a setting outside LC-13 (PA-A18). `Match` blocks hide settings from this audit, so they fail.
+MANAGED_KEYWORDS = frozenset({
+    "pubkeyauthentication", "passwordauthentication", "kbdinteractiveauthentication", "permitemptypasswords", "hostbasedauthentication",
+    "gssapiauthentication", "permitrootlogin", "authenticationmethods", "allowusers", "maxauthtries", "authorizedkeysfile",
+    "authorizedkeyscommand", "trustedusercakeys", "authorizedprincipalsfile", "allowagentforwarding", "allowtcpforwarding",
+    "allowstreamlocalforwarding", "gatewayports", "x11forwarding", "permittunnel", "permituserrc", "permituserenvironment",
+    "kexalgorithms", "macs",
+})
+DEFAULT_KEYWORDS = frozenset({"include", "usepam", "printmotd", "acceptenv", "subsystem"})
+KEYWORD_LINE = re.compile(r"^\s*([A-Za-z0-9]+)(?:\s*=\s*|\s+|$)")
+
+
+def _config_files(ssh_dir):
+    return [os.path.join(ssh_dir, "sshd_config")] + sorted(glob.glob(os.path.join(ssh_dir, "sshd_config.d", "*.conf")))
+
+
+def config_digest(ssh_dir="/etc/ssh"):
+    """A digest of sshd_config and sshd_config.d/*.conf (names and contents): it changes when any sshd setting file changes."""
+    digest = hashlib.sha256()
+    for path in _config_files(ssh_dir):
+        try:
+            with open(path, "rb") as handle:
+                content = handle.read(MAX_BYTES)
+        except FileNotFoundError:
+            continue
+        digest.update(os.path.relpath(path, ssh_dir).encode() + b"\0" + content + b"\0")
+    return digest.hexdigest()
+
+
+def audit_sshd_files(ssh_dir="/etc/ssh"):
+    """Problems for any setting in the sshd configuration files outside LC-13 and the Debian defaults, and for any Match block."""
+    problems = []
+    for path in _config_files(ssh_dir):
+        try:
+            text = _read(path)
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            problems.append(f"sshd: {os.path.relpath(path, ssh_dir)} cannot be read")
+            continue
+        for line in text.splitlines():
+            found = KEYWORD_LINE.match(line.split("#", 1)[0])
+            if not found:
+                continue
+            keyword = found.group(1).lower()
+            where = os.path.relpath(path, ssh_dir)
+            if keyword == "match":
+                problems.append(f"sshd: a Match block in {where} hides settings from the audit")
+            elif keyword not in MANAGED_KEYWORDS and keyword not in DEFAULT_KEYWORDS:
+                problems.append(f"sshd: {keyword} in {where} is outside LC-13")
+    return sorted(set(problems))
+
+
+def audit_lc13(text, accounts, keys_dir="/etc/ssh/authorized_keys"):
+    """LC-13 and OC-10 on the effective settings: audit_sshd after the drop-in, and no SHA-1 key exchange or MAC."""
+    problems = audit_sshd(text, "sshd_after", accounts, keys_dir)
+    settings = parse_sshd_output(text)
+    for keyword in ("kexalgorithms", "macs"):
+        if any("sha1" in value for value in settings.get(keyword, [])):
+            problems.append(f"sshd: {keyword} still offers SHA-1")
+    return problems
+
+
+def write_snapshot(path, text, digest, check_mode=False):
+    """Write the sshd -T text with the digest of the configuration it came from (root-owned, 0644). True when the file differs."""
+    content = f"# sshd -T of this machine at lab setup; config-sha256: {digest}\n{text.rstrip()}\n"
+    info = _lstat(path)
+    if info is not None and stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o644:
+        try:
+            if _read(path) == content:
+                return False
+        except (OSError, ValueError):
+            pass
+    if not check_mode:
+        directory = os.path.dirname(path)
+        fd, temporary = tempfile.mkstemp(dir=directory, prefix=".tmp-")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    return True
+
+
+def read_snapshot(path, ssh_dir="/etc/ssh", trusted_uids=(0,)):
+    """(text, problems): the recorded sshd -T text when the file is a root-owned regular file and the configuration files still have
+    the digest it was taken with."""
+    info = _lstat(path)
+    if info is None:
+        return "", ["sshd: lab setup has not recorded the sshd settings (sshd is not switched yet, or lab setup has not run)"]
+    if not stat.S_ISREG(info.st_mode) or info.st_uid not in trusted_uids or info.st_mode & 0o022:
+        return "", ["sshd: the recorded settings are a link, not owned by root, or writable by others"]
+    try:
+        head, _, body = _read(path).partition("\n")
+    except (OSError, ValueError):
+        return "", ["sshd: the recorded settings cannot be read"]
+    recorded = head.rsplit("config-sha256: ", 1)[-1].strip() if "config-sha256: " in head else ""
+    if recorded != config_digest(ssh_dir):
+        return "", ["sshd: the configuration files changed after lab setup recorded the settings (run lab setup again)"]
+    return body, []
+
+
 def main():
     import pwd
     from ansible.module_utils.basic import AnsibleModule
 
     module = AnsibleModule(
         argument_spec={
-            "mode": {"type": "str", "required": True, "choices": ["keys", "install", "sshd_before", "sshd_after"]},
+            "mode": {"type": "str", "required": True, "choices": ["keys", "install", "sshd_before", "sshd_after", "snapshot"]},
             "accounts": {"type": "list", "elements": "str", "default": []},
             "private_key_accounts": {"type": "list", "elements": "str", "default": []},
             "key_options": {"type": "dict", "default": {}},
             "keys_dir": {"type": "path", "default": "/etc/ssh/authorized_keys"},
             "sshd_text": {"type": "str", "default": ""},
+            "ssh_dir": {"type": "path", "default": "/etc/ssh"},
+            "snapshot_path": {"type": "path", "default": "/etc/ssh/ai-lab-sshd-effective.txt"},
         },
         supports_check_mode=True,
     )
@@ -334,12 +443,16 @@ def main():
     if params["mode"] in ("keys", "install"):
         entries = [(entry.pw_name, entry.pw_dir) for entry in pwd.getpwall()]
         result = audit_keys(entries, params["accounts"], params["private_key_accounts"], params["keys_dir"], params["key_options"])
+    elif params["mode"] == "snapshot":
+        result = {"problems": [] if params["sshd_text"].strip() else ["sshd -T printed nothing"], "files": {}}
     else:
         result = {"problems": audit_sshd(params["sshd_text"], params["mode"], params["accounts"], params["keys_dir"]), "files": {}}
     if result["problems"]:
         module.fail_json(msg="refused: " + "; ".join(result["problems"]), problems=result["problems"])
     if params["mode"] == "install":
         changed = install_files(result["files"], params["keys_dir"], module.check_mode)
+    elif params["mode"] == "snapshot":
+        changed = write_snapshot(params["snapshot_path"], params["sshd_text"], config_digest(params["ssh_dir"]), module.check_mode)
     module.exit_json(changed=changed)
 
 

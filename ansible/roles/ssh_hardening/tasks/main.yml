@@ -93,6 +93,13 @@
             accounts: "{{ ssh_hardening_accounts }}"
             sshd_text: "{{ ssh_hardening_sshd_after.stdout }}"
             keys_dir: "{{ ssh_hardening_keys_dir }}"
+
+        - name: Record what sshd reports, for the read-only checks that run without privileges (sshd -T needs root)
+          ssh_hardening_audit:
+            mode: snapshot
+            sshd_text: "{{ ssh_hardening_sshd_after.stdout }}"
+            snapshot_path: "{{ ssh_hardening_snapshot }}"
+          become: "{{ ai_lab_become }}"
       rescue:
         - name: Take the drop-in away again, sshd is not switched
           ansible.builtin.file:
