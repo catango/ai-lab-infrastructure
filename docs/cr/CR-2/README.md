@@ -26,4 +26,4 @@ and the CI skeleton with an ARM64 job. Design only: no scripts, roles, or workfl
 ## Next step
 
 The approver merges the last implementation PR, creates the release tag `v0.1.0`, and runs the reset test
-([runbook](../../operations/workspace-restore.md)). The acceptance evidence table is in the body of the last implementation PR.
+(the runbook, `docs/operations/workspace-restore.md`, was removed in CR-57 plan PR 7 with the restore script). The acceptance evidence table is in the body of the last implementation PR.
