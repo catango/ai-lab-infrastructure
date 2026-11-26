@@ -6,7 +6,8 @@
 #   Switch sshd:        only after a second login with each account worked while this session stayed open, add
 #                       -e ssh_second_login_confirmed=true. Without it everything else is applied and sshd keeps its settings.
 # Order: the gates and the key audit first (a refusal changes nothing), the toolchain, the managed files, the root-owned token step
-# and lab check, the system-wide git identity (LC-8) and unattended security updates (LC-15) next, sshd last.
+# and lab check, the user-level deny layer (lab_deny_layer; the one write into the AI user's home), the system-wide git identity (LC-8)
+# and unattended security updates (LC-15) next, sshd last.
 - name: Apply the lab profile
   hosts: all
   connection: local
@@ -73,6 +74,25 @@
         name: git_identity
         tasks_from: assert
 
+    - name: Deny layer variable, lab_deny_layer must name one of the three modes
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - lab_deny_layer in ['both', 'user', 'managed']
+        quiet: true
+        fail_msg: >-
+          lab_deny_layer must be both, user, or managed (the default is both)
+
+    # PA-51: the last pre-task. It changes nothing: it tries the immutable attribute on a scratch file next to the AI user's home, so a
+    # filesystem or a container without it fails the play before any file is written. The PA-28 fixtures skip it by this tag to show the
+    # refusals of the module and its fail-closed path; nothing else does.
+    - name: Attribute probe, the home of the AI user takes the immutable attribute (PA-51) and nothing is changed
+      tags: [always, claude_user_deny_probe]
+      ansible.builtin.import_role:
+        name: claude_user_deny
+        tasks_from: probe
+      when: lab_deny_layer in ['both', 'user']
+
   roles:
     - apt_base
     - toolchain
@@ -83,6 +103,8 @@
       tags: [claude_managed_settings]
     - role: lab_tools
       tags: [lab_tools]
+    - role: claude_user_deny
+      tags: [claude_user_deny]
     - role: git_identity
       tags: [git_identity]
     - role: unattended_upgrades

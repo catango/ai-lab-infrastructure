@@ -104,8 +104,8 @@ class Structure(unittest.TestCase):
             "Refuse a real run without the explicit apply variable", "Release check", "Preflight",
             "The two managed accounts are named and differ", "Key audit",
             "The configuration names the machine account and its numeric id",
-            "Deny layer variable: lab_deny_layer must name one of the three modes",
-            "Attribute probe: the home of the AI user takes the immutable attribute (PA-51) and nothing is changed"])
+            "Deny layer variable",
+            "Attribute probe"])
         self.assertIn("name: release_check", pre)
         self.assertIn("tasks_from: audit", pre)
 
@@ -129,7 +129,7 @@ class Structure(unittest.TestCase):
 
     def test_privilege_only_where_the_design_allows(self):
         allowed = {"apt_base", "toolchain", "python_tools", "shell_env", "claude_managed_settings", "ssh_hardening", "lab_tools",
-                   "git_identity", "unattended_upgrades"}
+                   "git_identity", "unattended_upgrades", "claude_user_deny"}
         for role in ROLES:
             for path in (ANSIBLE / "roles" / role / "tasks").glob("*.yml"):
                 text = path.read_text()

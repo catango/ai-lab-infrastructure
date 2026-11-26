@@ -21,6 +21,12 @@ lab_expected_arch: x86_64
 # The lab profile changes the machine, so a real run needs the explicit apply variable; --check always works (dry run by default).
 lab_apply: false
 
+# The user-level deny layer of the AI user (CR-57 follow-up R-2, PA-47, PA-52): `both` (the default, R2-O1), `user`, or `managed`. `managed`
+# writes nothing into any home and removes nothing. It is recorded in lab.conf as deny_layer=<value>, which the lab check reads (LC-16).
+lab_deny_layer: both
+# The one source of the lab-wide deny list (PA-55): the layer and the root-owned deny.txt beside lab.conf are generated from it.
+lab_deny_list_source: "{{ repo_root }}/workspace/claude-user/required-deny.txt"
+
 # The operator profile (CR-57, ADR-012): Debian 13, x86-64, the operator machine. A real run needs the explicit apply variable (a dry
 # run is the default); the names of the two managed accounts are passed with -e operator_user and -e operator_admin_user.
 operator_apply: false

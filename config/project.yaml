@@ -42,6 +42,7 @@ operator_paths:
   - ansible/roles/lab_tools/
   - ansible/roles/git_identity/
   - ansible/roles/unattended_upgrades/
+  - ansible/roles/claude_user_deny/
 # Hosts an operator script may call (ADR-009 decision 14, ADR-011 decision 11, CR-57 PA-22, C-6). Read from the BASE commit by
 # the operator code check that PR 4 of CR-57 adds, so it is on the base commit before that check reads it; the check fails
 # closed when the key is missing while `operator_paths` is not empty. One plain host name per line; no scheme, port, or path.

@@ -1,0 +1,15 @@
+# The user-level deny layer of the AI user (CR-57 follow-up R-2, plan PR 4a; PA-47, PA-50, PA-52, PA-54). It is the one exception to
+# "lab setup writes nothing into a user's home": exactly ~/.claude (created when missing, owned by the AI user, mode 0700) and
+# ~/.claude/settings.json (root:root 0644, immutable). Only the module `claude_user_deny` touches those two paths: it works on file
+# descriptors, refuses links, hard links, and files the AI user owns, and removes the file again if the attribute cannot be set. No Ansible
+# file, copy, or command task is used on a path in a home, so a planted link cannot redirect root.
+# `lab_deny_layer` selects `both` (the default, R2-O1), `user`, or `managed`; `managed` writes nothing here and removes nothing.
+# The managed settings (role claude_managed_settings) are written in every mode: LC-4 is unchanged, and the lab check reads the same
+# lab-wide list from the root-owned deny.txt that lab_tools installs from the same source file as this role.
+- name: Write the user-level deny layer (the module refuses a link, a hard link, or a file the AI user owns and changes nothing then)
+  claude_user_deny:
+    user: "{{ lab_ai_user }}"
+    action: write
+    deny_list: "{{ lab_deny_list_source }}"
+  when: lab_deny_layer in ['both', 'user']
+  become: "{{ ai_lab_become }}"

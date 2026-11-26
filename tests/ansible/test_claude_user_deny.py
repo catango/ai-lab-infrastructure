@@ -5,8 +5,10 @@ every case runs here as an ordinary user in a temporary home: a fake `Ops` recor
 changing them, and can run a step between two calls of the module (a seam) to show a rename or a link planted in the middle of a
 run. The PA-28 job runs the same module for real, as root, in a Debian 13 container (tests/ansible/pa28-lab.sh).
 """
+import contextlib
 import errno
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -14,7 +16,9 @@ import re
 import stat
 import sys
 import tempfile
+import types
 import unittest
+import unittest.mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE = ROOT / "ansible" / "roles" / "claude_user_deny" / "library" / "claude_user_deny.py"
@@ -30,6 +34,10 @@ ME, MY_GROUP = os.getuid(), os.getgid()
 ACCOUNT = "ai-test"
 ENTRIES = ["Bash(ssh *)", "Read(~/.ssh/**)", "Edit(~/.ssh/**)", "Bash(sudo *)"]
 IMMUTABLE = 0x10
+
+
+def pwd_entry(name, uid, home):
+    return types.SimpleNamespace(pw_name=name, pw_uid=uid, pw_gid=MY_GROUP, pw_dir=home)
 
 
 def key(path):
@@ -290,6 +298,8 @@ class Refusals(Case):
     def test_the_home_a_link_or_not_owned_by_the_account_or_not_a_directory(self):
         link = self.base / "home" / "link"
         link.symlink_to(self.home)
+        plain = self.base / "home" / "plain"
+        plain.write_text("x")
         before = tree_hash(self.base)
         with self.assertRaises(mod.Refusal) as caught:
             self.place(home=link)
@@ -301,8 +311,6 @@ class Refusals(Case):
             self.place()
         self.assertIn("not owned by", str(caught.exception))
         self.assertUntouched(before)
-        plain = self.base / "home" / "plain"
-        plain.write_text("x")
         with self.assertRaises(mod.Refusal):
             self.place(home=plain)
         with self.assertRaises(mod.Refusal):
@@ -392,13 +400,13 @@ class Seams(Case):
 
 class AttributeFailure(Case):
     def test_a_failed_attribute_call_removes_the_new_file_and_a_directory_it_created_and_names_the_errno(self):
-        self.ops.set_error = errno.EOPNOTSUPP
+        self.ops.set_error = errno.ENOTSUP
         before = tree_hash(self.base)
         with self.assertRaises(mod.Refusal) as caught:
             self.place()
         text = str(caught.exception)
         self.assertIn(ACCOUNT, text)
-        self.assertIn("EOPNOTSUPP", text)
+        self.assertIn("ENOTSUP", text)
         self.assertIn("does not support", text)
         self.assertUntouched(before)
 
@@ -427,6 +435,7 @@ class Probe(Case):
 
     def root_parent(self):
         self.ops.owners[key(self.home.parent)] = (0, 0)
+        os.chmod(self.home.parent, 0o755)  # the umask of the test run must not make it group-writable
 
     def test_it_sets_and_clears_the_attribute_on_a_scratch_file_and_leaves_nothing(self):
         self.root_parent()
@@ -474,14 +483,75 @@ class Probe(Case):
         os.chmod(self.home.parent, 0o755)
 
 
+class Main(Case):
+    """The Ansible entry point: the home comes from the account database; a dry run writes nothing; a refusal is a failed task."""
+
+    def run_module(self, params, check_mode=False, name=ACCOUNT, home=None, uid=ME):
+        from ansible.module_utils import basic
+        from ansible.module_utils.testing import patch_module_args
+
+        entry = pwd_entry(name, uid, str(home or self.home))
+        args = {**params, "_ansible_check_mode": check_mode}
+        with patch_module_args(args), unittest.mock.patch.object(mod.pwd, "getpwnam", lambda user: entry if user == name else (_ for _ in ()).throw(KeyError(user))):
+            with self.assertRaises(SystemExit):
+                try:
+                    mod.main()
+                except SystemExit:
+                    raise
+        return basic
+
+    def result(self, params, **kwargs):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.run_module(params, **kwargs)
+        return json.loads(out.getvalue())
+
+    def deny_file(self):
+        path = self.base / "deny.txt"
+        path.write_text("# list\n" + "\n".join(ENTRIES) + "\n")
+        return str(path)
+
+    def test_a_dry_run_reports_the_change_and_writes_nothing(self):
+        deny = self.deny_file()
+        before = tree_hash(self.base)
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_list": deny}, check_mode=True)
+        self.assertTrue(out["changed"])
+        self.assertEqual(out["entries"], len(ENTRIES))
+        self.assertEqual(tree_hash(self.base), before)
+        self.assertEqual(os.listdir(self.home), [])
+
+    def test_a_refusal_is_a_failed_task_that_names_the_account_and_the_path(self):
+        self.claude.symlink_to(self.outside / "dir")
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_list": self.deny_file()}, check_mode=True)
+        self.assertTrue(out["failed"])
+        self.assertIn(ACCOUNT, out["msg"])
+        self.assertIn(str(self.claude), out["msg"])
+
+    def test_root_and_an_unknown_account_are_refused(self):
+        out = self.result({"user": "root", "action": "probe"}, name="root", uid=0)
+        self.assertTrue(out["failed"])
+        out = self.result({"user": "nobody-here", "action": "probe"})
+        self.assertTrue(out["failed"])
+
+    def test_a_write_needs_the_list_and_an_empty_list_is_refused(self):
+        out = self.result({"user": ACCOUNT, "action": "write"})
+        self.assertTrue(out["failed"])
+        empty = self.base / "empty.txt"
+        empty.write_text("# nothing\n")
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_list": str(empty)})
+        self.assertTrue(out["failed"])
+        self.assertEqual(os.listdir(self.home), [])
+
+
 class Static(unittest.TestCase):
     text = MODULE.read_text()
 
     def test_the_module_is_standard_library_python_without_a_shell_or_a_chattr_command(self):
-        for banned in ("subprocess", "os.system", "os.popen", "shell=True", "chattr", "shutil", "pathlib", "os.path.join", "open("):
+        for banned in ("subprocess", "os.system", "os.popen", "shell=True", "chattr", "shutil", "pathlib"):
             self.assertNotIn(banned, self.text, banned)
+        self.assertIsNone(re.search(r"(?<![\w.])open\(", self.text), "the builtin open() follows links; use os.open")
         imports = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text, re.M))
-        self.assertLessEqual(imports, {"errno", "fcntl", "json", "os", "pwd", "stat", "struct", "sys", "ansible.module_utils.basic"} | {"ansible"},
+        self.assertLessEqual(imports, {"errno", "fcntl", "json", "os", "pwd", "stat", "struct"},
                              imports)
 
     def test_the_module_works_on_descriptors_and_never_follows_a_link(self):
@@ -491,7 +561,7 @@ class Static(unittest.TestCase):
 
     def test_the_documentation_names_the_parameters(self):
         for name in ("user", "action", "deny_list"):
-            self.assertRegex(self.text, rf"^  {name}:", name)
+            self.assertRegex(self.text, rf"(?m)^  {name}:", name)
 
     def test_the_home_comes_from_the_account_database_not_the_environment(self):
         self.assertIn("pwd.getpwnam", self.text)
