@@ -1,0 +1,5 @@
+schema_version: 1
+architectures:
+  - name: amd64
+    runner: ubuntu-24.04
+    runner_private: ubuntu-24.04

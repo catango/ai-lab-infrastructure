@@ -308,16 +308,17 @@ class ReadingTheConfiguration(unittest.TestCase):
         for parsed in (None, {}, {"schema_version": 1}):
             self.assertEqual(config.architectures(parsed), config.DEFAULT_ARCHITECTURES)
 
+    def test_the_default_lists_amd64_only(self):
+        # CR-57 PR 6 (O-24): this repository supports amd64 only, so the default needs no evidence line and names no arm64 runner.
+        self.assertEqual(config.DEFAULT_ARCHITECTURES, (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),))
+        self.assertEqual({a.name for a in config.DEFAULT_ARCHITECTURES}, {"amd64"})
+
     def test_the_default_needs_no_line_for_a_public_repository(self):
-        # Design section 7: no metered ARM64 runner. arm64 has the free public runner and no private one.
         by_name = {a.name: a for a in config.DEFAULT_ARCHITECTURES}
-        self.assertEqual(set(by_name), {"amd64", "arm64"})
         self.assertTrue(by_name["amd64"].runner and by_name["amd64"].runner_private)
-        self.assertTrue(by_name["arm64"].runner)
-        self.assertEqual(by_name["arm64"].runner_private, "")
 
     def test_this_repositorys_own_configuration_lists_amd64_only(self):
-        # CR-57 PR 5: the arm64 entry is gone from config/project.yaml; DEFAULT_ARCHITECTURES keeps arm64 until PR 6.
+        # CR-57 PR 5: the arm64 entry is gone from config/project.yaml; PR 6 made the code default amd64 only too.
         parsed = config.parse_yaml((helpers.ROOT / "config" / "project.yaml").read_text())
         self.assertIn("architectures", parsed)
         self.assertEqual(config.architectures(parsed), (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),))
@@ -325,7 +326,7 @@ class ReadingTheConfiguration(unittest.TestCase):
     def test_the_fixture_files_read_as_intended(self):
         expect = {
             "base-no-arm-runner.yaml": (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"), config.Arch("arm64", "", "")),
-            "base-with-runners.yaml": config.DEFAULT_ARCHITECTURES,
+            "base-with-runners.yaml": (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"), config.Arch("arm64", "ubuntu-24.04-arm", "")),
             "head-empties-architectures.yaml": (),
         }
         for name, arches in expect.items():

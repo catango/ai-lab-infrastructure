@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 import helpers
-from helpers import ARM64_URL, AMD64_URL, manifest_text
+from helpers import ARM64_URL, AMD64_URL, manifest_text, without_arm64, write_config
 from toolchain_engine import manifest
 
 GOOD = "a" * 64
@@ -23,10 +23,13 @@ smoke_match = "yamllint"
 '''
 
 
-def check(text, lock=LOCK):
+def check(text, lock=LOCK, arches=("amd64", "arm64")):
+    """Validation errors of TEXT under a root whose config/project.yaml lists ARCHES (None: no configuration file)."""
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         (root / "toolchain" / "python").mkdir(parents=True)
+        if arches is not None:
+            write_config(root, *arches)
         if lock is not None:
             (root / "toolchain" / "python" / "builder.lock").write_text(lock)
         (root / "toolchain" / "manifest.toml").write_text(text)
@@ -50,6 +53,51 @@ class Accepts(unittest.TestCase):
         text = good().replace('format = "tar.gz"', 'format = "binary"').replace("strip = 1\n", "strip = 0\n") \
             .replace('binaries = ["bin/alpha"]', 'binaries = ["alpha"]')
         self.assertEqual(check(text), [])
+
+
+class ConfiguredArchitectures(unittest.TestCase):
+    """CR-57 PA-30, O-4, PA-A7, PA-A19: `check` requires artifacts for exactly the architectures of config/project.yaml."""
+
+    def errors(self, text, arches):
+        return check(text, arches=arches)
+
+    def test_amd64_only_configuration_passes_with_amd64_artifacts(self):
+        self.assertEqual(self.errors(without_arm64(good()), ("amd64",)), [])
+
+    def test_an_arm64_artifact_fails_under_an_amd64_only_configuration(self):
+        errors = self.errors(good(), ("amd64",))
+        self.assertTrue(any("tools.alpha.artifacts.arm64" in e and "unlisted" in e for e in errors), errors)
+
+    def test_amd64_and_arm64_configuration_still_requires_both(self):
+        self.assertEqual(self.errors(good(), ("amd64", "arm64")), [])
+        errors = self.errors(without_arm64(good()), ("amd64", "arm64"))
+        self.assertTrue(any("tools.alpha.artifacts.arm64" in e and "missing" in e for e in errors), errors)
+
+    def test_a_missing_configuration_file_means_the_default_which_is_amd64_only(self):
+        self.assertEqual(self.errors(without_arm64(good()), None), [])
+        self.assertTrue(any("unlisted" in e for e in self.errors(good(), None)))
+
+    def test_a_configuration_naming_an_unknown_architecture_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "toolchain" / "python").mkdir(parents=True)
+            (root / "toolchain" / "python" / "builder.lock").write_text(LOCK)
+            (root / "config").mkdir()
+            (root / "config" / "project.yaml").write_text("architectures:\n  - name: riscv64\n")
+            (root / "toolchain" / "manifest.toml").write_text(without_arm64(good()))
+            errors = manifest.check_file(root / "toolchain" / "manifest.toml", root)
+        self.assertTrue(any("riscv64" in e for e in errors), errors)
+
+    def test_an_unreadable_configuration_is_an_error_and_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "toolchain" / "python").mkdir(parents=True)
+            (root / "toolchain" / "python" / "builder.lock").write_text(LOCK)
+            (root / "config").mkdir()
+            (root / "config" / "project.yaml").write_text("architectures: {amd64: {}}\n")
+            (root / "toolchain" / "manifest.toml").write_text(without_arm64(good()))
+            errors = manifest.check_file(root / "toolchain" / "manifest.toml", root)
+        self.assertTrue(any("config/project.yaml" in e for e in errors), errors)
 
 
 class Rejects(unittest.TestCase):

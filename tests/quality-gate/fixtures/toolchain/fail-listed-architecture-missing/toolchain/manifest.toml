@@ -1,0 +1,15 @@
+schema_version = 1
+
+[tools.demo]
+version     = "1.2.3"
+profiles    = ["lab"]
+source      = "download"
+format      = "tar.gz"
+strip       = 1
+binaries    = ["demo"]
+smoke       = ["demo", "--version"]
+smoke_match = "1.2.3"
+
+[tools.demo.artifacts.amd64]
+url    = "https://example.invalid/demo/1.2.3/demo-linux-amd64.tar.gz"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000001"

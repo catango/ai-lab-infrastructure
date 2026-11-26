@@ -77,10 +77,6 @@ smoke_match = "alpha 1.2.3"
 [tools.alpha.artifacts.amd64]
 url = "https://example.invalid/alpha/1.2.3/alpha-amd64.tar.gz"
 sha256 = "0000000000000000000000000000000000000000000000000000000000000001"
-
-[tools.alpha.artifacts.arm64]
-url = "https://example.invalid/alpha/1.2.3/alpha-arm64.tar.gz"
-sha256 = "0000000000000000000000000000000000000000000000000000000000000002"
 TOML
   printf 'ID=debian\nVERSION_ID="13"\n' >"$OSREL"
   # A local origin that stands in for GitHub through url.insteadOf; the clone keeps the https remote.
