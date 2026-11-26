@@ -1,0 +1,9 @@
+# The attribute probe (PA-51): a pre-task of ansible/lab.yml that changes nothing. It sets and clears the immutable attribute on a scratch
+# file in a root-owned directory on the filesystem of the AI user's home and deletes it, so an unsupported filesystem or a missing
+# capability stops the play before any file is written. It also runs in a dry run: it leaves nothing behind.
+- name: Try the immutable attribute on a scratch file next to the home directory of the AI user
+  claude_user_deny:
+    user: "{{ lab_ai_user }}"
+    action: probe
+  check_mode: false
+  become: "{{ ai_lab_become }}"

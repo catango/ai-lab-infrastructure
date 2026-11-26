@@ -10,6 +10,8 @@ environment variable. Exit 0 when nothing failed, 1 when something failed, 2 for
 before a lab is discarded. It reads the remote branches as of the last fetch and changes nothing.
 The logic is in plain functions of the class Lab, so tests/lab can run every item against a fake machine without root or sshd.
 """
+import errno
+import fcntl
 import importlib.machinery
 import importlib.util
 import json
@@ -18,6 +20,7 @@ import platform
 import pwd
 import re
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -37,6 +40,12 @@ MARKER = "ai-lab-infrastructure managed rules"
 SSH_KEYS = "/etc/ssh/authorized_keys"
 SNAPSHOT = "/etc/ssh/ai-lab-sshd-effective.txt"
 CREDENTIAL_SECTION = re.compile(r"^#{1,6}\s*credential paths\s*$", re.I)
+DENY_LAYERS = ("both", "user", "managed")
+FS_IMMUTABLE_FL = 0x10
+# FS_IOC_GETFLAGS is _IOR('f', 1, long): the request number depends on the size of a long. It needs no privilege.
+FS_IOC_GETFLAGS = (2 << 30) | (struct.calcsize("l") << 16) | (ord("f") << 8) | 1
+LAYER_KEYS = {"enableAllProjectMcpServers", "permissions"}
+LAYER_PERMISSION_KEYS = {"deny", "disableBypassPermissionsMode"}
 
 
 def load_module(name, path):
@@ -69,7 +78,8 @@ class Lab:
     """One machine as the check sees it. Tests pass another root, home, environment, and command runner."""
 
     def __init__(self, ssh_audit, conf, user, home, root="", prefix="/opt/ai-lab", environ=None, run=None, gh=None, machine=None,
-                 trusted_uids=(0,), groups=None, home_of=None, systemd=None, chain_top="/", scratch=None):
+                 trusted_uids=(0,), groups=None, home_of=None, systemd=None, chain_top="/", scratch=None, owner_of=None, flags_of=None,
+                 ai_uid=None):
         self.audit = ssh_audit
         self.conf = conf
         self.user = user
@@ -87,6 +97,10 @@ class Lab:
         self.work = os.path.join(home, "work")
         self.chain_top = chain_top
         self.scratch = scratch
+        # Seams for LC-16: who owns a file (a test user cannot own one as root) and the attribute flags of an open file.
+        self.owner_of = owner_of or (lambda info: (info.st_uid, info.st_gid))
+        self.flags_of = flags_of or self._flags_of
+        self.ai_uid = os.getuid() if ai_uid is None else ai_uid
 
     # ------------------------------------------------------------------ plumbing
     def p(self, path):
@@ -428,6 +442,136 @@ class Lab:
             return [("FAIL", "; ".join(problems))]
         return [("PASS", "unattended security updates are configured" + ("" if self.systemd else " (the units are left to PA-A33: no systemd here)"))]
 
+    # ------------------------------------------------------------------ LC-16: the user-level deny layer (PA-54)
+    @staticmethod
+    def _flags_of(fd):
+        buffer = bytearray(struct.calcsize("l"))
+        fcntl.ioctl(fd, FS_IOC_GETFLAGS, buffer, True)
+        return struct.unpack("=i", bytes(buffer[:4]))[0]
+
+    def layer_path(self):
+        return os.path.join(self.home, ".claude", "settings.json")
+
+    def lab_wide_list(self):
+        """(entries, problem): the root-owned lab-wide deny list that lab setup installs beside lab.conf, in order."""
+        path = os.path.join(self.prefix, "lab", "deny.txt")
+        reason = self.root_owned(path)
+        if reason:
+            return None, f"the lab-wide deny list {reason}"
+        try:
+            lines = self.read(path).splitlines()
+        except OSError:
+            return None, "the lab-wide deny list cannot be read"
+        entries = [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
+        if not entries:
+            return None, "the lab-wide deny list holds no entry"
+        return entries, None
+
+    def layer_file_problems(self):
+        """What is wrong with ~/.claude and ~/.claude/settings.json, as short sentences (never any content of the file)."""
+        claude = os.path.join(self.home, ".claude")
+        path = self.layer_path()
+        info = self.lstat(claude)
+        if info is None:
+            return ["~/.claude does not exist"]
+        if stat.S_ISLNK(info.st_mode):
+            return ["~/.claude is a link"]
+        if not stat.S_ISDIR(info.st_mode):
+            return ["~/.claude is not a directory"]
+        problems = []
+        if self.owner_of(info)[0] != self.ai_uid:
+            problems.append("~/.claude is not owned by the AI user")
+        info = self.lstat(path)
+        if info is None:
+            return problems + ["~/.claude/settings.json does not exist"]
+        if stat.S_ISLNK(info.st_mode):
+            return problems + ["~/.claude/settings.json is a link"]
+        if not stat.S_ISREG(info.st_mode):
+            return problems + ["~/.claude/settings.json is not a regular file"]
+        if info.st_nlink != 1:
+            problems.append("~/.claude/settings.json is hard-linked")
+        if self.owner_of(info) != (0, 0):
+            problems.append("~/.claude/settings.json is not owned by root:root")
+        if mode_of(info) != 0o644:
+            problems.append("~/.claude/settings.json mode is not 0644")
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except OSError as error:
+            return problems + [f"~/.claude/settings.json cannot be opened ({errno.errorcode.get(error.errno, error.errno)})"]
+        try:
+            try:
+                flags = self.flags_of(fd)
+                if not flags & FS_IMMUTABLE_FL:
+                    problems.append("~/.claude/settings.json: the immutable attribute is not set")
+            except OSError as error:
+                problems.append("~/.claude/settings.json: the immutable attribute cannot be read, so it is unsupported here or unreadable "
+                                f"({errno.errorcode.get(error.errno, error.errno)})")
+            with os.fdopen(os.dup(fd), "rb") as handle:
+                text = handle.read(262144).decode("utf-8", "replace")
+        finally:
+            os.close(fd)
+        return problems + self.layer_content_problems(text)
+
+    def layer_content_problems(self, text):
+        reference, problem = self.lab_wide_list()
+        if problem:
+            return [problem]
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return ["~/.claude/settings.json is not valid JSON"]
+        if not isinstance(data, dict):
+            return ["~/.claude/settings.json is not a JSON object"]
+        permissions = data.get("permissions")
+        if set(data) != LAYER_KEYS or not isinstance(permissions, dict) or set(permissions) != LAYER_PERMISSION_KEYS:
+            return ["the keys of ~/.claude/settings.json are not those of the canonical object"]
+        problems = []
+        if data["enableAllProjectMcpServers"] is not False:
+            problems.append("enableAllProjectMcpServers is not false")
+        if not isinstance(permissions["disableBypassPermissionsMode"], str) or permissions["disableBypassPermissionsMode"] != "disable":
+            problems.append('permissions.disableBypassPermissionsMode is not "disable"')
+        deny = permissions["deny"]
+        if not isinstance(deny, list) or not all(isinstance(rule, str) for rule in deny):
+            return problems + ["permissions.deny is not a list of rules"]
+        if len(set(deny)) != len(deny):
+            problems.append("an entry of the layer is repeated")
+        missing, extra = [rule for rule in reference if rule not in deny], [rule for rule in deny if rule not in reference]
+
+        def entries(count):
+            return f"{count} entr{'y' if count == 1 else 'ies'}"
+
+        if missing and extra:
+            count = max(len(missing), len(extra))
+            problems.append(f"{entries(count)} {'differs' if count == 1 else 'differ'} from the lab-wide list")
+        elif missing:
+            problems.append(f"{entries(len(missing))} missing from the layer")
+        elif extra:
+            problems.append(f"{entries(len(extra))} not in the lab-wide list")
+        elif len(set(deny)) == len(deny) and deny != reference:
+            problems.append("the order of the entries differs from the lab-wide list")
+        return problems
+
+    def lc16(self):
+        mode = self.conf.get("deny_layer", "")
+        if mode not in DENY_LAYERS:
+            return [("FAIL", "lab.conf has no valid deny_layer (both, user, or managed): run lab setup from a tag that has the user-level layer")]
+        if mode == "managed":
+            results = [("PASS", "the user-level layer was not selected (deny_layer=managed); LC-4 covers the managed file")]
+            info = self.lstat(self.layer_path())
+            if info is not None and stat.S_ISREG(info.st_mode) and self.owner_of(info)[0] == 0:
+                results.append(("WARN", "a root-owned file is at ~/.claude/settings.json: the lab was switched from both to managed, the layer "
+                                        "still stands, and nothing removes it"))
+            return results
+        problems = self.layer_file_problems()
+        results = [("FAIL", "; ".join(problems))] if problems else [("PASS", "the user-level layer is root-owned, immutable, and the canonical object with the lab-wide list")]
+        try:
+            moved = sorted(entry.name for entry in os.scandir(self.home) if entry.name.startswith(".claude.") and entry.is_dir(follow_symlinks=False))
+        except OSError:
+            moved = []
+        for name in moved:
+            results.append(("WARN", f"~/{name} is a directory that may be a moved ~/.claude (the file itself cannot be deleted); look at it"))
+        return results
+
     # ------------------------------------------------------------------ PA-43: project credential paths
     def credential_paths(self):
         """(name, path) for the paths under a `Credential paths` heading of PROJECT.md or docs/PROJECT.md of each clone."""
@@ -452,11 +596,18 @@ class Lab:
         return paths
 
     def deny_rules(self):
-        try:
-            data = json.loads(self.read(self.p("/etc/claude-code/managed-settings.json")))
-            return [rule for rule in data["permissions"]["deny"] if isinstance(rule, str)]
-        except (OSError, ValueError, KeyError, TypeError):
-            return []
+        """The rules of the effective deny layers: the managed settings and, when it is selected, the user-level layer (PA-A31)."""
+        paths = [self.p("/etc/claude-code/managed-settings.json")]
+        if self.conf.get("deny_layer") in ("both", "user"):
+            paths.append(self.layer_path())
+        rules = []
+        for path in paths:
+            try:
+                data = json.loads(self.read(path))
+                rules += [rule for rule in data["permissions"]["deny"] if isinstance(rule, str)]
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                continue
+        return rules
 
     def covered(self, path, rules):
         trimmed = path.rstrip("/")
@@ -497,7 +648,7 @@ class Lab:
     # ------------------------------------------------------------------ the whole check and the pre-disposal mode
     ITEMS = (("LC-1", "lc1"), ("LC-2", "lc2"), ("LC-3", "lc3"), ("LC-4", "lc4"), ("LC-6", "lc6"), ("LC-7", "lc7"), ("LC-8", "lc8"),
              ("LC-9", "lc9"), ("LC-10", "lc10"), ("LC-11", "lc11"), ("LC-12", "lc12"), ("LC-13", "lc13"), ("LC-14", "lc14"),
-             ("LC-15", "lc15"), ("PA-43", "pa43"))
+             ("LC-15", "lc15"), ("LC-16", "lc16"), ("PA-43", "pa43"))
 
     def check_all(self):
         results = []

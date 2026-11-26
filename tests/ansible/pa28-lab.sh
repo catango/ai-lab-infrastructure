@@ -6,7 +6,10 @@
 # login), first-run, second-run, dry-run, verify (what the AI user cannot change, sshd settings in force), merge (foreign managed files
 # merged, never replaced), token-step (the tests/lab token step fixtures against the installed step, as the AI user), lab-check (the
 # installed lab check as the AI user: the gap lab setup still leaves, a complete lab, failures a container can show, the pre-disposal
-# mode; the tree hash is unchanged). A real sshd restart, `sshd -T` of a running daemon, and the unattended-upgrade units are PA-A33.
+# mode; the tree hash is unchanged), deny-probe (plan PR 4a, PA-56: does the filesystem of /home take the immutable attribute here?),
+# deny-layer (the user-level deny layer: with the attribute the write attempts of the AI user all fail and each root change makes LC-16
+# fail; without it the fail-closed fixture runs and the job says `immutability not testable here`). A real sshd restart, `sshd -T` of a
+# running daemon, and the unattended-upgrade units are PA-A33.
 # The operator half of the PA-28 job is pa28-operator.sh in a second container: the two profiles own the same sshd drop-in.
 # The script changes /etc, so it runs only as root on a disposable host.
 set -euo pipefail
@@ -37,11 +40,28 @@ home_hash() {
   } | LC_ALL=C sort | sha256sum | cut -d' ' -f1
 }
 
+# The same for the home of the AI user outside the two paths of the user-level layer (PA-A11, PA-A29: the layer is the one change a
+# home-directory hash may show).
+home_hash_outside_layer() {
+  {
+    find "/home/$AI" "/home/$ADMIN" -not -path "/home/$AI/.claude" -not -path "/home/$AI/.claude/*" -printf '%p %y %m %U %G %s %l\n'
+    find "/home/$AI" "/home/$ADMIN" -not -path "/home/$AI/.claude/*" -type f -print0 | xargs -0 -r sha256sum
+  } | LC_ALL=C sort | sha256sum | cut -d' ' -f1
+}
+
+# The layer mode of every run: `both` (the default of lab setup) when the probe step found the attribute usable here, `managed` when it
+# did not (the fail-closed fixture then shows what `both` does). A fixture that needs a mode passes -e lab_deny_layer=... itself: the
+# later -e wins.
+deny_mode() {
+  if [[ -s $WORK/deny-layer ]]; then cat "$WORK/deny-layer"; else echo both; fi
+}
+
 playbook() { # playbook CLONE ARGUMENT...
   local clone=$1
   shift
   (cd "$clone" && ANSIBLE_CONFIG="$clone/ansible/ansible.cfg" ANSIBLE_NOCOLOR=1 \
-    ansible-playbook -i ansible/inventory/localhost.yml ansible/lab.yml -e "lab_ai_user=$AI" -e "lab_admin_user=$ADMIN" "$@")
+    ansible-playbook -i ansible/inventory/localhost.yml ansible/lab.yml -e "lab_ai_user=$AI" -e "lab_admin_user=$ADMIN" \
+    -e "lab_deny_layer=$(deny_mode)" "$@")
 }
 
 prepare() {
@@ -91,6 +111,104 @@ fixture() {
   "$restore"
 }
 
+# deny_probe: the probe step of the PA-28 job (PA-56, PA-A37). It tries `chattr +i` on a scratch file on the filesystem of /home and records
+# the answer for every later step. It never fails the job and never skips silently: without the attribute it says so and the job summary
+# repeats it.
+deny_probe() {
+  command -v chattr >/dev/null || fail "chattr is not installed (package e2fsprogs): the probe cannot run"
+  local scratch=/home/.pa28-attribute-probe error
+  : >"$scratch"
+  if error=$(chattr +i "$scratch" 2>&1); then
+    chattr -i "$scratch"
+    rm -f "$scratch"
+    echo both >"$WORK/deny-layer"
+    printf 'immutable attribute: usable here (chattr +i works on the filesystem of /home), so the layer is tested for real\n' >"$WORK/attribute.txt"
+  else
+    rm -f "$scratch"
+    echo managed >"$WORK/deny-layer"
+    printf 'immutability not testable here: %s\nThe real attribute is proved only by the approver check PA-A38; the fail-closed fixture of PA-51 runs instead.\n' \
+      "${error#chattr: }" >"$WORK/attribute.txt"
+  fi
+  cat "$WORK/attribute.txt"
+  ok "attribute probe done (layer mode for the other steps: $(deny_mode))"
+}
+
+# refused_layer NAME MESSAGE: the layer role alone, mode both, with the probe skipped (its tag, used by these fixtures only): the module
+# refuses, names the account and the path, and the machine is unchanged (the home hash included, planted link targets too).
+refused_layer() {
+  refused "$1" "$LAB" "$2" -e lab_apply=true -e lab_deny_layer=both --tags claude_user_deny --skip-tags claude_user_deny_probe
+}
+
+reset_layer_fixture() {
+  chattr -i "/home/$AI/.claude/settings.json" 2>/dev/null || true
+  rm -rf "/home/$AI/.claude" "$WORK/link-target"
+  if [[ -L /home/$AI ]]; then
+    rm -f "/home/$AI"
+    mv "/home/$AI.real" "/home/$AI"
+  fi
+  chown "$AI:$AI" "/home/$AI"
+}
+
+deny_layer_refusals() {
+  local claude=/home/$AI/.claude layer=/home/$AI/.claude/settings.json before
+  # Mode managed writes nothing into any home (PA-A34), and the variable is checked (PA-52).
+  before=$(home_hash)
+  playbook "$LAB" -e lab_apply=true -e lab_deny_layer=managed --tags claude_user_deny >"$WORK/managed-only.txt" 2>&1 || {
+    cat "$WORK/managed-only.txt"
+    fail "mode managed failed"
+  }
+  [[ $before == "$(home_hash)" && ! -e $claude ]] || fail "mode managed wrote into a home directory"
+  refused "an unknown lab_deny_layer is refused" "$LAB" "lab_deny_layer must be both, user, or managed" -e lab_apply=true -e lab_deny_layer=everything
+
+  # PA-A35: the planted ~/.claude link of the old first-run fixture is now a refusal; link targets stay as they were.
+  ln -s /etc/claude-code "$claude"
+  refused_layer "a ~/.claude that is a link is refused" "account $AI: $claude is a link"
+  [[ $(readlink "$claude") == /etc/claude-code ]] || fail "the planted ~/.claude link was changed"
+  [[ ! -e /etc/claude-code/settings.json ]] || fail "lab setup followed the planted ~/.claude link"
+  reset_layer_fixture
+
+  install -d -m 0700 -o "$AI" -g "$AI" "$claude"
+  printf 'target\n' >"$WORK/link-target"
+  ln -s "$WORK/link-target" "$layer"
+  refused_layer "a settings.json that is a link is refused" "account $AI: $layer is a link"
+  [[ $(cat "$WORK/link-target") == target ]] || fail "the target of the planted settings.json link was changed"
+  reset_layer_fixture
+
+  install -d -m 0700 -o "$AI" -g "$AI" "$claude"
+  install -m 0644 -o root -g root /dev/null "$layer"
+  ln "$layer" "$claude/second-name"
+  refused_layer "a hard-linked settings.json is refused" "account $AI: $layer is hard-linked"
+  reset_layer_fixture
+
+  install -d -m 0700 -o "$AI" -g "$AI" "$claude"
+  mkdir "$layer"
+  refused_layer "a directory in place of settings.json is refused" "account $AI: $layer is not a regular file"
+  reset_layer_fixture
+
+  install -d -m 0700 -o "$AI" -g "$AI" "$claude"
+  mkfifo "$layer"
+  refused_layer "a device or pipe in place of settings.json is refused" "account $AI: $layer is not a regular file"
+  reset_layer_fixture
+
+  install -d -m 0700 -o "$AI" -g "$AI" "$claude"
+  printf '{"mine": true}\n' >"$layer"
+  chown "$AI:$AI" "$layer"
+  refused_layer "a settings.json that the AI user owns is refused and the move-aside command is printed (R2-O2)" \
+    "mv ~/.claude/settings.json ~/.claude/settings.json.pre-lab"
+  [[ $(cat "$layer") == '{"mine": true}' ]] || fail "the refusal changed the file of the AI user"
+  reset_layer_fixture
+
+  mv "/home/$AI" "/home/$AI.real"
+  ln -s "/home/$AI.real" "/home/$AI"
+  refused_layer "a home that is a link is refused" "account $AI: the home directory /home/$AI is a link"
+  reset_layer_fixture
+
+  chown root "/home/$AI"
+  refused_layer "a home that the AI user does not own is refused" "account $AI: the home directory /home/$AI is not owned by it"
+  reset_layer_fixture
+  ok "the user-level layer: every refusal names the account and the path and changes nothing; mode managed writes nothing"
+}
+
 refusals() {
   refused "a real run without the apply variable is refused" "$LAB" "lab_apply=true"
   refused "an untagged tree is refused" "$UNTAGGED" "this clone is not a release" -e lab_apply=true -e ssh_second_login_confirmed=true
@@ -101,6 +219,7 @@ refusals() {
   refused "an empty github.machine_user_id is refused (LC-8)" "$LAB" "numeric GitHub id" -e lab_apply=true -e "git_identity_project_config=$WORK/empty-id.yaml"
   refused "a github.machine_user_id that is not a number is refused (LC-8)" "$LAB" "numeric GitHub id" -e lab_apply=true -e "git_identity_project_config=$WORK/text-id.yaml"
   key_rule_fixtures
+  deny_layer_refusals
 }
 
 unconfirmed() {
@@ -116,17 +235,45 @@ unconfirmed() {
 }
 
 first_run() {
-  # Symbolic links the AI user could plant (PA-A11): lab setup follows none of them and writes into no home directory.
-  ln -s /etc/claude-code "/home/$AI/.claude"
+  # Symbolic links the AI user could plant (PA-A11): lab setup follows none of them. The planted ~/.claude link is now a refusal
+  # (deny_layer_refusals, PA-A35); the two links left here are not followed, and lab setup writes into no home directory beyond the
+  # two paths of the user-level layer.
   ln -s "$KEYS" "/home/$AI/keys"
   ln -s /opt/ai-lab "/home/$ADMIN/tools"
-  local before after
+  local before before_outside after after_outside
   before=$(home_hash)
+  before_outside=$(home_hash_outside_layer)
   playbook "$LAB" -e lab_apply=true -e ssh_second_login_confirmed=true | tee "$WORK/first-apply.txt"
   after=$(home_hash)
-  [[ $before == "$after" ]] || fail "lab setup wrote into a user's home directory"
-  [[ $(readlink "/home/$AI/.claude") == /etc/claude-code ]] || fail "a planted link was changed"
-  ok "first run: home directories unchanged, planted links not followed"
+  after_outside=$(home_hash_outside_layer)
+  [[ $before_outside == "$after_outside" ]] || fail "lab setup wrote into a user's home directory outside the two paths of the layer"
+  [[ $(readlink "/home/$AI/keys") == "$KEYS" && $(readlink "/home/$ADMIN/tools") == /opt/ai-lab ]] || fail "a planted link was changed"
+  [[ ! -e /home/$ADMIN/.claude ]] || fail "lab setup wrote a ~/.claude for the lab admin"
+  if [[ $(deny_mode) == managed ]]; then
+    [[ $before == "$after" && ! -e /home/$AI/.claude ]] || fail "mode managed wrote into a home directory"
+    ok "first run (mode managed, the attribute is not testable here): home directories unchanged, planted links not followed"
+  else
+    check_layer_content
+    ok "first run: only the layer changed in the homes, planted links not followed, the layer is the canonical object (PA-A34)"
+  fi
+  [[ $(stat -c '%U:%G %a' "$TOOLS/deny.txt") == 'root:root 644' ]] || fail "deny.txt is not root-owned 0644"
+  cmp -s "$TOOLS/deny.txt" "$LAB/workspace/claude-user/required-deny.txt" || fail "deny.txt is not a byte copy of required-deny.txt"
+  grep -qx "deny_layer=$(deny_mode)" "$TOOLS/lab.conf" || fail "lab.conf does not record deny_layer=$(deny_mode)"
+}
+
+# check_layer_content: ~/.claude and the layer as PA-A34 states them, compared entry by entry with the core list.
+check_layer_content() {
+  local layer=/home/$AI/.claude/settings.json
+  [[ $(stat -c '%U:%G %a' "/home/$AI/.claude") == "$AI:$AI 700" ]] || fail "the .claude directory is not owned by the AI user with mode 0700"
+  [[ $(stat -c '%U:%G %a %h' "$layer") == 'root:root 644 1' ]] || fail "the layer is not root:root 0644 with one link"
+  lsattr -d "$layer" | awk '{print $1}' | grep -q i || fail "the layer is not immutable"
+  jq -e '.enableAllProjectMcpServers == false and .permissions.disableBypassPermissionsMode == "disable"
+    and (keys == ["enableAllProjectMcpServers", "permissions"]) and (.permissions | keys == ["deny", "disableBypassPermissionsMode"])' "$layer" >/dev/null ||
+    fail "the layer is not the canonical object"
+  diff <(jq -r '.permissions.deny[]' "$layer") <(grep -vE '^[[:space:]]*(#|$)' "$LAB/workspace/claude-user/required-deny.txt") >/dev/null ||
+    fail "the layer's deny list is not the core list entry by entry and in order"
+  [[ $(jq '.permissions.deny | length' "$layer") -eq 90 ]] || fail "the layer does not hold 90 entries"
+  [[ $(tail -c 1 "$layer" | od -An -tx1 | tr -d ' ') == 0a ]] || fail "the layer has no final newline"
 }
 
 second_run() {
@@ -389,6 +536,93 @@ lab_check() {
   ok "lab check: only LC-7 fails before the token step, a complete lab, six failures a container can show, the pre-disposal mode; the tree hash is unchanged"
 }
 
+# deny_layer: plan PR 4a, PA-A37. With the attribute: every write attempt of the AI user fails, LC-16 passes, each root change after
+# `chattr -i` makes LC-16 fail, and a lab switched to mode managed keeps the layer. Without it: the fail-closed fixture of PA-51.
+deny_layer() {
+  local layer=/home/$AI/.claude/settings.json
+  complete_lab
+  if [[ $(deny_mode) == managed ]]; then
+    deny_fail_closed
+    return
+  fi
+  local attempt sum inode mutation
+  sum=$(sha256sum "$layer")
+  # shellcheck disable=SC2016 # the attempts are for the inner shell, which expands $1
+  for attempt in 'printf x >>"$1"' ': >"$1"' 'rm -f -- "$1"' 'mv -- "$1" "$1.off"' 'ln -- "$1" "$1.link"' 'chmod 0600 -- "$1"' 'chattr -i -- "$1"'; do
+    if as_ai bash -c "$attempt" _ "$layer" 2>/dev/null; then fail "the AI user succeeded with: $attempt"; fi
+  done
+  [[ $(sha256sum "$layer") == "$sum" ]] || fail "the layer changed under the write attempts of the AI user"
+  [[ $(ls -A "/home/$AI/.claude") == settings.json ]] || fail "a write attempt left a file in ~/.claude"
+  check_layer_content
+  lab_run --gh "$LAB_GH"
+  expect_failing "LC-16 passes on the complete layer" ""
+  grep -q '^PASS LC-16:' "$WORK/lab-check.txt" || fail "LC-16 does not pass"
+  # Each change that root makes after `chattr -i` makes LC-16 fail; lab setup puts the layer back.
+  for mutation in unflag content mode owner; do
+    chattr -i "$layer"
+    case $mutation in
+      content) jq '.permissions.deny += ["Bash(extra *)"]' "$layer" >"$WORK/layer.new" && cat "$WORK/layer.new" >"$layer" ;;
+      mode) chmod 0600 "$layer" ;;
+      owner) chown "$AI:$AI" "$layer" ;;
+      *) ;;
+    esac
+    if [[ $mutation != unflag ]]; then chattr +i "$layer"; fi
+    lab_run --gh "$LAB_GH"
+    expect_failing "root change '$mutation' after chattr -i makes LC-16 fail" "LC-16"
+    chattr -i "$layer" 2>/dev/null || true
+    rm -f "$layer"
+    playbook "$LAB" -e lab_apply=true --tags claude_user_deny >"$WORK/layer-restore.txt" 2>&1 || {
+      cat "$WORK/layer-restore.txt"
+      fail "lab setup did not put the layer back after '$mutation'"
+    }
+    check_layer_content
+  done
+  # A second run changes nothing (the layer included), and a lab switched to mode managed keeps the layer, unchanged.
+  playbook "$LAB" -e lab_apply=true --tags claude_user_deny | tee "$WORK/layer-again.txt"
+  grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/layer-again.txt" || fail "the second run changed the layer"
+  sum=$(sha256sum "$layer")
+  inode=$(stat -c %i "$layer")
+  playbook "$LAB" -e lab_apply=true -e lab_deny_layer=managed --tags lab_tools,claude_user_deny >"$WORK/layer-managed.txt" 2>&1 ||
+    { cat "$WORK/layer-managed.txt"; fail "the switch to mode managed failed"; }
+  [[ $(sha256sum "$layer") == "$sum" && $(stat -c %i "$layer") == "$inode" ]] || fail "switching to mode managed changed the layer"
+  grep -qx deny_layer=managed "$TOOLS/lab.conf" || fail "lab.conf does not record the switch"
+  lab_run --gh "$LAB_GH"
+  expect_failing "a lab switched from both to managed passes" ""
+  grep -q '^WARN LC-16: .*switched' "$WORK/lab-check.txt" || fail "LC-16 does not warn about the root-owned file in mode managed"
+  playbook "$LAB" -e lab_apply=true -e lab_deny_layer=both --tags lab_tools,claude_user_deny >/dev/null 2>&1 || fail "the switch back to both failed"
+  grep -qx deny_layer=both "$TOOLS/lab.conf" || fail "lab.conf does not record the switch back"
+  printf 'immutable attribute proved in this job: write, append, truncate, rm, mv, ln, chmod, chattr -i by the AI user fail; LC-16 fails for each root change\n' >>"$WORK/attribute.txt"
+  # The fail-closed fixture of PA-51 also runs here, for real: with the capability dropped from the bounding set the attribute cannot be
+  # set, which is what a container without it looks like. The layer is removed first (as root) and put back by lab setup afterwards.
+  command -v capsh >/dev/null || fail "capsh is not installed (package libcap2-bin): the fail-closed fixture cannot run"
+  chattr -i "$layer"
+  rm -rf "/home/$AI/.claude"
+  capsh --drop=cap_linux_immutable -- -c "'$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pa28-lab.sh' deny-fail-closed" ||
+    fail "the fail-closed fixture failed with the capability dropped"
+  playbook "$LAB" -e lab_apply=true --tags claude_user_deny >"$WORK/layer-restore.txt" 2>&1 || {
+    cat "$WORK/layer-restore.txt"
+    fail "lab setup did not put the layer back after the fail-closed fixture"
+  }
+  check_layer_content
+  ok "user-level layer: the attribute holds against the AI user, LC-16 sees each change, the switch to managed removes nothing"
+}
+
+# deny_fail_closed (PA-51, PA-A37): the attribute is not usable here, so mode both must fail, leave no file, and name the errno; mode
+# managed (what the other steps used) must have written nothing.
+deny_fail_closed() {
+  local claude=/home/$AI/.claude
+  [[ ! -e $claude ]] || fail "mode managed left a ~/.claude"
+  refused "mode both fails when the attribute is not usable (the probe pre-task)" "$LAB" "does not support the immutable attribute" -e lab_apply=true -e lab_deny_layer=both
+  grep -Eq 'errno E[A-Z]+' "$WORK/refusal.txt" || fail "the failure does not name the errno"
+  [[ ! -e $claude ]] || fail "the failed probe left a ~/.claude"
+  refused "mode both fails after the file is placed and leaves nothing (the module itself)" "$LAB" "does not support the immutable attribute" \
+    -e lab_apply=true -e lab_deny_layer=both --tags claude_user_deny --skip-tags claude_user_deny_probe
+  grep -Eq 'errno E[A-Z]+' "$WORK/refusal.txt" || fail "the module's failure does not name the errno"
+  [[ ! -e $claude ]] || fail "the failed write left a ~/.claude or a file in it"
+  printf 'fail-closed fixture passed: mode both fails before any change and, with the probe skipped, after placing the file; nothing is left behind\n' >>"$WORK/attribute.txt"
+  ok "mode both fails closed without the attribute, names the errno, and leaves no file"
+}
+
 case ${1:-} in
   prepare) prepare "${2:-}" ;;
   refusals) refusals ;;
@@ -400,8 +634,11 @@ case ${1:-} in
   merge) merge ;;
   token-step) token_step ;;
   lab-check) lab_check ;;
+  deny-probe) deny_probe ;;
+  deny-layer) deny_layer ;;
+  deny-fail-closed) deny_fail_closed ;;
   *)
-    echo "usage: pa28-lab.sh prepare SOURCE | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check" >&2
+    echo "usage: pa28-lab.sh prepare SOURCE | deny-probe | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check | deny-layer | deny-fail-closed" >&2
     exit 2
     ;;
 esac
