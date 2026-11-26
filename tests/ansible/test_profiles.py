@@ -76,8 +76,9 @@ def clone_of_this_tree(test, tag=None, contained=True):
 
 class Structure(unittest.TestCase):
     def test_layout(self):
-        for rel in ("ansible.cfg", "inventory/localhost.yml", "group_vars/all.yml", "lab.yml", "builder.yml"):
+        for rel in ("ansible.cfg", "inventory/localhost.yml", "group_vars/all.yml", "lab.yml", "operator.yml"):
             self.assertTrue((ANSIBLE / rel).is_file(), rel)
+        self.assertEqual(sorted(p.name for p in ANSIBLE.glob("*.yml")), ["lab.yml", "operator.yml"], "two playbooks, one per machine")
         for role in ROLES:
             self.assertTrue((ANSIBLE / "roles" / role / "tasks" / "main.yml").is_file(), role)
         self.assertTrue((ANSIBLE / "roles" / "ssh_hardening" / "tasks" / "audit.yml").is_file())
@@ -118,12 +119,11 @@ class Structure(unittest.TestCase):
         for path in ANSIBLE.rglob("*.yml"):
             self.assertNotRegex(path.read_text(), r"release_check_skip|skip_release|ignore_release|release_bypass", path.name)
 
-    def test_legacy_builder_playbook_is_only_a_toolchain_for_the_restore_script(self):
-        text = (ANSIBLE / "builder.yml").read_text()
-        for role in ("release_check", "ssh_hardening", "claude_managed_settings"):
-            self.assertNotIn(role, text)
-        self.assertIn("toolchain_profile: lab", text)
-        self.assertIn("ansible/builder.yml", (ROOT / "workspace" / "restore.sh").read_text(), "restore.sh still applies it until PR 7")
+    def test_the_legacy_builder_playbook_is_gone_and_every_playbook_refuses_without_a_release_tag(self):
+        """The CR-2 playbook ran toolchain-only with no release check, for workspace/restore.sh; both were removed in plan PR 7."""
+        self.assertFalse((ANSIBLE / "builder.yml").exists())
+        for name in ("lab.yml", "operator.yml"):
+            self.assertIn("name: release_check", (ANSIBLE / name).read_text(), name)
 
     def test_privilege_only_where_the_design_allows(self):
         allowed = {"apt_base", "toolchain", "python_tools", "shell_env", "claude_managed_settings", "ssh_hardening", "lab_tools",
@@ -286,8 +286,10 @@ class ManagedFiles(unittest.TestCase):
                      "Never run `sudo` or install software. Propose the exact commands for the user to run."):
             self.assertIn(rule, managed)
             self.assertNotIn(rule, user)
-        # What stays in the user-level file until PR 7 and PR 9: the restore rule and the workflow rule.
-        self.assertIn("Never run `workspace/restore.sh`.", user)
+        # What stays in the user-level file until PR 9: the workflow rule. The restore rule went with workspace/restore.sh (PR 7); the
+        # managed file keeps the T1 rule (`gh auth login`, plain SSH terminal).
+        self.assertNotIn("workspace/restore.sh", user)
+        self.assertIn("Never run `gh auth login`. Token T1 is entered only by the user, in a plain SSH terminal", managed)
         self.assertIn("Commit and push after each completed checklist item", user)
 
     def test_the_user_level_file_no_longer_says_repository_instructions_take_precedence(self):
@@ -299,7 +301,7 @@ class ManagedFiles(unittest.TestCase):
 @unittest.skipUnless(HAVE_ANSIBLE, "ansible-playbook and git are required")
 class SyntaxAndGates(unittest.TestCase):
     def test_syntax_check_of_the_profiles(self):
-        for playbook in ("lab.yml", "builder.yml", "operator.yml"):
+        for playbook in ("lab.yml", "operator.yml"):
             with self.subTest(playbook=playbook):
                 code, out = run(playbook, "--syntax-check")
                 self.assertEqual(code, 0, out)

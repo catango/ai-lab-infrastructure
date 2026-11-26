@@ -153,9 +153,9 @@ class Rejects(unittest.TestCase):
         self.assert_error(good().replace('profiles = ["lab"]', 'profiles = ["lab", "prod"]'), "profiles")
         self.assert_error(good().replace('profiles = ["lab"]', 'profiles = "lab"'), "profiles")
 
-    def test_builder_is_an_alias_of_lab_and_not_a_second_profile(self):
-        """CR-57 O-19: `builder` stays accepted until plan PR 7, and means `lab`."""
-        self.assertEqual(check(good().replace('profiles = ["lab"]', 'profiles = ["builder"]')), [])
+    def test_builder_is_not_a_profile(self):
+        """CR-57 O-19: the alias of plan PR 2 is removed in PR 7; `builder` is an unknown profile like any other name."""
+        self.assert_error(good().replace('profiles = ["lab"]', 'profiles = ["builder"]'), "profiles")
         self.assert_error(good().replace('profiles = ["lab"]', 'profiles = ["builder", "lab"]'), "profiles")
 
     def test_smoke_must_be_an_argument_array(self):

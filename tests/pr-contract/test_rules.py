@@ -236,7 +236,7 @@ class PC8(unittest.TestCase):
              "toolchain/python/operator.lock")
     LOOKALIKES = ("scripts/operators/x.py", "scripts/operator", "scripts/Operator/x.py", "docs/scripts/operator/x.py",
                   "ansible/operator.yaml", "ansible/roles/operator/tasks/main.yml", "ansible/roles/builder_x/tasks/main.yml",
-                  "ansible/builder.yml", "toolchain/python/builder.lock", "docs/operations/operator.md")
+                  "ansible/site.yml", "toolchain/python/builder.lock", "docs/operations/operator.md")
 
     def judge(self, pr, files=None):
         """The old behaviour, now read from this repository's own configuration at `config/project.yaml`."""

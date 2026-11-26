@@ -1,6 +1,6 @@
 """CR-57 PA-A8, PA-A25, LC-14: the token step refuses without a terminal and inside a Claude session before it reads anything, runs
 in a clean environment, reads no startup file of the AI user, and hands the token to gh only on its standard input. The static
-checks are the AC1-8 checks of tests/workspace/run.sh lines 383-393, re-created for the token step (the old tests stay until PR 7).
+checks are the AC1-8 checks of the old workspace restore tests (deleted in plan PR 7), re-created for the token step.
 """
 import os
 import pathlib
@@ -199,7 +199,7 @@ class Login(unittest.TestCase):
 
 
 class Static(unittest.TestCase):
-    """The AC1-8 checks of tests/workspace/run.sh lines 383-393 for the token step (PA-A25)."""
+    """The AC1-8 checks of the old workspace restore tests, for the token step (PA-A25)."""
 
     def test_no_eval_and_no_pipe_into_a_shell(self):
         bad = [line for line in TOKEN_STEP.read_text().splitlines()

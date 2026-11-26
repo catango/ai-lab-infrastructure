@@ -17,7 +17,7 @@ ANSIBLE = ROOT / "ansible"
 HAVE_ANSIBLE = shutil.which("ansible-playbook") is not None and shutil.which("git") is not None
 OPERATOR_ROLES = ("operator_user", "operator_tools", "operator_projects", "operator_checks")
 SHARED_ROLES = ("ssh_hardening", "release_check", "unattended_upgrades")
-# The roles of the CR-18 Ubuntu profile that no profile applies any more; plan PR 7 deletes them.
+# The roles of the CR-18 Ubuntu profile; no profile applies them and plan PR 7 deleted them.
 LEFTOVERS = ("operator_firewall", "operator_lock", "operator_sudo", "operator_system", "operator_ssh")
 ORDER = ["apt_base", "toolchain", "shell_env", "verify", "unattended_upgrades", "operator_user", "operator_tools", "operator_projects",
          "ssh_hardening", "operator_checks"]

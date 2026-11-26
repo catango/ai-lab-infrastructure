@@ -294,7 +294,7 @@ class PC8OnTheCommandLine(unittest.TestCase):
                 self.assertEqual(code, 0, out)
 
     def test_other_paths_need_nothing(self):
-        code, out, _ = Offline(self, "base-configured.yaml", [changed("scripts/checks/x.sh"), changed("ansible/builder.yml")]).run()
+        code, out, _ = Offline(self, "base-configured.yaml", [changed("scripts/checks/x.sh"), changed("ansible/site.yml")]).run()
         self.assertEqual(code, 0, out)
 
     def test_an_explicit_empty_value_is_inactive(self):
