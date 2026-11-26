@@ -316,10 +316,11 @@ class ReadingTheConfiguration(unittest.TestCase):
         self.assertTrue(by_name["arm64"].runner)
         self.assertEqual(by_name["arm64"].runner_private, "")
 
-    def test_this_repositorys_own_configuration_reads_back_as_the_default(self):
+    def test_this_repositorys_own_configuration_lists_amd64_only(self):
+        # CR-57 PR 5: the arm64 entry is gone from config/project.yaml; DEFAULT_ARCHITECTURES keeps arm64 until PR 6.
         parsed = config.parse_yaml((helpers.ROOT / "config" / "project.yaml").read_text())
         self.assertIn("architectures", parsed)
-        self.assertEqual(config.architectures(parsed), config.DEFAULT_ARCHITECTURES)
+        self.assertEqual(config.architectures(parsed), (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),))
 
     def test_the_fixture_files_read_as_intended(self):
         expect = {
