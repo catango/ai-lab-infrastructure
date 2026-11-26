@@ -2,7 +2,7 @@
 # tool: none
 # order: 100
 # class: generic
-# Runs the shell test suites tests/*/run.sh (the gate's own fixture tests, the workspace restore tests)
+# Runs the shell test suites tests/*/run.sh (the gate's own fixture tests)
 # that are part of the file list.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

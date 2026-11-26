@@ -1,6 +1,6 @@
 """CR-57 PA-A13, PA-A10: the PA-19(a) deny entries are in the three copies of the deny list, and the three copies do not drift.
 
-The drift checks are those of tests/workspace/run.sh lines 390-394 (the old test stays until PR 7), now covering the new entries.
+The drift checks of the old workspace restore tests (deleted in plan PR 7), re-created for the three copies and the new entries.
 The managed settings take their deny list from workspace/claude-user/settings.json (roles/claude_managed_settings), so the third
 copy is also the managed list; the PA-28 job compares the installed managed settings with required-deny.txt.
 """

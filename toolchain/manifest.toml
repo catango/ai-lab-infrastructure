@@ -1,8 +1,7 @@
 # Toolchain manifest (CR-2, ADR-005): the single source of truth for tools, versions, sources, and checksums.
 # Every download has an artifact with a SHA-256 checksum for each architecture of config/project.yaml (amd64 only; CR-57 PA-30). Changes are toolchain PRs (ADR-003).
-# Profiles: `lab` (the gate tools of the AI lab and of CI; CR-2 called it `builder`, which stays accepted as an alias of `lab` until
-# CR-57 plan PR 7) and `operator`. The operator profile takes manifest membership for Python 3 and git only (CR-57 O-15, OC-6): it installs
-# no gate tools. What else the operator machine needs from the Debian archive (unattended-upgrades) is installed by a shared Ansible role.
+# Profiles: `lab` (the gate tools of the AI lab and of CI) and `operator`. The operator profile takes manifest membership for Python 3
+# and git only (CR-57 O-15, OC-6): it installs no gate tools. What else the operator machine needs from the Debian archive (unattended-upgrades) is installed by a shared Ansible role.
 # Apt tools use a minimum version and rely on the signed archive (design section 9, decision 1).
 
 schema_version = 1
@@ -147,7 +146,7 @@ source      = "apt"
 package     = "python3-venv"
 smoke       = ["python3", "-c", "import venv"]
 
-# Bootstrapped from the archive by hand (or restore.sh) before any profile can be applied.
+# Bootstrapped from the archive by hand before any profile can be applied.
 [tools.ansible-core]
 version_min = "2.14"
 profiles    = ["lab"]

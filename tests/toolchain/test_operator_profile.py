@@ -22,16 +22,24 @@ class ProfileName(unittest.TestCase):
         return check(text)
 
     def test_operator_is_an_allowed_profile_name(self):
-        self.assertEqual(manifest.PROFILES, ("builder", "lab", "operator"))
+        self.assertEqual(manifest.PROFILES, ("lab", "operator"))
 
-    def test_the_message_names_the_profiles_and_the_alias(self):
+    def test_the_message_names_the_two_profiles_and_no_alias(self):
         text = good().replace('profiles = ["lab"]', 'profiles = ["prod"]')
-        self.assertIn("lab, operator (builder is an alias of lab)", " ".join(self.errors(text)))
+        message = " ".join(self.errors(text))
+        self.assertIn("must be a non-empty subset of lab, operator", message)
+        self.assertNotIn("alias", message)
 
     def test_operator_alone_and_with_lab_pass(self):
-        for value in ('["operator"]', '["lab", "operator"]', '["builder", "operator"]'):
+        for value in ('["operator"]', '["lab", "operator"]'):
             with self.subTest(value=value):
                 self.assertEqual(self.errors(good().replace('profiles = ["lab"]', f"profiles = {value}")), [])
+
+    def test_builder_is_not_a_profile_any_more(self):
+        """CR-57 O-19: the alias of plan PR 2 is removed in PR 7."""
+        for value in ('["builder"]', '["builder", "operator"]', '["builder", "lab"]'):
+            with self.subTest(value=value):
+                self.assertIn("profiles", " ".join(self.errors(good().replace('profiles = ["lab"]', f"profiles = {value}"))))
 
 
 class RealManifest(unittest.TestCase):
@@ -47,22 +55,23 @@ class RealManifest(unittest.TestCase):
         pip = engine("list", "--profile", "operator", "--source", "pip", "--format", "json")
         self.assertEqual(json.loads(pip.stdout), [])
 
-    def test_the_lab_profile_is_unchanged_and_builder_lists_the_same_tools(self):
+    def test_the_lab_profile_is_unchanged(self):
         done = engine("list", "--profile", "lab", "--source", "apt", "--format", "json")
         names = {item["package"] for item in json.loads(done.stdout)}
         self.assertTrue({"python3", "git", "curl", "tmux", "jq", "ansible-core"} <= names)
         self.assertFalse(names & {"nftables", "openssh-server", "sudo", "unattended-upgrades", "systemd-timesyncd"})
         self.assertFalse("[tools.unattended-upgrades]" in (ROOT / "toolchain" / "manifest.toml").read_text())
-        alias = engine("list", "--profile", "builder", "--source", "apt", "--format", "json")
-        self.assertEqual(alias.returncode, 0, alias.stderr)
-        self.assertEqual(alias.stdout, done.stdout)
 
-    def test_builder_alias_selects_every_lab_tool_of_the_real_manifest(self):
+    def test_the_command_line_refuses_the_builder_profile(self):
         lab = engine("list", "--profile", "lab", "--format", "json")
-        builder = engine("list", "--profile", "builder", "--format", "json")
-        self.assertEqual((lab.returncode, builder.returncode), (0, 0), lab.stderr + builder.stderr)
+        self.assertEqual(lab.returncode, 0, lab.stderr)
         self.assertGreater(len(json.loads(lab.stdout)), 5)
-        self.assertEqual(builder.stdout, lab.stdout)
+        for argv in (("list",), ("install", "--prefix", "/nonexistent"), ("verify", "--prefix", "/nonexistent")):
+            with self.subTest(argv=argv):
+                refused = engine(*argv[:1], "--profile", "builder", *argv[1:])
+                self.assertEqual(refused.returncode, 2, refused.stdout + refused.stderr)
+                self.assertIn("invalid usage", refused.stderr)
+                self.assertEqual(refused.stdout, "")
 
     def test_every_operator_tool_has_a_version_minimum_and_a_smoke_command(self):
         import tomllib

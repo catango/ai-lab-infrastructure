@@ -2,7 +2,7 @@
 # tool: ansible-playbook
 # order: 91
 # class: platform
-# ansible-playbook --syntax-check for every top-level playbook in ansible/ (lab.yml, operator.yml, and the legacy builder.yml).
+# ansible-playbook --syntax-check for every top-level playbook in ansible/ (lab.yml and operator.yml).
 # Nothing is executed on any host; the temporary and home directories are outside the repository.
 set -euo pipefail
 # shellcheck source=../lib/gate-lib.sh source-path=SCRIPTDIR

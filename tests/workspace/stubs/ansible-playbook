@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Test stub: records the call; fails when STUB_ANSIBLE_RC is set.
-set -euo pipefail
-printf 'ansible-playbook %s\n' "$*" >>"$STUB_LOG"
-exit "${STUB_ANSIBLE_RC:-0}"
