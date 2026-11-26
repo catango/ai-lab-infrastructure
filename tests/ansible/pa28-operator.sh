@@ -2,7 +2,9 @@
 # The operator half of the PA-28 job (CR-57 PA-A14, PA-A18, PA-A21, PA-A26, PA-A27, PA-A29, PA-A30; design C-4, C-5): the operator
 # configuration in a disposable Debian 13 container with two managed accounts and one key each. The CI job `operator-profile` calls one
 # subcommand per step: prepare SOURCE (accounts, keys, four clones of SOURCE with a local bare origin at its HEAD: one with an unpushed
-# local v* test tag, one without a tag, one whose tag origin/main does not contain, a second one with its own tag for a second project),
+# local v* test tag, one without a tag, one whose tag origin/main does not contain, a second one with its own tag for a second project;
+# the first clone is made under umask 002 and the second under umask 000, as an operator admin's account may have them, so the installed
+# tree must not inherit the clone's modes),
 # refusals (release tag, apply variable, wrong user, key rules), unconfirmed (the sshd step without the second login), first-run,
 # second-run, dry-run, second-project (a second project is installed beside the first, then nothing changes), verify (what the operator user
 # cannot change, sshd settings in force), operator-check (the installed check as the operator user: OC-8 and OC-12 shown, the failures a
@@ -77,17 +79,22 @@ prepare() {
   provider_dropin
   git init -q --bare --initial-branch=main "$WORK/origin.git"
   git -C "$source" push -q "$WORK/origin.git" HEAD:refs/heads/main
-  git clone -q "$WORK/origin.git" "$CLONE"
+  # The clone's modes are not the installation's: umask 002 gives 664 and 775 (group-writable), umask 000 gives 666 and 777.
+  (umask 002 && git clone -q "$WORK/origin.git" "$CLONE")
   git -C "$CLONE" tag v0.0.0-ci
   git clone -q "$WORK/origin.git" "$UNTAGGED"
   git clone -q "$WORK/origin.git" "$AHEAD"
   git -C "$AHEAD" -c user.name=ci -c user.email=noreply commit -q --allow-empty -m ahead
   git -C "$AHEAD" tag v0.0.1-ci
-  git clone -q "$WORK/origin.git" "$SECOND"
+  (umask 000 && git clone -q "$WORK/origin.git" "$SECOND")
   git -C "$SECOND" tag v0.0.2-ci
   git -C "$CLONE" tag --points-at HEAD | grep -qx v0.0.0-ci
   [[ $(git -C "$CLONE" rev-parse HEAD) == "$(git -C "$source" rev-parse HEAD)" ]] || fail "the clone is not at the head of the pull request"
   ! git -C "$WORK/origin.git" tag --list | grep -q . || fail "the test tag must stay unpushed"
+  # The fixture must really be what it claims, or the installation modes below prove nothing.
+  [[ -n $(find "$CLONE/scripts/operator" -type f -perm -g+w -print -quit) && -n $(find "$CLONE/scripts/operator" -type d -perm -g+w -print -quit) ]] ||
+    fail "the clone is not group-writable (umask 002)"
+  [[ -n $(find "$SECOND/scripts/operator" -type f -perm -o+w -print -quit) ]] || fail "the second clone is not writable by others (umask 000)"
   ok "prepared: four clones, a local bare origin at the head, unpushed test tags"
 }
 
@@ -184,6 +191,19 @@ dry_run() {
   ok "dry run: the tree hash is unchanged"
 }
 
+# installed_modes_are_safe CLONE PROJECT: the installation of PROJECT is root-owned with no group or other write bit (symbolic links aside:
+# their own mode is meaningless), a file that is executable in CLONE is 0755 in the installation, and every executable installed file is 0755.
+installed_modes_are_safe() {
+  local clone=$1 root="$TOOLS/projects/$2" bad rel
+  bad=$(find "$root" ! -type l \( -perm /022 -o ! -user root -o ! -group root \) -printf '%m %u:%g %P\n' | head -n 3)
+  [[ -z $bad ]] || fail "the installation of $2 is not root-owned or is writable by group or others: $bad"
+  while IFS= read -r rel; do
+    [[ $(stat -c '%a' "$root/scripts/operator/$rel") == 755 ]] || fail "$2: the executable file $rel is not 0755 in the installation"
+  done < <(cd "$clone/scripts/operator" && find . -type f -perm -u+x -printf '%P\n')
+  [[ -z $(find "$root/scripts/operator" -type f -perm /111 -print0 | xargs -0 -r stat -c '%a' | grep -vx 755 || true) ]] ||
+    fail "$2: an installed file is executable but not 0755"
+}
+
 verify() {
   local target dir tool effective setting
   local append=": >>\"\$1\"" # the inner shell expands $1
@@ -203,6 +223,10 @@ verify() {
   for dir in "$TOOLS" "$TOOLS/projects" "$TOOLS/projects/$PROJECT" "$TOOLS/projects/$PROJECT/scripts/operator" "$KEYS" /etc/ssh/sshd_config.d /opt/ai-lab; do
     if runuser -u "$AI" -- test -w "$dir"; then fail "the operator user can write into $dir"; fi
   done
+  # The installed scripts of every project are root-owned with no group or other write bit, whatever the umask of its clone was
+  # (CLONE: 002, SECOND: 000), and the executable files of the source are 0755 there.
+  installed_modes_are_safe "$CLONE" "$PROJECT"
+  installed_modes_are_safe "$SECOND" "$SECOND_NAME"
   # Per project: one root-owned installation directory at its tag, one output directory (0700) of the operator user.
   for dir in "$PROJECT" "$SECOND_NAME"; do
     [[ $(stat -c '%U:%G %a' "$TOOLS/projects/$dir") == 'root:root 755' ]] || fail "the installation of $dir is not root-owned"

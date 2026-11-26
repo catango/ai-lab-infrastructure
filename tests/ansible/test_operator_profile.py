@@ -31,8 +31,8 @@ def tasks(role, name="main.yml"):
     return (ANSIBLE / "roles" / role / "tasks" / name).read_text()
 
 
-def everything():
-    return {p.relative_to(ANSIBLE).as_posix(): p.read_text() for p in ANSIBLE.rglob("*.yml") if "operator" in p.as_posix()}
+def everything(ansible=ANSIBLE):
+    return {p.relative_to(ansible).as_posix(): p.read_text() for p in ansible.rglob("*.yml") if "operator" in p.relative_to(ansible).as_posix()}
 
 
 def operator_yml():
@@ -185,6 +185,17 @@ class Privilege(unittest.TestCase):
         self.assertIn("/usr/sbin/runuser", text)
 
 
+class Selection(unittest.TestCase):
+    def test_everything_selects_by_the_path_inside_ansible_not_by_where_the_checkout_is(self):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="operator-") as tmp:  # a checkout whose own path says "operator"
+            ansible = pathlib.Path(tmp) / "operator-checkout" / "ansible"
+            for name in ("operator.yml", "roles/operator_tools/tasks/main.yml", "group_vars/all.yml", "roles/apt_base/tasks/main.yml"):
+                (ansible / name).parent.mkdir(parents=True, exist_ok=True)
+                (ansible / name).write_text("---\n")
+            self.assertEqual(sorted(everything(ansible)), ["operator.yml", "roles/operator_tools/tasks/main.yml"])
+
+
 class Tools(unittest.TestCase):
     def test_every_install_task_is_root_owned_and_uses_the_root_check(self):
         for role, exceptions in (("operator_tools", 5), ("operator_projects", 0)):
@@ -202,6 +213,18 @@ class Tools(unittest.TestCase):
             for path in (ANSIBLE / "roles" / role).rglob("*.yml"):
                 for mode in re.findall(r'^\s+(?:directory_)?mode: "(\d+)"', path.read_text(), re.M):
                     self.assertEqual(int(mode, 8) & 0o022, 0, f"{path.name}: mode {mode} is writable by others")
+
+    def test_the_modes_of_the_whole_installation_are_set_after_the_copy_and_links_are_not_followed(self):
+        # copy with remote_src applies mode and directory_mode to the top-level destination only (a recursive remote copy keeps the
+        # clone's modes below it, 664 and 775 under umask 002), so a recursive file task must follow it (PA-28 runs clones at umask 002).
+        one = tasks("operator_projects", "one.yml")
+        copy = one[one.index("- name: Install the operator scripts"):one.index("- name: Set the modes of the whole installation")]
+        modes = one[one.index("- name: Set the modes of the whole installation"):one.index("- name: Record the release")]
+        self.assertIn("remote_src: true", copy)
+        for line in ("state: directory", "recurse: true", "follow: false", "owner: root", "group: root", 'mode: "u=rwX,go=rX"',
+                     'become: "{{ ai_lab_become }}"', 'path: "{{ operator_project_dir }}/scripts/operator"'):
+            self.assertIn(line, modes)
+        self.assertEqual(copy.count("mode:"), 2)  # mode and directory_mode: the top level only, never a substitute for the task above
 
     def test_the_run_lock_and_the_output_directories_are_the_operator_users_and_private(self):
         text = tasks("operator_tools")
