@@ -24,6 +24,7 @@ readonly WORK=/var/tmp/pa28
 readonly AI=ci-op ADMIN=ci-opadm OTHER=ci-other
 readonly KEYS=/etc/ssh/authorized_keys
 readonly DROPIN=/etc/ssh/sshd_config.d/00-ai-lab.conf
+readonly LOADED=/etc/ssh/ai-lab-sshd-loaded.txt
 readonly TOOLS=/opt/ai-lab/operator
 readonly STATE=/var/lib/ai-lab/operator
 readonly CLONE=$WORK/clone UNTAGGED=$WORK/untagged AHEAD=$WORK/ahead SECOND=$WORK/second
@@ -157,7 +158,9 @@ first_run() {
 second_run() {
   playbook "$CLONE" -e operator_apply=true -e ssh_second_login_confirmed=true | tee "$WORK/second-apply.txt"
   grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/second-apply.txt" || fail "the second run changed something"
-  ok "second run: zero changes"
+  # The reload and its record are for systemd hosts only (a real reload is PA-A33): a container has no systemd, so none is recorded.
+  [[ ! -e $LOADED ]] || fail "a reload of sshd is recorded on a host without systemd"
+  ok "second run: zero changes, no reload recorded without systemd"
 }
 
 # Two projects (PA-A30, PA-42): this clone and a second clone at its own tag, each with its own installation and output directory.

@@ -1,7 +1,9 @@
 # The apply half of the shared SSH hardening role (PA-16, LC-13, OC-10). The playbook has already run tasks/audit.yml as a pre-task.
 # Order: the root-owned key files first (sshd still reads the old location, so nothing changes for a login), then, only when a second
-# login with each managed account has been confirmed while the current session stayed open, the sshd drop-in. Nothing is written
-# into a user's home and nothing is removed.
+# login with each managed account has been confirmed while the current session stayed open, the sshd drop-in, then the reload.
+# Nothing is written into a user's home and nothing is removed.
+# The reload is a task of this role and not a handler: handlers run at the end of the roles section and never for a failed play, and
+# the operator check that follows this role fails the play. The reload therefore comes right after the checks that gate the drop-in.
 - name: Copy the provisioned keys to the root-owned location (one file per managed account, owned by root)
   ssh_hardening_audit:
     mode: install
@@ -68,7 +70,6 @@
           PermitUserEnvironment no
           KexAlgorithms -*-sha1
           MACs -hmac-sha1*
-      notify: Reload ssh
       become: "{{ ai_lab_become }}"
 
     - name: Check the whole sshd configuration and what is in force now
@@ -110,3 +111,42 @@
         - name: Stop
           ansible.builtin.fail:
             msg: the sshd settings did not pass the check, so the drop-in was removed and sshd was not switched
+
+# The reload. It is decided by comparing the drop-in with the record of what sshd last loaded, not by whether this run wrote the
+# drop-in: a run that failed after the write leaves the drop-in correct on disk, so the next run writes nothing and a handler would
+# never fire, while every check (they read files and the snapshot, never the running daemon) passes against a stale daemon.
+# The record is a copy of the drop-in, made only after the reload worked, so a failed reload is retried by the next run. Any change of
+# the drop-in differs from the record and is reloaded; a second run finds both equal and changes nothing. Only with systemd (a
+# container has none, and sshd is then not running). Not in a dry run. Not before the confirmed second login, and never before the
+# whole configuration passed `sshd -t` and the audit above: a failure there stopped the play before this point.
+- name: sshd reads the drop-in as it is now (LC-13, OC-10)
+  when: ssh_second_login_confirmed | bool and not ansible_check_mode and ansible_facts['service_mgr'] == 'systemd'
+  block:
+    - name: What the drop-in is and what sshd last loaded
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop:
+        - "{{ ssh_hardening_dropin }}"
+        - "{{ ssh_hardening_loaded }}"
+      register: ssh_hardening_stat
+      become: "{{ ai_lab_become }}"
+
+    - name: Reload ssh, the daemon has not read the drop-in as it is now
+      ansible.builtin.service:
+        name: ssh
+        state: reloaded
+      when: >-
+        not ssh_hardening_stat.results[1].stat.exists
+        or ssh_hardening_stat.results[1].stat.checksum != ssh_hardening_stat.results[0].stat.checksum
+      become: "{{ ai_lab_become }}"
+
+    - name: Record the drop-in that sshd has read (a copy of it, written after the reload worked)
+      ansible.builtin.copy:
+        src: "{{ ssh_hardening_dropin }}"
+        dest: "{{ ssh_hardening_loaded }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      become: "{{ ai_lab_become }}"

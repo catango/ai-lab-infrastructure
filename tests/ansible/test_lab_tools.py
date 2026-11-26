@@ -194,7 +194,7 @@ class StrayOptions(unittest.TestCase):
             (ssh / "sshd_config.d").mkdir()
             (ssh / "sshd_config").write_text("# default\nInclude /etc/ssh/sshd_config.d/*.conf\nX11Forwarding yes\nUsePAM=yes\n")
             role = (ROOT / "ansible" / "roles" / "ssh_hardening" / "tasks" / "main.yml").read_text()
-            body = role[role.index("content: |") + len("content: |\n"):role.index("      notify: Reload ssh")]
+            body = role[role.index("content: |") + len("content: |\n"):role.index("      become:", role.index("content: |"))]
             (ssh / "sshd_config.d" / "00-ai-lab.conf").write_text("\n".join(line[10:] for line in body.splitlines()) + "\n")
             self.assertEqual(audit.audit_sshd_files(str(ssh)), [])
             (ssh / "sshd_config.d" / "99.conf").write_text("Banner /etc/issue\nMatch All\n")
