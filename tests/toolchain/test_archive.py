@@ -51,6 +51,16 @@ class Valid(unittest.TestCase):
         self.assertIsNone(error)
         self.assertIn(("bin/alias", "link", "real"), files)
 
+    def test_a_zip_member_that_others_can_write_is_extracted_without_that_bit(self):
+        """CR-57 PA-A23 (plan PR 8): the AI user must not be able to modify an installed project tool, so no mode of an archive grants
+        group or other write (the tar `data` filter already clears it; the zip path does it here)."""
+        data = zip_bytes([("top/bin/alpha", b"#!/bin/sh\n", 0o100777), ("top/other", b"x", 0o100666)])
+        error, files = extract(data, "zip")
+        self.assertIsNone(error)
+        modes = {entry[0]: entry[3] for entry in files if entry[1] == "file"}
+        self.assertEqual(modes["bin/alpha"], 0o755)
+        self.assertEqual(modes["other"], 0o644)
+
     def test_zip(self):
         data = zip_bytes([("top/bin/alpha", b"#!/bin/sh\n", 0o100755), ("top/README", b"r", 0o100644)])
         error, files = extract(data, "zip")

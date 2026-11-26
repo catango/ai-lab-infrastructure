@@ -799,6 +799,84 @@ class UserLayerCredentials(Case):
         self.assertFail(self.lab_machine.check("PA-43"), "not covered")
 
 
+class ProjectDeny(Case):
+    """PA-A31 at plan PR 8 (I-7, O-18, R-2): the project's deny.platform.txt entries arrive through lab setup in the lab-wide list, the
+    managed settings, and the user-level layer, and PA-43 reads both layers. The machine is built by the same merge lab setup uses."""
+
+    PROJECT_FILE = "# the project's seeded list\nRead(~/.config/svc/**)\n"
+
+    def setUp(self):
+        self.mod = load("lab_project_input", ROOT / "ansible" / "roles" / "lab_project" / "files" / "lab-project-input")
+        self.lab_machine = self.machine()
+        repo = self.lab_machine.repo("project")
+        self.lab_machine.write(repo / "docs" / "PROJECT.md", "## Credential paths\n\n- `~/.config/svc/token` - a test credential\n")
+        self.lab_machine.write(self.lab_machine.home / ".config" / "svc" / "token", "x", 0o600)
+
+    def lab_setup(self, project_file):
+        """What lab setup writes from the core list DENY and the project's file: deny.txt, the managed settings, and the layer."""
+        core = "# the lab-wide deny list\n" + "\n".join(DENY) + "\n"
+        text, entries, _ = self.mod.merge_deny(core, project_file, "owner/project", "a" * 40)
+        machine = self.lab_machine
+        machine.write(machine.prefix / "lab" / "deny.txt", text)
+        machine.write(machine.root / "etc" / "claude-code" / "managed-settings.json", json.dumps({"permissions": {"deny": entries}}))
+        machine.layer(json.dumps(machine.layer_object(entries)) + "\n")
+        return entries
+
+    def test_an_entry_that_arrives_from_deny_platform_txt_covers_the_path_in_both_layers(self):
+        self.lab_setup(self.PROJECT_FILE)
+        for item in ("PA-43", "LC-4", "LC-16"):
+            self.assertPass(self.lab_machine.check(item))
+
+    def test_the_layer_alone_would_cover_it_and_so_would_the_managed_settings_alone(self):
+        entries = self.lab_setup(self.PROJECT_FILE)
+        self.lab_machine.write(self.lab_machine.root / "etc" / "claude-code" / "managed-settings.json", json.dumps({"permissions": {"deny": DENY}}))
+        self.assertPass(self.lab_machine.check("PA-43"))
+        self.lab_machine.layer(json.dumps(self.lab_machine.layer_object(DENY)) + "\n")
+        self.lab_machine.write(self.lab_machine.root / "etc" / "claude-code" / "managed-settings.json", json.dumps({"permissions": {"deny": entries}}))
+        self.assertPass(self.lab_machine.check("PA-43"))
+
+    def test_an_entry_missing_from_deny_platform_txt_fails_the_lab_check(self):
+        self.lab_setup("# the project forgot its credential entry\nRead(~/.config/other/**)\n")
+        self.assertFail(self.lab_machine.check("PA-43"), "~/.config/svc/token is not covered")
+
+    def test_no_project_file_at_all_leaves_a_listed_path_uncovered_and_failing(self):
+        self.lab_setup(None)
+        self.assertFail(self.lab_machine.check("PA-43"), "not covered")
+
+    def test_a_missing_entry_fails_for_the_project_even_with_the_layer_in_managed_mode(self):
+        self.lab_setup("Read(~/.config/other/**)\n")
+        self.lab_machine.set_conf(deny_layer="managed")
+        self.assertFail(self.lab_machine.check("PA-43"), "not covered")
+
+    def test_the_message_names_both_layers(self):
+        self.lab_setup(None)
+        self.assertFail(self.lab_machine.check("PA-43"), "managed settings or the user-level layer")
+
+    def test_lc4_fails_when_the_managed_settings_lack_an_entry_of_the_lab_wide_list(self):
+        entries = self.lab_setup(self.PROJECT_FILE)
+        self.lab_machine.write(self.lab_machine.root / "etc" / "claude-code" / "managed-settings.json",
+                               json.dumps({"permissions": {"deny": [rule for rule in entries if rule != "Read(~/.config/svc/**)"]}}))
+        results = self.lab_machine.check("LC-4")
+        self.assertFail(results, "lack")
+        self.assertIn("Read(~/.config/svc/**)", results[0][1])
+
+    def test_lc4_does_not_fail_when_the_lab_wide_list_is_not_there_yet(self):
+        self.lab_setup(self.PROJECT_FILE)
+        (self.lab_machine.prefix / "lab" / "deny.txt").unlink()
+        self.assertPass(self.lab_machine.check("LC-4"))
+
+    def test_lc16_fails_when_the_layer_lacks_the_project_entry(self):
+        entries = self.lab_setup(self.PROJECT_FILE)
+        self.lab_machine.layer(json.dumps(self.lab_machine.layer_object(entries[:-1])) + "\n")
+        self.assertFail(self.lab_machine.check("LC-16"), "1 entry missing from the layer")
+
+    def test_the_check_changes_nothing(self):
+        self.lab_setup(self.PROJECT_FILE)
+        before = tree_hash(self.lab_machine.base)
+        self.lab_machine.lab.check_all()
+        self.assertEqual(before, tree_hash(self.lab_machine.base))
+
+
 class PreDisposal(Case):
     """PA-A32: two repositories, one dirty and one with an unpushed commit; the listing names both and changes nothing."""
 
