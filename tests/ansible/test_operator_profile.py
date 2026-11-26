@@ -203,6 +203,18 @@ class Tools(unittest.TestCase):
                 for mode in re.findall(r'^\s+(?:directory_)?mode: "(\d+)"', path.read_text(), re.M):
                     self.assertEqual(int(mode, 8) & 0o022, 0, f"{path.name}: mode {mode} is writable by others")
 
+    def test_the_modes_of_the_whole_installation_are_set_after_the_copy_and_links_are_not_followed(self):
+        # copy with remote_src applies mode and directory_mode to the top-level destination only (a recursive remote copy keeps the
+        # clone's modes below it, 664 and 775 under umask 002), so a recursive file task must follow it (PA-28 runs clones at umask 002).
+        one = tasks("operator_projects", "one.yml")
+        copy = one[one.index("- name: Install the operator scripts"):one.index("- name: Set the modes of the whole installation")]
+        modes = one[one.index("- name: Set the modes of the whole installation"):one.index("- name: Record the release")]
+        self.assertIn("remote_src: true", copy)
+        for line in ("state: directory", "recurse: true", "follow: false", "owner: root", "group: root", 'mode: "u=rwX,go=rX"',
+                     'become: "{{ ai_lab_become }}"', 'path: "{{ operator_project_dir }}/scripts/operator"'):
+            self.assertIn(line, modes)
+        self.assertEqual(copy.count("mode:"), 2)  # mode and directory_mode: the top level only, never a substitute for the task above
+
     def test_the_run_lock_and_the_output_directories_are_the_operator_users_and_private(self):
         text = tasks("operator_tools")
         lock = text[text.index("- name: The run lock"):text.index("- name: The commands the user types")]
