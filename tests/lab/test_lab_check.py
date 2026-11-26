@@ -60,6 +60,7 @@ class Machine:
         self.engine = (0, "toolchain: verified 12 tools")
         self.environ = {"PATH": "/usr/bin"}
         self.groups = ["ai"]
+        self.owners, self.flags, self.flags_error = {}, {}, None
         for directory in (self.root / "etc" / "claude-code", self.root / "etc" / "ssh" / "authorized_keys",
                           self.root / "etc" / "ssh" / "sshd_config.d", self.prefix / "lab" / "engine" / "scripts",
                           self.home / ".ssh", self.home / "work", self.admin_home):
@@ -79,11 +80,51 @@ class Machine:
         self.write(self.root / "etc" / "ssh" / "sshd_config.d" / "00-ai-lab.conf",
                    "PubkeyAuthentication yes\nPasswordAuthentication no\nAllowUsers ai adm\nMACs -hmac-sha1*\n")
         self.write(self.prefix / "lab" / "token-step", (TOOLS / "token-step").read_text(), 0o755)
-        self.write(self.prefix / "lab" / "lab.conf", "machine_login=machine-bot\nowner=owner\nai_user=ai\nadmin_user=adm\n")
+        self.write(self.prefix / "lab" / "lab.conf", "machine_login=machine-bot\nowner=owner\nai_user=ai\nadmin_user=adm\ndeny_layer=both\n")
+        self.write(self.prefix / "lab" / "deny.txt", "# the lab-wide deny list\n" + "\n".join(DENY) + "\n")
         self.write(self.prefix / "lab" / "engine" / "scripts" / "toolchain", "", 0o755)
         self.write(self.prefix / "bin" / "gh", "", 0o755)
         self.write(self.home / ".gitconfig", f"[user]\n\tname = machine-bot\n\temail = {EMAIL}\n")
         self.record_sshd()
+        self.layer()
+
+    def owner_of(self, info):
+        """The seam for ownership: the test user cannot own a file as root, so the fixtures record who owns what."""
+        return self.owners.get((info.st_dev, info.st_ino), (info.st_uid, info.st_gid))
+
+    def flags_of(self, fd):
+        """The seam for FS_IOC_GETFLAGS, which a container or a test user may not have."""
+        if self.flags_error:
+            raise self.flags_error
+        info = os.fstat(fd)
+        return self.flags.get((info.st_dev, info.st_ino), 0)
+
+    def own(self, path, uid, gid):
+        info = os.lstat(path)
+        self.owners[(info.st_dev, info.st_ino)] = (uid, gid)
+
+    def layer_object(self, deny=None):
+        return {"enableAllProjectMcpServers": False,
+                "permissions": {"deny": list(DENY if deny is None else deny), "disableBypassPermissionsMode": "disable"}}
+
+    def layer(self, text=None, mode=0o644, immutable=True, root=True):
+        """The user-level layer as lab setup leaves it: root:root 0644, immutable, in a directory the AI user owns."""
+        directory = self.home / ".claude"
+        directory.mkdir(mode=0o700, exist_ok=True)
+        path = directory / "settings.json"
+        path.unlink(missing_ok=True)
+        self.write(path, json.dumps(self.layer_object(), indent=2) + "\n" if text is None else text, mode)
+        if root:
+            self.own(path, 0, 0)
+        if immutable:
+            info = os.lstat(path)
+            self.flags[(info.st_dev, info.st_ino)] = 0x10
+        return path
+
+    def set_conf(self, **values):
+        path = self.prefix / "lab" / "lab.conf"
+        lines = [line for line in path.read_text().splitlines() if line.split("=")[0] not in values]
+        self.write(path, "\n".join(lines + [f"{key}={value}" for key, value in values.items()]) + "\n")
 
     @staticmethod
     def write(path, text, mode=0o644):
@@ -148,7 +189,7 @@ class Machine:
             self._lab = lab_check.Lab(audit, conf, "ai", str(self.home), root=str(self.root), prefix=str(self.prefix),
                                       environ=self.environ, run=self.run, gh=str(self.prefix / "bin" / "gh"), machine="x86_64",
                                       trusted_uids=(ME,), groups=self.groups, home_of=lambda name: homes[name], systemd=False,
-                                      chain_top=str(self.base))
+                                      chain_top=str(self.base), owner_of=self.owner_of, flags_of=self.flags_of, ai_uid=ME)
         return self._lab
 
     def check(self, item):
@@ -177,7 +218,7 @@ class WholeCheck(Case):
         results = machine.lab.check_all()
         self.assertEqual({status for status, _, _ in results}, {"PASS"}, results)
         self.assertEqual({item for _, item, _ in results},
-                         {f"LC-{n}" for n in (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)} | {"PA-43"})
+                         {f"LC-{n}" for n in (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)} | {"PA-43"})
 
     def test_it_changes_nothing(self):
         """PA-A8: the tree hash before and after every run is equal, for the whole check and for the pre-disposal mode."""
@@ -534,6 +575,226 @@ class Credentials(Case):
         self.assertPass(machine.check("PA-43"))
 
 
+class UserLayer(Case):
+    """PA-54, PA-A36: LC-16, the user-level deny layer of the AI user, read-only, one fixture per failure."""
+
+    def layer_file(self, machine):
+        return machine.home / ".claude" / "settings.json"
+
+    def assertLc16Fails(self, machine, text):
+        results = machine.check("LC-16")
+        self.assertEqual([status for status, _ in results if status == "FAIL"], ["FAIL"], results)
+        self.assertIn(text, " ".join(detail for _, detail in results))
+        return results
+
+    def test_a_complete_layer_passes_in_both_and_in_user_mode(self):
+        for mode in ("both", "user"):
+            machine = self.machine()
+            machine.set_conf(deny_layer=mode)
+            self.assertPass(machine.check("LC-16"))
+
+    def test_claude_a_link_or_missing_or_not_owned_by_the_ai_user_fails(self):
+        machine = self.machine()
+        moved = machine.home / ".claude.real"
+        os.rename(machine.home / ".claude", moved)
+        (machine.home / ".claude").symlink_to(moved)
+        self.assertLc16Fails(machine, "~/.claude is a link")
+        machine = self.machine()
+        os.rename(machine.home / ".claude", machine.home / "elsewhere")
+        self.assertLc16Fails(machine, "~/.claude does not exist")
+        machine = self.machine()
+        machine.own(machine.home / ".claude", 0, 0)
+        self.assertLc16Fails(machine, "~/.claude is not owned by the AI user")
+
+    def test_settings_a_link_hard_linked_not_root_not_0644_not_immutable_fail(self):
+        machine = self.machine()
+        path = self.layer_file(machine)
+        real = machine.home / ".claude" / "real.json"
+        os.rename(path, real)
+        path.symlink_to(real)
+        self.assertLc16Fails(machine, "settings.json is a link")
+        machine = self.machine()
+        os.link(self.layer_file(machine), machine.base / "second-name")
+        self.assertLc16Fails(machine, "hard-linked")
+        machine = self.machine()
+        machine.layer(root=False)
+        self.assertLc16Fails(machine, "not owned by root")
+        for mode in (0o600, 0o664, 0o666):
+            machine = self.machine()
+            machine.layer(mode=mode)
+            self.assertLc16Fails(machine, "mode is not 0644")
+        machine = self.machine()
+        machine.layer(immutable=False)
+        self.assertLc16Fails(machine, "the immutable attribute is not set")
+
+    def test_an_attribute_that_cannot_be_read_fails_and_names_the_errno(self):
+        machine = self.machine()
+        machine.flags_error = OSError(25, "Inappropriate ioctl for device")
+        results = self.assertLc16Fails(machine, "immutable attribute cannot be read")
+        self.assertIn("ENOTTY", " ".join(detail for _, detail in results))
+
+    def test_a_directory_or_a_missing_file_in_place_of_settings_fails(self):
+        machine = self.machine()
+        self.layer_file(machine).unlink()
+        self.assertLc16Fails(machine, "settings.json does not exist")
+        self.layer_file(machine).mkdir()
+        self.assertLc16Fails(machine, "settings.json is not a regular file")
+
+    def test_a_key_outside_the_canonical_object_fails(self):
+        for change in (lambda o: o.update({"env": {"X": "1"}}), lambda o: o["permissions"].update({"allow": ["Bash(ls)"]}),
+                       lambda o: o.update({"$schema": "x"}), lambda o: o.pop("enableAllProjectMcpServers"),
+                       lambda o: o["permissions"].pop("disableBypassPermissionsMode")):
+            machine = self.machine()
+            obj = machine.layer_object()
+            change(obj)
+            machine.layer(json.dumps(obj, indent=2) + "\n")
+            self.assertLc16Fails(machine, "canonical object")
+
+    def test_a_missing_extra_changed_or_reordered_entry_fails(self):
+        for deny, text in ((DENY[:-1], "1 entry missing"), (DENY + ["Bash(extra *)"], "1 entry not in the lab-wide list"),
+                           ([DENY[0], DENY[1], DENY[2], "Read(~/.config/gh/*)"], "differs from the lab-wide list"),
+                           ([DENY[1], DENY[0]] + DENY[2:], "order"), (DENY + [DENY[0]], "repeated")):
+            machine = self.machine()
+            machine.layer(json.dumps(machine.layer_object(deny), indent=2) + "\n")
+            self.assertLc16Fails(machine, text)
+
+    def test_a_changed_value_of_either_setting_fails(self):
+        for value in ("enable", True, None):
+            machine = self.machine()
+            obj = machine.layer_object()
+            obj["permissions"]["disableBypassPermissionsMode"] = value
+            machine.layer(json.dumps(obj) + "\n")
+            self.assertLc16Fails(machine, "disableBypassPermissionsMode")
+        for value in (True, "false", 0):
+            machine = self.machine()
+            obj = machine.layer_object()
+            obj["enableAllProjectMcpServers"] = value
+            machine.layer(json.dumps(obj) + "\n")
+            self.assertLc16Fails(machine, "enableAllProjectMcpServers")
+
+    def test_invalid_json_and_a_json_value_that_is_not_an_object_fail_without_printing_the_content(self):
+        for text in ("{not json canary-secret", "[\"canary-secret\"]", "\"canary-secret\"", ""):
+            machine = self.machine()
+            machine.layer(text)
+            results = machine.check("LC-16")
+            self.assertEqual(results[0][0], "FAIL")
+            self.assertNotIn("canary", " ".join(detail for _, detail in results))
+
+    def test_it_prints_no_content_of_the_file(self):
+        machine = self.machine()
+        obj = machine.layer_object()
+        obj["permissions"]["allow"] = ["Bash(canary-secret *)"]
+        obj["canary"] = "canary-secret"
+        machine.layer(json.dumps(obj) + "\n")
+        self.assertNotIn("canary", " ".join(detail for _, detail in machine.check("LC-16")))
+
+    def test_a_moved_claude_directory_is_a_warning_and_a_file_of_that_name_is_not(self):
+        machine = self.machine()
+        (machine.home / ".claude.json").write_text("{}")
+        self.assertPass(machine.check("LC-16"))
+        (machine.home / ".claude.moved").mkdir()
+        results = machine.check("LC-16")
+        self.assertEqual([status for status, _ in results], ["PASS", "WARN"])
+        self.assertIn(".claude.moved", results[1][1])
+
+    def test_a_moved_directory_warns_next_to_the_failure_it_causes(self):
+        machine = self.machine()
+        os.rename(machine.home / ".claude", machine.home / ".claude.moved")
+        results = machine.check("LC-16")
+        self.assertEqual([status for status, _ in results], ["FAIL", "WARN"])
+
+    def test_the_lab_wide_list_is_the_reference_and_must_be_root_owned_and_present(self):
+        machine = self.machine()
+        (machine.prefix / "lab" / "deny.txt").unlink()
+        self.assertLc16Fails(machine, "lab-wide deny list")
+        machine = self.machine()
+        (machine.prefix / "lab" / "deny.txt").chmod(0o666)
+        self.assertLc16Fails(machine, "lab-wide deny list")
+        machine = self.machine()
+        (machine.prefix / "lab" / "deny.txt").write_text("# nothing\n")
+        self.assertLc16Fails(machine, "lab-wide deny list")
+
+    def test_a_list_with_other_entries_than_the_layer_fails_so_a_new_project_entry_must_reach_the_layer(self):
+        machine = self.machine()
+        (machine.prefix / "lab" / "deny.txt").write_text("\n".join(DENY + ["Read(~/.config/svc/token)"]) + "\n")
+        self.assertLc16Fails(machine, "1 entry missing")
+
+    def test_a_lab_conf_without_or_with_an_unknown_deny_layer_fails(self):
+        for value in ("", "everything", "BOTH"):
+            machine = self.machine()
+            machine.set_conf(deny_layer=value)
+            self.assertLc16Fails(machine, "deny_layer")
+        machine = self.machine()
+        text = (machine.prefix / "lab" / "lab.conf").read_text().replace("deny_layer=both\n", "")
+        (machine.prefix / "lab" / "lab.conf").write_text(text)
+        self.assertLc16Fails(machine, "deny_layer")
+
+    def test_managed_mode_passes_with_a_note_and_does_not_look_at_the_layer(self):
+        machine = self.machine()
+        machine.set_conf(deny_layer="managed")
+        self.layer_file(machine).unlink()
+        (machine.home / ".claude").rmdir()
+        results = machine.check("LC-16")
+        self.assertEqual([status for status, _ in results], ["PASS"])
+        self.assertIn("not selected", results[0][1])
+
+    def test_managed_mode_warns_when_a_root_owned_file_is_at_the_layer_path(self):
+        machine = self.machine()
+        machine.set_conf(deny_layer="managed")
+        results = machine.check("LC-16")
+        self.assertEqual([status for status, _ in results], ["PASS", "WARN"])
+        self.assertIn("switched", results[1][1])
+        self.assertIn("nothing removes it", results[1][1])
+
+    def test_managed_mode_does_not_warn_for_a_file_the_ai_user_owns(self):
+        machine = self.machine()
+        machine.set_conf(deny_layer="managed")
+        machine.layer(root=False, immutable=False)
+        self.assertEqual([status for status, _ in machine.check("LC-16")], ["PASS"])
+
+    def test_it_changes_nothing(self):
+        for mode in ("both", "managed"):
+            machine = self.machine()
+            machine.set_conf(deny_layer=mode)
+            (machine.home / ".claude.moved").mkdir()
+            before = tree_hash(machine.base)
+            machine.check("LC-16")
+            self.assertEqual(tree_hash(machine.base), before)
+
+    def test_the_check_reads_the_attribute_through_a_descriptor_that_does_not_follow_a_link(self):
+        text = (TOOLS / "lab-check").read_text()
+        self.assertIn("FS_IOC_GETFLAGS", text)
+        self.assertIn("O_NOFOLLOW", text)
+        self.assertNotIn("lsattr", text)
+
+
+class UserLayerCredentials(Case):
+    """PA-A31 (as amended): coverage of a project credential path is read from the managed settings and, when selected, the layer."""
+
+    def setUp(self):
+        self.lab_machine = self.machine()
+        repo = self.lab_machine.repo("project")
+        self.lab_machine.write(repo / "docs" / "PROJECT.md", "## Credential paths\n\n- `~/.config/svc/token` - a test credential\n")
+        self.lab_machine.write(self.lab_machine.home / ".config" / "svc" / "token", "x", 0o600)
+        self.lab_machine.write(self.lab_machine.root / "etc" / "claude-code" / "managed-settings.json",
+                               json.dumps({"permissions": {"deny": DENY}}))
+
+    def layer_with_rule(self):
+        self.lab_machine.layer(json.dumps(self.lab_machine.layer_object(DENY + ["Read(~/.config/svc/token)"])) + "\n")
+
+    def test_a_rule_that_only_the_layer_carries_covers_the_path_when_the_layer_is_selected(self):
+        self.layer_with_rule()
+        self.assertPass(self.lab_machine.check("PA-43"))
+
+    def test_the_layer_is_not_read_in_managed_mode(self):
+        self.lab_machine.set_conf(deny_layer="managed")
+        self.layer_with_rule()
+        self.assertFail(self.lab_machine.check("PA-43"), "not covered")
+
+    def test_a_rule_in_neither_layer_does_not_cover_it(self):
+        self.assertFail(self.lab_machine.check("PA-43"), "not covered")
+
+
 class PreDisposal(Case):
     """PA-A32: two repositories, one dirty and one with an unpushed commit; the listing names both and changes nothing."""
 
@@ -590,7 +851,7 @@ class Static(unittest.TestCase):
 
     def test_the_lab_check_has_exactly_the_contract_items(self):
         ids = [item for item, _ in lab_check.Lab.ITEMS]
-        self.assertEqual(ids, [f"LC-{n}" for n in (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)] + ["PA-43"])
+        self.assertEqual(ids, [f"LC-{n}" for n in (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)] + ["PA-43"])
 
 
 if __name__ == "__main__":

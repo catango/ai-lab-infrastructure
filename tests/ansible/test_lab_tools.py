@@ -62,7 +62,8 @@ class Role(unittest.TestCase):
     def test_the_roles_are_operator_paths(self):
         """PC-8 reads the base commit, so a PR that adds a path states it in its body; the file lists it for every PR after that."""
         config = (ROOT / "config" / "project.yaml").read_text()
-        for path in ("lab_tools", "git_identity", "unattended_upgrades", "ssh_hardening", "release_check", "claude_managed_settings"):
+        for path in ("lab_tools", "git_identity", "unattended_upgrades", "ssh_hardening", "release_check", "claude_managed_settings",
+                     "claude_user_deny"):
             self.assertIn(f"  - ansible/roles/{path}/\n", config, path)
         self.assertIn("  - ansible/roles/operator_*/\n", config)
 
@@ -87,6 +88,58 @@ class Role(unittest.TestCase):
             self.assertIn("ai_user=ai", out)
             self.assertIn("admin_user=adm", out)
             self.assertFalse((pathlib.Path(tmp) / "opt").exists(), "a check-mode run wrote")
+
+
+class DenyLayerRole(unittest.TestCase):
+    """CR-57 plan PR 4a (PA-47, PA-50 to PA-52, PA-54): the variable, deny.txt, the role, and the probe, read in text."""
+
+    role = ROOT / "ansible" / "roles" / "claude_user_deny"
+
+    def test_the_default_is_both_and_it_is_written_to_lab_conf(self):
+        variables = (ROOT / "ansible" / "group_vars" / "all.yml").read_text()
+        self.assertRegex(variables, r"(?m)^lab_deny_layer: both$")
+        tasks = (ROLE / "tasks" / "main.yml").read_text()
+        self.assertIn("deny_layer={{ lab_deny_layer }}", tasks)
+
+    def test_lab_setup_installs_the_lab_wide_list_root_owned_beside_lab_conf_as_a_byte_copy(self):
+        tasks = (ROLE / "tasks" / "main.yml").read_text()
+        block = tasks[tasks.index("- name: Install the lab-wide deny list"):]
+        block = block[:block.index("\n- name:", 1)] if "\n- name:" in block[1:] else block
+        for needle in ("ansible.builtin.copy", 'src: "{{ lab_deny_list_source }}"', 'dest: "{{ lab_tools_dir }}/deny.txt"', "owner: root",
+                       'mode: "0644"', 'become: "{{ ai_lab_become }}"'):
+            self.assertIn(needle, block, needle)
+        self.assertNotIn("content:", block)
+
+    def test_the_variable_is_checked_before_anything_changes_and_the_probe_is_a_pre_task(self):
+        text = (ROOT / "ansible" / "lab.yml").read_text()
+        pre = text[text.index("  pre_tasks:"):text.index("  roles:")]
+        self.assertIn("lab_deny_layer in ['both', 'user', 'managed']", pre)
+        self.assertIn("tasks_from: probe", pre)
+        self.assertIn("lab_deny_layer in ['both', 'user']", pre)
+        self.assertLess(pre.index("Deny layer variable"), pre.index("Attribute probe"))
+        self.assertLess(pre.index("Key audit"), pre.index("Attribute probe"))
+
+    def test_the_role_runs_only_for_both_and_user_and_only_the_module_touches_the_home(self):
+        text = (self.role / "tasks" / "main.yml").read_text()
+        self.assertIn("lab_deny_layer in ['both', 'user']", text)
+        self.assertIn("claude_user_deny:", text)
+        for banned in ("ansible.builtin.file", "ansible.builtin.copy", "lineinfile", "blockinfile", "template", "ansible.builtin.command",
+                       "ansible.builtin.shell", "chattr"):
+            self.assertNotIn(banned, text, banned)
+        probe = (self.role / "tasks" / "probe.yml").read_text()
+        self.assertIn("action: probe", probe)
+        self.assertIn("check_mode: false", probe)
+        self.assertNotIn("ansible.builtin.copy", probe)
+
+    def test_the_operator_profile_knows_nothing_of_the_layer(self):
+        for path in (ROOT / "ansible").rglob("*.yml"):
+            if path.name == "operator.yml" or "operator_" in str(path):
+                self.assertNotRegex(path.read_text(), r"claude_user_deny|lab_deny_layer|deny_layer", str(path))
+
+    def test_the_probe_can_be_skipped_only_by_naming_its_tag_which_the_fixtures_use_for_the_refusals(self):
+        text = (ROOT / "ansible" / "lab.yml").read_text()
+        block = text[text.index("- name: Attribute probe"):]
+        self.assertIn("claude_user_deny_probe", block.split("\n\n")[0])
 
 
 class Snapshot(unittest.TestCase):
