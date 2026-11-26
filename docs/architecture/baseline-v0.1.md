@@ -1,6 +1,6 @@
 # AI Engineering Platform: Architecture Baseline v0.1
 
-> **Superseded by [baseline v0.2](baseline-v0.2.md)** (CR-57, Proposed; takes effect when the CR-57 design PR is merged). This file is kept as history so that existing links survive. Its OCI components, decisions D2 to D7, D12, and CHG-002, ADR-004, ADR-006, ADR-007, and Stages 2 to 4 are superseded or withdrawn; read v0.2 for the current component map, decision index, and build sequence.
+> **Superseded by [baseline v0.2](baseline-v0.2.md)** (CR-57, in effect since the merge of design PR 58 on 2026-11-23). This file is kept as history so that existing links survive. Its OCI components, decisions D2 to D7, D12, and CHG-002, ADR-004, ADR-006, ADR-007, and Stages 2 to 4 are superseded or withdrawn; read v0.2 for the current component map, decision index, and build sequence.
 
 | Field | Value |
 |---|---|

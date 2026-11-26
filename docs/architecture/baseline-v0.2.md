@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed**. Approved by the approver's review and merge of CR-57 design PR 58 (ADR-003 approval rule) |
+| Status | **Accepted** (2026-11-23). Approved by the approver's review and merge of CR-57 design PR 58 (ADR-003 approval rule) |
 | Date | 2026-11-23 |
 | Replaces | [Baseline v0.1](baseline-v0.1.md), which stays as history with a "superseded by v0.2" banner so that existing links survive |
 | Change request | CR-57 (issue #57), PA-38, PA-40 |
@@ -63,7 +63,7 @@
 | D15 | One toolchain codebase; profiles; three test levels | **Reduced** (CR-57): `lab` and `operator` profiles, Debian 13, amd64 only | ADR-005 (amended) |
 | D16 | Disposable home; restore script; token re-entered by you | **Reduced** (CR-57): lab setup, token step, lab check | ADR-001 (amended), ADR-012 |
 | D17 | GitHub access per surface | Accepted | ADR-001 |
-| ADR-012 | Host model: AI lab, operator machine, lab host (Z8), contracts | **Proposed** (CR-57; accepted by merge) | ADR-012 |
+| ADR-012 | Host model: AI lab, operator machine, lab host (Z8), contracts | **Accepted** (CR-57, merge of design PR 58, 2026-11-23) | ADR-012 |
 
 ADR-004, ADR-006, and ADR-007 are **withdrawn** in this baseline (PA-38); their numbers are not reused. ADR-002 is superseded and ADR-011 is amended (CR-57).
 
@@ -98,7 +98,7 @@ Stages 2 to 4 of baseline v0.1 (OCI seed, lab VM, pipeline) are dropped with ADR
 | ADR-004, ADR-006, ADR-007 | OCI baseline, `labctl`, backup and disaster recovery | Withdrawn (PA-38) |
 | ADR-005 | Toolchain | Accepted; amended by CR-57 |
 | ADR-008 | Software template | Accepted |
-| ADR-009 | Security and CI baseline | Accepted (its status line still reads Proposed; the follow-up design PR R-1 corrects it, `docs/cr/CR-57/design.md` O-12) |
+| ADR-009 | Security and CI baseline | Accepted (its status line was corrected by the follow-up design PR R-1, PR 59 merged 2026-11-23, `docs/cr/CR-57/design.md` O-12) |
 | ADR-010 | Token optimisation and metrics | Accepted (CR-45 design PR #46 merged 2026-11-20) |
 | ADR-011 | Rules for operator scripts | Accepted; amended by CR-57 |
-| ADR-012 | Host model | Proposed (CR-57) |
+| ADR-012 | Host model | Accepted (CR-57, 2026-11-23) |
