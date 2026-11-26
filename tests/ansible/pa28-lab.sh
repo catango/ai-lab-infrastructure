@@ -8,9 +8,8 @@
 # installed lab check as the AI user: the gap lab setup still leaves, a complete lab, failures a container can show, the pre-disposal
 # mode; the tree hash is unchanged), deny-probe (plan PR 4a, PA-56: does the filesystem of /home take the immutable attribute here?),
 # deny-layer (the user-level deny layer: with the attribute the write attempts of the AI user all fail and each root change makes LC-16
-# fail; without it the fail-closed fixture runs and the job says `immutability not testable here`), project (plan PR 8, PA-34: the
-# project toolchain, package list, and deny list through the project input channel, as the AI user and root). A real sshd restart, `sshd -T` of a
-# running daemon, and the unattended-upgrade units are PA-A33.
+# fail; without it the fail-closed fixture runs and the job says `immutability not testable here`), project (plan PR 8, see below). A
+# real sshd restart, `sshd -T` of a running daemon, and the unattended-upgrade units are PA-A33.
 # The operator half of the PA-28 job is pa28-operator.sh in a second container: the two profiles own the same sshd drop-in.
 # The script changes /etc, so it runs only as root on a disposable host.
 set -euo pipefail

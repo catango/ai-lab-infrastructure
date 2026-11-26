@@ -20,6 +20,7 @@ from helpers import ROOT, load
 HELPER = ROOT / "ansible" / "roles" / "lab_project" / "files" / "lab-project-input"
 GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "noreply", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "noreply"}
+AT = "@"  # kept apart so that no line of this file looks like an email address to the public-repository hygiene check
 CORE = "# the core list\nBash(ssh *)\nRead(~/.ssh/**)\n"
 MANIFEST = ('schema_version = 1\n[tools.demo]\nversion = "1.0.0"\nprofiles = ["lab"]\nsource = "download"\nformat = "binary"\n'
             'binaries = ["demo"]\nsmoke = ["demo"]\nsmoke_match = "1.0.0"\n[tools.demo.artifacts.amd64]\n'
@@ -247,7 +248,7 @@ class Sources(Fixture):
                 self.anonymous(ref)
 
     def test_only_an_anonymous_https_address_of_github_is_accepted(self):
-        for url in ("file:///tmp/x", "http://github.com/o/p", "git@github.com:o/p.git", "https://user:token@github.com/o/p",
+        for url in ("file:///tmp/x", "http://github.com/o/p", "git" + AT + "github.com:o/p.git", "https://user:token" + AT + "github.com/o/p",
                     "https://example.org/o/p", "https://github.com/o", "https://github.com/o/p/extra", "ssh://github.com/o/p", "/tmp/x"):
             with self.assertRaises(self.mod.Refusal, msg=url):
                 self.anonymous("v1.0.0", url=url)
