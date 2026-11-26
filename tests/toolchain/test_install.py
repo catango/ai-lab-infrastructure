@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 import helpers
-from helpers import AMD64_URL, ARM64_URL, FakeFetcher, good_archive, manifest_text, sha256, tar_bytes, tree, write_config
+from helpers import AMD64_URL, ARM64_URL, FakeFetcher, good_archive, manifest_text, sha256, tar_bytes, tree
 from toolchain_engine import cli
 from toolchain_engine.errors import FetchError
 
@@ -18,8 +18,7 @@ class Base(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = pathlib.Path(self.tmp.name)
         self.prefix = self.root / "prefix"
-        # The engine is generic: these tests list both architectures so the arm64 path stays covered (CR-57 PA-30, PA-A7).
-        write_config(self.root, "amd64", "arm64")
+        # The engine is generic: install and verify take either architecture, so the arm64 path stays covered here (CR-57 PA-30).
         self.good = good_archive()
         self.arm = good_archive()
         self.fetcher = FakeFetcher({AMD64_URL: self.good, ARM64_URL: self.arm})

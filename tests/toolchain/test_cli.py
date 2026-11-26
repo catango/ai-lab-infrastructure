@@ -12,14 +12,13 @@ from toolchain_engine import cli, manifest
 
 
 class Usage(Base):
-    def test_an_architecture_the_configuration_does_not_list_is_a_usage_error(self):
-        """CR-57 PA-30: with amd64 only in config/project.yaml, `--arch arm64` has no artifact to install and is refused."""
-        write_config(self.root, "amd64")
+    def test_an_architecture_the_manifest_has_no_artifact_for_is_a_usage_error(self):
+        """CR-57 PA-30: an amd64-only manifest has no artifact for `--arch arm64`; install and verify refuse before any download."""
         self.write_manifest(without_arm64(manifest_text(amd64_sha=sha256(self.good))))
         self.assertEqual(self.install(arch="amd64")[0], 0)
         code, _, err = self.install(arch="arm64")
         self.assertEqual(code, 2)
-        self.assertIn("not listed", err)
+        self.assertIn("no artifact for architecture arm64", err)
 
     def test_check_names_the_unlisted_architecture_under_an_amd64_only_configuration(self):
         write_config(self.root, "amd64")
@@ -48,6 +47,7 @@ class Usage(Base):
         self.assertEqual(cli.main(["--manifest", "/nonexistent/manifest.toml", "check"], out=out, err=err), 2)
 
     def test_check_ok(self):
+        write_config(self.root, "amd64", "arm64")  # the fixture manifest has both artifacts, so the configuration lists both
         code, out, _ = self.run_cli("check")
         self.assertEqual(code, 0)
         self.assertIn("ok", out)
