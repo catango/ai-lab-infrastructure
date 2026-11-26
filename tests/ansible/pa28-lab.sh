@@ -592,6 +592,18 @@ deny_layer() {
   playbook "$LAB" -e lab_apply=true -e lab_deny_layer=both --tags lab_tools,claude_user_deny >/dev/null 2>&1 || fail "the switch back to both failed"
   grep -qx deny_layer=both "$TOOLS/lab.conf" || fail "lab.conf does not record the switch back"
   printf 'immutable attribute proved in this job: write, append, truncate, rm, mv, ln, chmod, chattr -i by the AI user fail; LC-16 fails for each root change\n' >>"$WORK/attribute.txt"
+  # The fail-closed fixture of PA-51 also runs here, for real: with the capability dropped from the bounding set the attribute cannot be
+  # set, which is what a container without it looks like. The layer is removed first (as root) and put back by lab setup afterwards.
+  command -v capsh >/dev/null || fail "capsh is not installed (package libcap2-bin): the fail-closed fixture cannot run"
+  chattr -i "$layer"
+  rm -rf "/home/$AI/.claude"
+  capsh --drop=cap_linux_immutable -- -c "'$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pa28-lab.sh' deny-fail-closed" ||
+    fail "the fail-closed fixture failed with the capability dropped"
+  playbook "$LAB" -e lab_apply=true --tags claude_user_deny >"$WORK/layer-restore.txt" 2>&1 || {
+    cat "$WORK/layer-restore.txt"
+    fail "lab setup did not put the layer back after the fail-closed fixture"
+  }
+  check_layer_content
   ok "user-level layer: the attribute holds against the AI user, LC-16 sees each change, the switch to managed removes nothing"
 }
 
@@ -624,8 +636,9 @@ case ${1:-} in
   lab-check) lab_check ;;
   deny-probe) deny_probe ;;
   deny-layer) deny_layer ;;
+  deny-fail-closed) deny_fail_closed ;;
   *)
-    echo "usage: pa28-lab.sh prepare SOURCE | deny-probe | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check | deny-layer" >&2
+    echo "usage: pa28-lab.sh prepare SOURCE | deny-probe | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check | deny-layer | deny-fail-closed" >&2
     exit 2
     ;;
 esac

@@ -112,6 +112,10 @@ class Machine:
         directory = self.home / ".claude"
         directory.mkdir(mode=0o700, exist_ok=True)
         path = directory / "settings.json"
+        if path.is_symlink() or path.exists():
+            old = os.lstat(path)  # the number of a removed file can be given to the next one: forget what was recorded for it
+            self.owners.pop((old.st_dev, old.st_ino), None)
+            self.flags.pop((old.st_dev, old.st_ino), None)
         path.unlink(missing_ok=True)
         self.write(path, json.dumps(self.layer_object(), indent=2) + "\n" if text is None else text, mode)
         if root:

@@ -487,18 +487,34 @@ class Main(Case):
     """The Ansible entry point: the home comes from the account database; a dry run writes nothing; a refusal is a failed task."""
 
     def run_module(self, params, check_mode=False, name=ACCOUNT, home=None, uid=ME):
-        from ansible.module_utils import basic
-        from ansible.module_utils.testing import patch_module_args
-
+        """Run main() with a stand-in for AnsibleModule (the real class differs between ansible-core releases, and its argument
+        parsing is not what is tested): it fills the defaults of the argument spec, prints what the module returns, and exits."""
         entry = pwd_entry(name, uid, str(home or self.home))
-        args = {**params, "_ansible_check_mode": check_mode}
-        with patch_module_args(args), unittest.mock.patch.object(mod.pwd, "getpwnam", lambda user: entry if user == name else (_ for _ in ()).throw(KeyError(user))):
+
+        def lookup(user):
+            if user != name:
+                raise KeyError(user)
+            return entry
+
+        class FakeModule:
+            def __init__(self, argument_spec, supports_check_mode=False):
+                self.params = {key: params.get(key, spec.get("default")) for key, spec in argument_spec.items()}
+                self.check_mode = check_mode and supports_check_mode
+
+            def exit_json(self, **result):
+                print(json.dumps(result))
+                raise SystemExit(0)
+
+            def fail_json(self, **result):
+                print(json.dumps({**result, "failed": True}))
+                raise SystemExit(1)
+
+        fake = types.SimpleNamespace(AnsibleModule=FakeModule)
+        modules = {"ansible": types.ModuleType("ansible"), "ansible.module_utils": types.ModuleType("ansible.module_utils"),
+                   "ansible.module_utils.basic": fake}
+        with unittest.mock.patch.dict(sys.modules, modules), unittest.mock.patch.object(mod.pwd, "getpwnam", lookup):
             with self.assertRaises(SystemExit):
-                try:
-                    mod.main()
-                except SystemExit:
-                    raise
-        return basic
+                mod.main()
 
     def result(self, params, **kwargs):
         out = io.StringIO()

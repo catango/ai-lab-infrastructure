@@ -214,7 +214,7 @@ jobs:
         shell: bash
         run: |
           apt-get update -q
-          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq e2fsprogs
+          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq e2fsprogs libcap2-bin
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
