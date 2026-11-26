@@ -57,6 +57,7 @@ def _parser():
     ver.add_argument("--download", action="store_true")
     ver.add_argument("--skip-smoke", action="store_true")
     ver.add_argument("--skip-apt", action="store_true", help="leave apt tools to the host-profiles job")
+    ver.add_argument("--source", choices=SOURCES, help="only the tools of this source (a project manifest: download)")
     return parser
 
 
@@ -109,7 +110,7 @@ def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
             print(f"changed={result.changed}", file=out)
             return 1 if result.failed else 0
         failed = verify(manifest, args.profile, args.prefix, arch, args.download, args.skip_smoke, fetcher or HttpsFetcher(), runner, out,
-                        skip_apt=args.skip_apt)
+                        skip_apt=args.skip_apt, source=args.source)
         return 1 if failed else 0
     except UsageError as error:
         print(f"toolchain: error: {error}", file=err)

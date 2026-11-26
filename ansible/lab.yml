@@ -83,6 +83,14 @@
         fail_msg: >-
           lab_deny_layer must be both, user, or managed (the default is both)
 
+    # Plan PR 8 (PA-34, I-7): reads the project the lab admin named (merged commit or tag, or a SHA of the AI user's clone) and merges
+    # its deny.platform.txt entries into the lab-wide list. It changes nothing on the machine; a refusal stops the play here.
+    - name: Project input, the project's package list, manifest, and deny entries are read and checked (changes nothing)
+      tags: [always]
+      ansible.builtin.import_role:
+        name: lab_project
+        tasks_from: input
+
     # PA-51: the last pre-task. It changes nothing: it tries the immutable attribute on a scratch file next to the AI user's home, so a
     # filesystem or a container without it fails the play before any file is written. The PA-28 fixtures skip it by this tag to show the
     # refusals of the module and its fail-closed path; nothing else does.
@@ -103,6 +111,8 @@
       tags: [claude_managed_settings]
     - role: lab_tools
       tags: [lab_tools]
+    - role: lab_project
+      tags: [lab_project]
     - role: claude_user_deny
       tags: [claude_user_deny]
     - role: git_identity
@@ -111,3 +121,13 @@
       tags: [unattended_upgrades]
     - role: ssh_hardening
       tags: [ssh_hardening]
+
+  post_tasks:
+    - name: Remove the staged project files
+      tags: [always]
+      ansible.builtin.file:
+        path: "{{ lab_project_stage }}"
+        state: absent
+      when: lab_project_stage is defined
+      check_mode: false
+      become: "{{ ai_lab_become }}"

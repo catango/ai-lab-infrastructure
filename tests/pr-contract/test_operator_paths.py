@@ -25,7 +25,7 @@ PATHS_TODAY = ("scripts/operator/", "ansible/operator.yml", "ansible/roles/opera
 # This repository's own file: the paths above plus the other roles of the lab profile (CR-57 plan PR 2).
 OWN_PATHS = PATHS_TODAY + ("ansible/roles/release_check/", "ansible/roles/claude_managed_settings/", "ansible/roles/lab_tools/",
                                 "ansible/roles/git_identity/", "ansible/roles/unattended_upgrades/",
-                           "ansible/roles/claude_user_deny/")
+                           "ansible/roles/claude_user_deny/", "ansible/roles/lab_project/")
 
 GOOD = {
     "block paths": "operator_paths:\n  - scripts/operator/\n  - ansible/operator.yml\n  - ansible/roles/operator_*/\n",

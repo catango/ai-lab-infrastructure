@@ -1,0 +1,50 @@
+# The project input (PA-34, I-7), run as a pre-task of the lab profile: it reads and checks the project and changes nothing on the
+# machine, so a refusal (an unmerged commit, a third-party apt source, a pip tool, a link where a file belongs) stops the play before
+# any role runs, in a dry run too. It runs in check mode as well, because the dry run has to read the project to print what would change.
+# The helper stages the three project files in a root-only temporary directory (removed by a post-task) and prints one JSON object.
+# One list comes out of it, `lab_deny_entries`: the core list of required-deny.txt followed by the project's deny.platform.txt entries.
+# The lab-wide deny.txt, the managed settings, and the user-level layer are all written from it (R-2).
+- name: A root-only directory for the staged project files
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: lab-project-
+  register: lab_project_stage_dir
+  check_mode: false
+  become: "{{ ai_lab_become }}"
+
+- name: Read the project (merged commit or tag of an anonymous clone, or a SHA of the AI user's clone) and merge its deny entries
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ lab_project_helper }}"
+      - stage
+      - --out
+      - "{{ lab_project_stage_dir.path }}"
+      - --core
+      - "{{ lab_deny_list_source }}"
+      - --repo
+      - "{{ lab_project_repo }}"
+      - --ref
+      - "{{ lab_project_ref }}"
+      - --clone
+      - "{{ lab_project_clone }}"
+      - --sha
+      - "{{ lab_project_sha }}"
+      - --as-user
+      - "{{ lab_project_git_user }}"
+      - --recorded
+      - "{{ lab_project_record_dir }}"
+    chdir: /
+  register: lab_project_result
+  changed_when: false
+  check_mode: false
+  become: "{{ ai_lab_become }}"
+
+- name: Keep the project input and make its deny list the lab-wide deny list
+  ansible.builtin.set_fact:
+    lab_project_input: "{{ lab_project_result.stdout | from_json }}"
+    lab_project_stage: "{{ lab_project_stage_dir.path }}"
+    lab_project_selected: "{{ (lab_project_result.stdout | from_json).source is not none and (lab_project_result.stdout | from_json).source.kind != 'recorded' }}"
+    lab_deny_text: "{{ (lab_project_result.stdout | from_json).deny_text }}"
+    lab_deny_entries: "{{ (lab_project_result.stdout | from_json).deny_entries }}"

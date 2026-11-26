@@ -32,7 +32,7 @@
     owner: root
     group: root
     mode: "0644"
-    content: "{{ claude_managed_existing | combine(claude_managed_ours, claude_managed_role_settings, recursive=True, list_merge='append_rp') | to_nice_json }}\n"
+    content: "{{ claude_managed_existing | combine(claude_managed_ours, claude_managed_role_settings, claude_managed_lab_wide_deny, recursive=True, list_merge='append_rp') | to_nice_json }}\n"
   become: "{{ ai_lab_become }}"
 
 - name: Write the managed CLAUDE.md (the rules that must not be relaxed), inside markers, keeping every other line of an existing file

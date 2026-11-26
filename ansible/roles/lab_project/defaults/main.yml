@@ -1,0 +1,26 @@
+# The project toolchain of the AI lab (CR-57 plan PR 8; PA-34, PA-A23, PA-A31; O-18, O-22; I-7; R-2).
+# Which project: the lab admin names it with ONE of these two pairs. Nothing is chosen by default, and then the role does nothing
+# (the lab-wide deny list is the core list, plus the entries that an earlier run recorded; see tasks/input.yml).
+#   anonymous clone of a public GitHub repository at a tag or a full commit SHA that is merged (reachable from its default branch):
+#     -e lab_project_repo=https://github.com/<owner>/<repository> -e lab_project_ref=<tag or 40-character SHA>
+#   the AI user's own clone at a full commit SHA the user supplies (merged or not; git runs as the AI user, root reads the bytes):
+#     -e lab_project_clone=<absolute path of that clone> -e lab_project_sha=<40-character SHA>
+lab_project_repo: ''
+lab_project_ref: ''
+lab_project_sha: ''
+lab_project_clone: ''
+# A project package list is applied only after the lab admin read the dry run (O-22): the dry run prints every package name and version
+# and a plan_sha256; a real run passes that value here. An empty value applies nothing and the run stops.
+lab_project_packages_reviewed: ''
+# The account that runs git in the supplied clone, and the smoke tests (never root). Empty runs git as the current user (tests only).
+lab_project_git_user: "{{ lab_ai_user | default('') }}"
+# Where the project tools go: amd64 only, the checksum rules of the gate tools (the engine of the release clone installs them).
+lab_project_prefix: "{{ toolchain_prefix }}/project"
+lab_project_arch: amd64
+# The root-owned record of what the lab was set up from: the three project files and where they came from. The AI user cannot change it.
+lab_project_record_dir: "{{ toolchain_prefix }}/lab/project"
+# The copy of the engine that lab_tools installs: the AI user cannot read the clone of the lab admin, so the smoke tests run this copy.
+lab_project_engine: "{{ toolchain_prefix }}/lab/engine/scripts/toolchain"
+lab_project_helper: "{{ role_path }}/files/lab-project-input"
+# Set by tasks/input.yml.
+lab_project_selected: false

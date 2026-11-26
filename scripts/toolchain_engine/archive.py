@@ -115,4 +115,4 @@ def _extract_zip(src, dest, strip, limits):
                     if written > limits.max_bytes:
                         raise ArchiveError("archive exceeds the file count or size limit")
                     sink.write(chunk)
-            target.chmod((mode & 0o777) or 0o644)
+            target.chmod((mode & 0o755) or 0o644)

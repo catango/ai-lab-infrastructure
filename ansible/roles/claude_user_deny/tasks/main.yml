@@ -5,11 +5,12 @@
 # file, copy, or command task is used on a path in a home, so a planted link cannot redirect root.
 # `lab_deny_layer` selects `both` (the default, R2-O1), `user`, or `managed`; `managed` writes nothing here and removes nothing.
 # The managed settings (role claude_managed_settings) are written in every mode: LC-4 is unchanged, and the lab check reads the same
-# lab-wide list from the root-owned deny.txt that lab_tools installs from the same source file as this role.
+# lab-wide list from the root-owned deny.txt that lab_tools installs: all three are written from `lab_deny_entries`, the core list followed
+# by a project's deny.platform.txt entries (plan PR 8, roles/lab_project).
 - name: Write the user-level deny layer (the module refuses a link, a hard link, or a file the AI user owns and changes nothing then)
   claude_user_deny:
     user: "{{ lab_ai_user }}"
     action: write
-    deny_list: "{{ lab_deny_list_source }}"
+    deny_entries: "{{ lab_deny_entries }}"
   when: lab_deny_layer in ['both', 'user']
   become: "{{ ai_lab_become }}"
