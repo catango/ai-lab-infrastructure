@@ -9,6 +9,7 @@
     state: directory
     prefix: lab-project-
   register: lab_project_stage_dir
+  changed_when: false
   check_mode: false
   become: "{{ ai_lab_become }}"
 

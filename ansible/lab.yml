@@ -129,5 +129,6 @@
         path: "{{ lab_project_stage }}"
         state: absent
       when: lab_project_stage is defined
+      changed_when: false
       check_mode: false
       become: "{{ ai_lab_become }}"

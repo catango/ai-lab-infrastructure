@@ -149,6 +149,15 @@ class Tasks(unittest.TestCase):
         self.assertIn("python3", self.stage)
         self.assertIn("- -I", self.stage)
 
+    def test_the_staging_never_counts_as_a_change_so_a_second_run_reports_zero(self):
+        """PA-A23 (second run changes nothing): the temporary directory is created and removed on every run, and must not be a change."""
+        for task in tasks_of(ROLE / "tasks" / "input.yml"):
+            if "ansible.builtin.set_fact" not in task:
+                self.assertIn("changed_when: false", task, task.splitlines()[0])
+        lab = (ANSIBLE / "lab.yml").read_text()
+        post = lab[lab.index("  post_tasks:"):]
+        self.assertIn("changed_when: false", post)
+
     def test_nothing_is_written_into_a_users_home(self):
         text = self.main + self.stage + (ROLE / "defaults" / "main.yml").read_text()
         self.assertNotRegex(text, r"/home/|~/|ansible_env|ansible_user_dir")
