@@ -201,16 +201,20 @@ jobs:
       contents: read
     container:
       image: debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+      # The immutable attribute of the user-level deny layer (plan PR 4a, PA-56): `chattr +i` needs CAP_LINUX_IMMUTABLE, which a container
+      # lacks by default. This is the lightest of the three options of the design (the capability, a loop image, a step on the runner
+      # host); the probe step below says whether it is enough, and the job never skips silently when it is not.
+      options: --cap-add LINUX_IMMUTABLE
     env:
       AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
       # What a fresh lab has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH). git comes first:
       # without it the checkout action downloads an archive and the workspace is not a repository.
-      - name: Bootstrap Ansible, git, sshd, and jq from the Debian archive
+      - name: Bootstrap Ansible, git, sshd, jq, and the attribute tools from the Debian archive
         shell: bash
         run: |
           apt-get update -q
-          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq
+          apt-get install -y --no-install-recommends ansible-core python3-apt ca-certificates git openssh-server jq e2fsprogs
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -222,7 +226,13 @@ jobs:
         shell: bash
         run: tests/ansible/pa28-lab.sh prepare "$GITHUB_WORKSPACE"
 
-      - name: Refusals change nothing (untagged tree, tag outside origin/main, key rules, sshd settings)
+      # PA-56, PA-A37: can this container set the immutable attribute on the filesystem of /home? The answer decides the layer mode of the
+      # steps below (both, or managed with the fail-closed fixture), is printed here, and is repeated in the job summary: never silent.
+      - name: Attribute probe, can the immutable attribute be set here (PA-56)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh deny-probe
+
+      - name: Refusals change nothing (untagged tree, tag outside origin/main, key rules, sshd settings, the user-level layer)
         shell: bash
         run: tests/ansible/pa28-lab.sh refusals
 
@@ -264,12 +274,19 @@ jobs:
         shell: bash
         run: tests/ansible/pa28-lab.sh lab-check
 
+      - name: User-level deny layer, the attribute against the AI user and LC-16 per root change, or the fail-closed fixture (PA-A34 to PA-A37)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh deny-layer
+
       - name: Job summary
         if: always()
         shell: bash
         run: |
           {
             echo "### host-profiles"
+            echo
+            echo "User-level deny layer (the immutable attribute):"
+            cat /var/tmp/pa28/attribute.txt 2>/dev/null || echo "  no probe output (an earlier step failed)"
             echo
             echo '~~~~text'
             for step in unconfirmed first-apply second-apply dry-run; do
