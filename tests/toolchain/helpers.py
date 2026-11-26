@@ -72,6 +72,25 @@ def good_archive(version="1.2.3", prefix=None):
     ])
 
 
+ARCH_ENTRIES = {
+    "amd64": "  - name: amd64\n    runner: ubuntu-24.04\n    runner_private: ubuntu-24.04\n",
+    "arm64": "  - name: arm64\n    runner: ubuntu-24.04-arm\n    runner_private: \"\"\n",
+}
+
+
+def write_config(root, *names):
+    """config/project.yaml of a test root listing the given architectures (CR-57 PA-30: `check` reads the list from it)."""
+    path = pathlib.Path(root) / "config" / "project.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("schema_version: 1\narchitectures:\n" + "".join(ARCH_ENTRIES[name] for name in names))
+
+
+def without_arm64(text):
+    """The same manifest text with the arm64 artifact table of the `alpha` tool removed."""
+    start = text.index("[tools.alpha.artifacts.arm64]")
+    return text[:start] + text[text.index("[tools.gitlike]"):]
+
+
 def manifest_text(*, amd64_sha=ZERO, arm64_sha=ZERO, extra_tools="", head='schema_version = 1\n', alpha_extra="", amd64_url=AMD64_URL,
                   arm64_url=ARM64_URL, version="1.2.3"):
     return f'''{head}

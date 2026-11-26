@@ -1,5 +1,5 @@
 # Toolchain manifest (CR-2, ADR-005): the single source of truth for tools, versions, sources, and checksums.
-# Every download has amd64 and arm64 artifacts with SHA-256 checksums. Changes are toolchain PRs (ADR-003).
+# Every download has an artifact with a SHA-256 checksum for each architecture of config/project.yaml (amd64 only; CR-57 PA-30). Changes are toolchain PRs (ADR-003).
 # Profiles: `lab` (the gate tools of the AI lab and of CI; CR-2 called it `builder`, which stays accepted as an alias of `lab` until
 # CR-57 plan PR 7) and `operator`. The operator profile takes manifest membership for Python 3 and git only (CR-57 O-15, OC-6): it installs
 # no gate tools. What else the operator machine needs from the Debian archive (unattended-upgrades) is installed by a shared Ansible role.
@@ -25,10 +25,6 @@ max_bytes   = 104857600
 url    = "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_linux_amd64.tar.gz"
 sha256 = "98cb101ad87dbbd3f6b2f2bfcbd43197ccd07643140121d8a9cfaa91eadbc24e"
 
-[tools.gh.artifacts.arm64]
-url    = "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_linux_arm64.tar.gz"
-sha256 = "cb34cefc6f4e77b90731374a2b737516bb8f3033c6ca46aa949e5344f68069e3"
-
 # yq (mikefarah). The upstream checksums file is signed (sigstore bundle, verified with cosign); the release asset digest agrees.
 [tools.yq]
 version     = "4.54.3"
@@ -43,10 +39,6 @@ max_bytes   = 104857600
 [tools.yq.artifacts.amd64]
 url    = "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64"
 sha256 = "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
-
-[tools.yq.artifacts.arm64]
-url    = "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_arm64"
-sha256 = "89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67"
 
 # ripgrep, static musl builds. Per-artifact upstream .sha256 files and the release asset digests agree.
 [tools.ripgrep]
@@ -64,10 +56,6 @@ max_bytes   = 104857600
 url    = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
 sha256 = "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
 
-[tools.ripgrep.artifacts.arm64]
-url    = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz"
-sha256 = "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915"
-
 # fd, static musl builds, installed under the name fd (the Debian package installs fdfind). Upstream publishes no checksums: the release asset digest and a local download hash agree.
 [tools.fd]
 version     = "10.5.2"
@@ -83,10 +71,6 @@ max_bytes   = 104857600
 [tools.fd.artifacts.amd64]
 url    = "https://github.com/sharkdp/fd/releases/download/v10.5.2/fd-v10.5.2-x86_64-unknown-linux-musl.tar.gz"
 sha256 = "7e2d07fa2b8807642aaec67b7e2972a9fbe4db26fcb340a7372392db42b26694"
-
-[tools.fd.artifacts.arm64]
-url    = "https://github.com/sharkdp/fd/releases/download/v10.5.2/fd-v10.5.2-aarch64-unknown-linux-musl.tar.gz"
-sha256 = "63ea52cb31586e6d98efa2f06d73d542f16c7d0c4af0f07b579aaf9714cf907a"
 
 # ShellCheck. Upstream publishes no checksums: the release asset digest and a local download hash agree.
 [tools.shellcheck]
@@ -104,10 +88,6 @@ max_bytes   = 104857600
 url    = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
 sha256 = "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
 
-[tools.shellcheck.artifacts.arm64]
-url    = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
-sha256 = "12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
-
 # actionlint. Upstream actionlint_1.7.12_checksums.txt and the release asset digest agree.
 [tools.actionlint]
 version     = "1.7.12"
@@ -122,10 +102,6 @@ max_bytes   = 104857600
 [tools.actionlint.artifacts.amd64]
 url    = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
 sha256 = "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
-
-[tools.actionlint.artifacts.arm64]
-url    = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz"
-sha256 = "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
 
 # ---- pip (hash-locked: toolchain/python/builder.lock, installed with --require-hashes into <prefix>/venv)
 

@@ -84,13 +84,48 @@ def load(path):
         raise ManifestError("manifest is not valid TOML") from None
 
 
-def check_file(path, root):
-    """All validation errors for a manifest file (empty list means valid). Never raises for bad content."""
+def configured_architectures(root):
+    """(names, errors): the architectures of `config/project.yaml` under ROOT, read with the strict reader of pr-contract.
+
+    The engine stays generic (ADR-008 decision 8, CR-57 PA-30): the repository decides which architectures it supports. A missing
+    file or key means the default of that reader. The reader is imported here and not at the top, because the copy of the engine
+    that lab setup installs has no `pr_contract` next to it and never calls `check`.
+    """
+    where = "config/project.yaml"
+    try:
+        from pr_contract import config as project_config
+        from pr_contract.errors import ConfigError
+    except ImportError:
+        return (), [f"{where}: cannot be read (scripts/pr_contract is not next to the engine)"]
+    path = Path(root) / "config" / "project.yaml"
+    try:
+        parsed = project_config.parse_yaml(path.read_text(encoding="utf-8")) if path.is_file() else None
+        names = tuple(arch.name for arch in project_config.architectures(parsed))
+    except (OSError, UnicodeDecodeError):
+        return (), [f"{where}: cannot be read"]
+    except ConfigError as error:
+        return (), [f"{where}: architectures cannot be read ({error})"]
+    errors = [f"{where}: architecture {name} is not known to the engine (expected one of {', '.join(ARCHES)})" for name in names if name not in ARCHES]
+    if not names:
+        errors.append(f"{where}: architectures lists none")
+    return names, errors
+
+
+def check_file(path, root, configured=True):
+    """All validation errors for a manifest file (empty list means valid). Never raises for bad content.
+
+    CONFIGURED true (`check`): every download tool has an artifact for exactly the architectures of `config/project.yaml` and
+    for no other (CR-57 PA-30, O-4). False (install, verify, list): the artifacts are checked for form only, because the engine
+    copy that lab setup installs has no configuration file beside it.
+    """
     try:
         raw = load(path)
     except ManifestError as error:
         return [str(error).replace("valid TOML", "valid TOML (TOML syntax error)")]
-    return validate(raw, Path(root))
+    if not configured:
+        return validate(raw, Path(root))
+    names, errors = configured_architectures(root)
+    return errors + validate(raw, Path(root), names)
 
 
 def parse(raw):
@@ -110,7 +145,8 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def validate(raw, root):
+def validate(raw, root, architectures=None):
+    """ARCHITECTURES: the names a download tool must have artifacts for and may only have; None means any known name, none required."""
     errors: List[str] = []
     if raw.get("schema_version") != SCHEMA_VERSION or not _is_int(raw.get("schema_version")):
         errors.append("schema_version: missing or unknown (expected 1)")
@@ -130,7 +166,7 @@ def validate(raw, root):
         if not isinstance(entry, dict):
             errors.append(f"{label}: must be a table")
             continue
-        errors.extend(_validate_tool(label, entry, Path(root)))
+        errors.extend(_validate_tool(label, entry, Path(root), architectures))
         binaries = entry.get("binaries")
         if isinstance(binaries, list):
             for binary in binaries:
@@ -142,7 +178,7 @@ def validate(raw, root):
     return errors
 
 
-def _validate_tool(label, entry, root):
+def _validate_tool(label, entry, root, architectures=None):
     errors: List[str] = []
     source = entry.get("source")
     if source not in SOURCES:
@@ -164,7 +200,7 @@ def _validate_tool(label, entry, root):
     if source in ("download", "pip") and match is None:
         errors.append(f"{label}.smoke_match: required for {source}")
     if source == "download":
-        errors.extend(_validate_download(label, entry))
+        errors.extend(_validate_download(label, entry, architectures))
     elif source == "apt":
         errors.extend(_validate_apt(label, entry))
     else:
@@ -180,7 +216,7 @@ def _validate_binaries(label, entry):
     return []
 
 
-def _validate_download(label, entry):
+def _validate_download(label, entry, architectures=None):
     errors = []
     version = entry.get("version")
     version_ok = isinstance(version, str) and bool(_VERSION.fullmatch(version))
@@ -202,14 +238,20 @@ def _validate_download(label, entry):
             errors.append(f"{label}.format: binary requires strip 0 and exactly one binary name without a directory")
     artifacts = entry.get("artifacts")
     if not isinstance(artifacts, dict):
-        return errors + [f"{label}.artifacts: missing (amd64 and arm64 are both required)"]
-    for arch in ARCHES:
+        return errors + [f"{label}.artifacts: missing (one table per architecture of config/project.yaml is required)"]
+    listed = ARCHES if architectures is None else architectures
+    for arch in (listed if architectures is not None else ()):
         if arch not in artifacts:
-            errors.append(f"{label}.artifacts.{arch}: missing (both architectures are required)")
+            errors.append(f"{label}.artifacts.{arch}: missing (config/project.yaml lists {arch})")
+    if architectures is None and not artifacts:
+        errors.append(f"{label}.artifacts: missing (at least one architecture is required)")
     for arch, artifact in artifacts.items():
         alabel = f"{label}.artifacts.{arch}"
         if arch not in ARCHES:
-            errors.append(f"{alabel}: unknown architecture (expected amd64 or arm64)")
+            errors.append(f"{alabel}: unknown architecture (expected {' or '.join(ARCHES)})")
+            continue
+        if architectures is not None and arch not in architectures:
+            errors.append(f"{alabel}: artifact for an unlisted architecture (config/project.yaml lists {', '.join(architectures)})")
             continue
         if not isinstance(artifact, dict):
             errors.append(f"{alabel}: must be a table")

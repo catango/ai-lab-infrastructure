@@ -78,7 +78,7 @@ def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
                 print(line, file=out)
             print("toolchain: manifest ok" if not errors else f"toolchain: {len(errors)} manifest error(s)", file=out)
             return 1 if errors else 0
-        errors = manifest_module.check_file(path, root)
+        errors = manifest_module.check_file(path, root, configured=False)
         if errors:
             for line in errors:
                 print(line, file=err)
@@ -97,6 +97,9 @@ def main(argv=None, *, fetcher=None, runner=None, out=None, err=None):
             return 0
         arch = args.arch or detect_arch()
         runner = runner or run_command
+        for tool in manifest.for_profile(args.profile):
+            if tool.source == "download" and arch not in tool.artifacts and (args.command == "verify" or not args.only or args.only == tool.name):
+                raise UsageError(f"{tool.name}: the manifest has no artifact for architecture {arch}")
         if args.command == "install":
             if args.only and args.only not in manifest.tools:
                 raise UsageError("unknown tool for --only")

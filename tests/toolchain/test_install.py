@@ -18,6 +18,7 @@ class Base(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = pathlib.Path(self.tmp.name)
         self.prefix = self.root / "prefix"
+        # The engine is generic: install and verify take either architecture, so the arm64 path stays covered here (CR-57 PA-30).
         self.good = good_archive()
         self.arm = good_archive()
         self.fetcher = FakeFetcher({AMD64_URL: self.good, ARM64_URL: self.arm})

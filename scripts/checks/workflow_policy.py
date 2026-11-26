@@ -21,7 +21,7 @@ import sys
 
 CONFIG = "config/project.yaml"
 DEFAULT_ALLOWED = ("actions/checkout",)
-DEFAULT_LABELS = ("ubuntu-24.04", "ubuntu-24.04-arm")
+DEFAULT_LABELS = ("ubuntu-24.04",)
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 LABEL_RE = re.compile(r"[A-Za-z0-9_.-]+")
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")

@@ -218,7 +218,7 @@ class ReadingTheValues(unittest.TestCase):
         parsed = config.parse_yaml((helpers.ROOT / "config" / "project.yaml").read_text())
         self.assertEqual(config.operator_paths(parsed), OWN_PATHS)
         self.assertEqual(config.operator_endpoints(parsed), ("api.github.com",))
-        # CR-57 PR 5: the repository's own file lists amd64 only; the code default still lists arm64 until PR 6.
+        # CR-57 PR 5 and 6: the repository's own file and the code default both list amd64 only.
         self.assertEqual(config.architectures(parsed), (config.Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),))
 
     @unittest.skipUnless(HAVE_YQ, "yq is not installed")

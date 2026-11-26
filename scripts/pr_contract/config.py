@@ -7,8 +7,8 @@ keys outside the subset raises ConfigError, so PC-8 and PC-9 fail closed instead
 
     architectures: []                 # or a block list of mappings, the only two forms
     architectures:
-      - name: arm64                   # keys name, runner, runner_private; values plain, "double" or 'single' quoted,
-        runner: ""                    # of letters, digits, `.`, `_`, `-` only (no escapes); an omitted value is null
+      - name: amd64                   # keys name, runner, runner_private; values plain, "double" or 'single' quoted,
+        runner: ubuntu-24.04          # of letters, digits, `.`, `_`, `-` only (no escapes); an omitted value is null
         runner_private: ubuntu-24.04
 
     operator_paths: []                # or a block list of plain strings, the only two forms (PC-8, CR-57 PA-A6)
@@ -29,8 +29,8 @@ avoid them in the two lists. tests/pr-contract/test_pc9_inputs.py and test_opera
 
 `architectures` is a list of mappings with `name`, `runner` (the label for a public repository), and `runner_private` (the label
 for a private one). An empty label means the repository has no runner for that architecture. When the key is absent the default
-applies: amd64 on the hosted runner, and arm64 on the free public ARM64 runner with no private one, because no metered ARM64
-runner is used (design section 7, Q14).
+applies: amd64 on the hosted runner only. This repository supports amd64 only (CR-57 PA-30, O-24); a repository that supports
+another architecture lists it in its own configuration.
 
 `operator_paths` is the operator set of rule PC-8. `operator_paths(config)` returns its entries as a tuple, an empty tuple for an
 explicit `[]` (PC-8 is then inactive), and raises ConfigError for a missing or malformed key (PC-8 then fails closed). An entry
@@ -79,10 +79,7 @@ class Arch:
         return self.runner_private if private else self.runner
 
 
-DEFAULT_ARCHITECTURES = (
-    Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),
-    Arch("arm64", "ubuntu-24.04-arm", ""),
-)
+DEFAULT_ARCHITECTURES = (Arch("amd64", "ubuntu-24.04", "ubuntu-24.04"),)
 
 
 def _scalar(text):
