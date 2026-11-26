@@ -24,11 +24,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # The builder toolchain (checksum-verified, hash-locked) provides every linter in a temporary prefix.
-      - name: Install the builder toolchain
+      # The lab toolchain (checksum-verified, hash-locked) provides every linter in a temporary prefix.
+      - name: Install the lab toolchain
         shell: bash
         run: |
-          python3 -I scripts/toolchain install --profile builder --prefix "$RUNNER_TEMP/toolchain"
+          python3 -I scripts/toolchain install --profile lab --prefix "$RUNNER_TEMP/toolchain"
           echo "$RUNNER_TEMP/toolchain/bin" >> "$GITHUB_PATH"
 
       # Ansible is the one bootstrap tool that comes from the distribution archive (design 3.5).
@@ -63,7 +63,7 @@ jobs:
     env:
       AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
-      # What a fresh operator VM has before the operator configuration: Ansible, git, and an installed sshd (it is reached over SSH). git
+      # What a fresh operator machine has before the operator configuration: Ansible, git, and an installed sshd (it is reached over SSH). git
       # comes first: without it the checkout action downloads an archive and the workspace is not a repository.
       - name: Bootstrap Ansible, git, and sshd from the Debian archive
         shell: bash
@@ -158,7 +158,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Installs every builder tool for this architecture, runs each smoke command and compares the
+      # Installs every lab tool for this architecture, runs each smoke command and compares the
       # version, re-downloads every artifact to compare checksums, and installs again to prove it is
       # idempotent (no change, no download).
       - name: Install, verify, and re-run
@@ -167,9 +167,9 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: |
           prefix="$RUNNER_TEMP/toolchain"
-          python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH"
-          python3 -I scripts/toolchain verify --profile builder --prefix "$prefix" --arch "$ARCH" --download --skip-apt | tee "$RUNNER_TEMP/verify.txt"
-          python3 -I scripts/toolchain install --profile builder --prefix "$prefix" --arch "$ARCH" | tee "$RUNNER_TEMP/second-run.txt"
+          python3 -I scripts/toolchain install --profile lab --prefix "$prefix" --arch "$ARCH"
+          python3 -I scripts/toolchain verify --profile lab --prefix "$prefix" --arch "$ARCH" --download --skip-apt | tee "$RUNNER_TEMP/verify.txt"
+          python3 -I scripts/toolchain install --profile lab --prefix "$prefix" --arch "$ARCH" | tee "$RUNNER_TEMP/second-run.txt"
           grep -qx 'changed=0' "$RUNNER_TEMP/second-run.txt"
 
       - name: Job summary
@@ -190,7 +190,7 @@ jobs:
   # become) with two accounts and one key each. It runs in a disposable clone whose local bare origin has main at the head of the
   # pull request and an unpushed local v* test tag on that commit, so the release check of the playbook runs for real and has no
   # bypass; an untagged tree is refused. The refusal fixtures, the first run, the second run (zero changes), and the dry run (the
-  # tree hash is unchanged) are steps of tests/ansible/pa28-lab.sh. This job replaces builder-profile. The token step fixtures and the
+  # tree hash is unchanged) are steps of tests/ansible/pa28-lab.sh. The token step fixtures and the
   # lab check are steps of it (plan PR 3); the operator half of the PA-28 job is the job operator-profile (plan PR 4).
   # The container has no systemd: a real sshd restart after a second login, `sshd -T` of a running daemon, and the
   # unattended-upgrade units are the approver check PA-A33.
@@ -204,7 +204,7 @@ jobs:
     env:
       AI_LAB_ALLOW_SYSTEM_CHANGES: "1"
     steps:
-      # What a fresh lab VM has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH). git comes first:
+      # What a fresh lab has before lab setup: Ansible, git, and an installed sshd (it is reached over SSH). git comes first:
       # without it the checkout action downloads an archive and the workspace is not a repository.
       - name: Bootstrap Ansible, git, sshd, and jq from the Debian archive
         shell: bash
@@ -242,10 +242,9 @@ jobs:
         shell: bash
         run: tests/ansible/pa28-lab.sh dry-run
 
-      # The alias of the CR-2 name: the engine still accepts `builder` and means `lab` (plan PR 7 removes it).
       - name: Verify the toolchain
         shell: bash
-        run: python3 -I scripts/toolchain verify --profile builder --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
+        run: python3 -I scripts/toolchain verify --profile lab --prefix /opt/ai-lab | tee "$RUNNER_TEMP/verify.txt"
 
       - name: Managed files, write attempts as the AI user, and the sshd settings in force
         shell: bash

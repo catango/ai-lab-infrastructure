@@ -66,11 +66,12 @@ class RealManifest(unittest.TestCase):
         lab = engine("list", "--profile", "lab", "--format", "json")
         self.assertEqual(lab.returncode, 0, lab.stderr)
         self.assertGreater(len(json.loads(lab.stdout)), 5)
-        for verb in ("list", "install", "verify"):
-            with self.subTest(verb=verb):
-                refused = engine(verb, "--profile", "builder", "--prefix", "/nonexistent")
+        for argv in (("list",), ("install", "--prefix", "/nonexistent"), ("verify", "--prefix", "/nonexistent")):
+            with self.subTest(argv=argv):
+                refused = engine(*argv[:1], "--profile", "builder", *argv[1:])
                 self.assertEqual(refused.returncode, 2, refused.stdout + refused.stderr)
-                self.assertIn("invalid choice", refused.stderr)
+                self.assertIn("invalid usage", refused.stderr)
+                self.assertEqual(refused.stdout, "")
 
     def test_every_operator_tool_has_a_version_minimum_and_a_smoke_command(self):
         import tomllib

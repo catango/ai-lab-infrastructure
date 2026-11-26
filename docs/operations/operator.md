@@ -117,17 +117,13 @@ is not that confirmation).
 ### 3.4 Confirm the operator login, then lock the initial account
 
 1. **Set the operator's sudo password.** The profile creates the account without a password, and sudo needs one. From the initial
-   account: `sudo passwd <operator-user>` (the name is the profile variable `operator_user_name`). The password never goes in the
+   account: `sudo passwd <operator-user>` (the name of the operator account). The password never goes in the
    repository.
 2. Log in as the operator user from a second session, with the key from `/etc/operator/authorized_keys`. Confirm `sudo` asks for
    the password.
-3. **Do not run the lock play before step 2 works.** It closes SSH access of the provider's initial account; with no working
-   operator login you would lock yourself out. Then run it:
-
-   ```bash
-   ansible-playbook -i ansible/inventory/localhost.yml ansible/operator.yml --tags operator_lock --ask-become-pass \
-     -e operator_apply=true -e operator_login_confirmed=true -e operator_initial_account=<initial-account>
-   ```
+3. **Do not close the provider's initial account before step 2 works.** With no working operator login you would lock yourself
+   out. The lock play of the Ubuntu profile (role `operator_lock`) was removed in CR-57 plan PR 7: closing SSH access of the
+   initial account is a manual line until PR 9 rewrites this runbook.
 
 4. Confirm the operator login still works from a third session.
 
@@ -157,7 +153,7 @@ fallback exists until then. Report "retired: yes/no".
 
 Check, as the approver:
 
-- **U-2:** `workspace/verify.sh` check V-4 passes on Z1 as the AI user, and no operator credential exists on Z1 or Z2.
+- **U-2:** no operator credential exists on Z1 or Z2 (the workspace verify script that used to check it was removed in CR-57 plan PR 7; a manual line until PR 9).
 - **U-3:** no credential, token, or raw response of an operator run exists in the repository, in an AI user's home, or in shell
   history.
 

@@ -120,7 +120,7 @@ class Structure(unittest.TestCase):
             self.assertNotRegex(path.read_text(), r"release_check_skip|skip_release|ignore_release|release_bypass", path.name)
 
     def test_the_legacy_builder_playbook_is_gone_and_every_playbook_refuses_without_a_release_tag(self):
-        """The CR-2 playbook ran toolchain-only with no release check, for workspace/restore.sh; both were removed in plan PR 7."""
+        """The CR-2 playbook ran toolchain-only with no release check, for the workspace restore script; both were removed in plan PR 7."""
         self.assertFalse((ANSIBLE / "builder.yml").exists())
         for name in ("lab.yml", "operator.yml"):
             self.assertIn("name: release_check", (ANSIBLE / name).read_text(), name)
@@ -286,9 +286,9 @@ class ManagedFiles(unittest.TestCase):
                      "Never run `sudo` or install software. Propose the exact commands for the user to run."):
             self.assertIn(rule, managed)
             self.assertNotIn(rule, user)
-        # What stays in the user-level file until PR 9: the workflow rule. The restore rule went with workspace/restore.sh (PR 7); the
+        # What stays in the user-level file until PR 9: the workflow rule. The restore rule went with the restore script (PR 7); the
         # managed file keeps the T1 rule (`gh auth login`, plain SSH terminal).
-        self.assertNotIn("workspace/restore.sh", user)
+        self.assertNotIn("restore.sh", user)
         self.assertIn("Never run `gh auth login`. Token T1 is entered only by the user, in a plain SSH terminal", managed)
         self.assertIn("Commit and push after each completed checklist item", user)
 

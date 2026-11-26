@@ -13,7 +13,7 @@ arch_map:
 ai_lab_become: "{{ ansible_facts['user_id'] != 'root' }}"
 
 # Preflight expectations (overridable with -e for the negative tests).
-# The lab profile (ADR-012, ADR-005): the AI lab, Debian 13 on x86-64. `builder` was its CR-2 name.
+# The lab profile (ADR-012, ADR-005): the AI lab, Debian 13 on x86-64.
 lab_expected_os: Debian
 lab_expected_major: "13"
 lab_expected_arch: x86_64
@@ -27,13 +27,4 @@ operator_apply: false
 operator_expected_os: Debian
 operator_expected_major: "13"
 operator_expected_arch: x86_64
-
-# Used only by the roles of the CR-18 Ubuntu profile that no profile applies any more (operator_firewall, operator_lock, operator_sudo,
-# operator_system, operator_ssh); plan PR 7 deletes them with these lines.
-# A role name, not a person: the account the approver logs in with and that holds sudo (with a password).
-operator_user_name: operator
-# Root-owned public keys for the operator login, provided by the approver or by cloud-init. Never in the repository.
-operator_authorized_keys_file: /etc/operator/authorized_keys
-operator_firewall_enabled: true
-operator_firewall_revert_seconds: 300
 # Local execution only: nothing in this repository connects to another host (CLAUDE.md).

@@ -168,10 +168,10 @@ Per D17, chat gets **read-only** access to the public repositories through Claud
 
 ## Part 12: First login on the workspace (10 min)
 
-Use a **plain SSH terminal** (Windows OpenSSH, via your hops), **not** a Claude session. Later restores use `workspace/restore.sh` (D16); this is the one-time manual equivalent.
+Use a **plain SSH terminal** (Windows OpenSSH, via your hops), **not** a Claude session. This is the one-time manual login of the machine account.
 
 ```bash
-# 1. Base tools; the builder profile will later manage versions
+# 1. Base tools; the lab profile will later manage versions
 sudo apt-get update && sudo apt-get install -y git gh
 
 # 2. Log in as the machine account; the token is read without echo and not stored in shell history
