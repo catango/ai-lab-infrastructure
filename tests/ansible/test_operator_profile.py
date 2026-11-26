@@ -31,8 +31,8 @@ def tasks(role, name="main.yml"):
     return (ANSIBLE / "roles" / role / "tasks" / name).read_text()
 
 
-def everything():
-    return {p.relative_to(ANSIBLE).as_posix(): p.read_text() for p in ANSIBLE.rglob("*.yml") if "operator" in p.as_posix()}
+def everything(ansible=ANSIBLE):
+    return {p.relative_to(ansible).as_posix(): p.read_text() for p in ansible.rglob("*.yml") if "operator" in p.relative_to(ansible).as_posix()}
 
 
 def operator_yml():
@@ -183,6 +183,17 @@ class Privilege(unittest.TestCase):
         text = tasks("operator_checks")
         self.assertIn("{{ operator_tools_dir }}/operator-check", text)
         self.assertIn("/usr/sbin/runuser", text)
+
+
+class Selection(unittest.TestCase):
+    def test_everything_selects_by_the_path_inside_ansible_not_by_where_the_checkout_is(self):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="operator-") as tmp:  # a checkout whose own path says "operator"
+            ansible = pathlib.Path(tmp) / "operator-checkout" / "ansible"
+            for name in ("operator.yml", "roles/operator_tools/tasks/main.yml", "group_vars/all.yml", "roles/apt_base/tasks/main.yml"):
+                (ansible / name).parent.mkdir(parents=True, exist_ok=True)
+                (ansible / name).write_text("---\n")
+            self.assertEqual(sorted(everything(ansible)), ["operator.yml", "roles/operator_tools/tasks/main.yml"])
 
 
 class Tools(unittest.TestCase):
