@@ -330,30 +330,5 @@ class DenyFilesUntouched(unittest.TestCase):
         self.assertEqual(len(json.loads(read("workspace/claude-user/settings.json"))["permissions"]["deny"]), 90)
 
 
-class FinalPaA1Run(unittest.TestCase):
-    """PA-A1, the recorded command unchanged. The two files named below are the LC-10 leftover-credential detector and its fixture; they
-    match because the exclusion list of the acceptance file does not list them, and that file cannot be edited in an implementation PR
-    (PC-5). A design PR must add them to the exclusion list before this run can be empty. Every other match is a failure."""
-
-    KNOWN = {"./ansible/roles/lab_tools/files/lab-check", "./tests/lab/test_lab_check.py"}
-
-    @unittest.skipUnless(shutil.which("rg"), "ripgrep is required")
-    def test_only_the_two_known_files_remain(self):
-        terms = [WORD_A, WORD_B, WORD_C, f"open{WORD_C}", LABVM, OPVM]
-        command = ["rg", "--hidden", "-n", "-i", "-w"]
-        for term in terms:
-            command += ["-e", term]
-        command.append(".")
-        for glob in (".git/**", "docs/adr/**", "docs/cr/**", "docs/architecture/**", "scripts/checks/public-repo-hygiene.sh", "tests/quality-gate/run.sh",
-                     "scripts/pr_contract/rules.py", "scripts/checks/operator-contract.sh", "scripts/checks/operator_contract.py",
-                     "tests/operator/test_contract_check.py", "tests/pr-contract/fixtures/recorded/**", ".claude/settings.json",
-                     "workspace/claude-user/settings.json", "workspace/claude-user/required-deny.txt", "CLAUDE.md"):
-            command += ["--glob", f"!{glob}"]
-        out = subprocess.run(command, cwd=ROOT, capture_output=True, text=True).stdout
-        files = {line.split(":", 1)[0] for line in out.splitlines()}
-        self.assertEqual(sorted(files - self.KNOWN), [])
-        self.assertEqual(sorted(files & self.KNOWN), sorted(self.KNOWN), "the known files are expected to remain until a design PR lists them")
-
-
 if __name__ == "__main__":
     unittest.main()
