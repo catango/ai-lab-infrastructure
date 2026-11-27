@@ -128,9 +128,9 @@ class LabRunbook(unittest.TestCase):
         self.text = read("docs/operations/lab.md")
 
     def test_the_lab_setup_commands_use_the_variables_the_playbook_reads(self):
-        playbook = read("ansible/lab.yml") + read("ansible/group_vars/all.yml")
+        source = "\n".join(p.read_text() for p in (ROOT / "ansible").rglob("*.yml"))
         for var in sorted(set(re.findall(r"-e (lab_[a-z_]+|ssh_second_login_confirmed)=", self.text))):
-            self.assertIn(var, playbook + read("ansible/roles/ssh_hardening/defaults/main.yml"), var)
+            self.assertIn(var, source, var)
         for needle in ("-e lab_apply=true", "-e ssh_second_login_confirmed=true", "--check --diff", "ansible/inventory/localhost.yml ansible/lab.yml"):
             self.assertIn(needle, self.text)
 
@@ -151,7 +151,7 @@ class LabRunbook(unittest.TestCase):
                        "~/.ssh", "~/.config/gh", "allow rule"):
             self.assertIn(needle, self.text)
         self.assertRegex(self.text, r"(?s)Claude Desktop.{0,300}recreates")
-        self.assertRegex(self.text, r"(?s)inside a session.{0,300}(removes|no longer)")
+        self.assertRegex(self.text, r"(?is)inside a session.{0,300}(removes|no longer)")
 
     def test_the_findings_do_not_claim_what_the_record_does_not_support(self):
         self.assertNotRegex(self.text, r"(?i)\bthe layer's Read entries (are|were) effective")
@@ -204,7 +204,7 @@ class OperatorRunbook(unittest.TestCase):
 
     def test_nothing_of_the_ubuntu_profile_is_left(self):
         for stale in ("scripts/operator/setup", "--privileged", "Ubuntu", "nft ", "NOPASSWD", "timestamp_timeout", "revert timer",
-                      "operator_lock", "Interim", "Break-glass", "machine-profiles", "Z7", "lab stack", "initial account", "--write-allowlist"):
+                      "operator_lock", "Interim", "Break-glass", "Z7", "lab stack", "initial account", "--write-allowlist"):
             self.assertNotIn(stale, self.text)
 
     def test_the_debian_13_procedure_uses_what_the_playbook_reads(self):

@@ -1,71 +1,66 @@
 # Documentation index
 
 Open only the document and section relevant to the task. Decision status is tracked in the
-[decision index](architecture/baseline-v0.2.md#4-decision-index) of the baseline; it is not repeated here.
+[decision index](architecture/baseline-v0.2.md#4-decision-index) of the baseline; the status cells here are short.
 
 ## Architecture
 
 | Document | Purpose | Status |
 |---|---|---|
-| [Architecture baseline v0.2](architecture/baseline-v0.2.md) | Constraints without OCI, component map (AI labs, operator machine, lab host), decision index, build sequence | Accepted (CR-57, 2026-11-23, approved by merge of design PR 58) |
-| [Architecture baseline v0.1](architecture/baseline-v0.1.md) | Component map, decision index, build sequence, designs still to write | Superseded by baseline v0.2 (CR-57, merged 2026-11-23); kept as history so links survive |
+| [Architecture baseline v0.2](architecture/baseline-v0.2.md) | Constraints, component map (AI labs, operator machine, lab host), decision index, build sequence | Accepted (CR-57, 2026-11-23) |
+| [Architecture baseline v0.1](architecture/baseline-v0.1.md) | Earlier component map and decision index | Superseded by baseline v0.2; kept so links survive |
 
 ## Architecture decision records
 
 | Document | Purpose | Status |
 |---|---|---|
-| [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, workspace restore, guardrails | Accepted; amended by ADR-011 (zones Z6 and Z7, credential rows); amended by CR-57 (design PR 58 merged 2026-11-23): AI labs and the operator machine (ADR-012), zones Z1, Z6, Z8, lab setup and the token step replace the restore; amended by CR-57 follow-up R-2 (Proposed): decisions 6 and 7, sections 4a and 5 settings location, AC1-5 evidence, RR-8, LC-1 to LC-16 |
-| [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Accepted, conditional on Spike S2; superseded by CR-57 (design PR 58 merged 2026-11-23) |
-| [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted; rule PC-8 (CR-21) in force; amended by CR-39 (Proposed): application-repository contract, init PR, qualified references; amended by CR-57 follow-up R-1 (PR 59 merged 2026-11-23): PC-8 refers to the `operator_paths` key, AI lab wording, ADR-002 citations |
-| [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; amended by ADR-011 (the `operator` profile); scope amended by CR-39 (Proposed): the template's CI manifest is not a host profile; amended by CR-57 (design PR 58 merged 2026-11-23): `lab` and `operator` profiles on Debian 13, amd64 only |
-| [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: rules for credentialed and extended-permission scripts (dry run by default, release tags, prompted credentials, sanitised output, standard-library Python) | Accepted (2026-11-18, merge of the CR-18 design PR); amended by CR-57 (design PR 58 merged 2026-11-23): the lab operator machine, OCI, alarms, lab access, and the Ubuntu profile dropped; ADR-012 describes the operator machine |
-| [ADR-012](adr/ADR-012-host-model.md) | Host model: AI lab, operator machine, lab host (zones Z1, Z6, Z8); credential placement, accounts and keys, lab contract, operator contract, lab setup, token step, project toolchains | Accepted (CR-57, 2026-11-23, merge of design PR 58); amended by CR-57 follow-up R-2 (Proposed): decision 14 (user-level deny layer), LC-16, RR-P12 to RR-P16 |
-| [ADR-008](adr/ADR-008-software-template.md) | Software template: structure, `CLAUDE.md`, rules, Skills, CR and ADR templates, template-sync, template gate and CI | Accepted (2026-11-19, merge of the CR-39 design PR #40) |
-| [ADR-009](adr/ADR-009-security-and-ci-baseline.md) | Security and CI baseline: required checks, Actions hardening, repository security features on GitHub Free, fork PRs, evidence line, printed rulesets, gate-check catalogue | Accepted (2026-11-20, merge of the CR-43 design PR #44); amended ADR-001, ADR-003, ADR-005, and ADR-008; amended by CR-57 follow-up R-1 (PR 59 merged 2026-11-23): status line, decision 11 wording, `operator_endpoints` in decision 14, Related row |
-| [ADR-010](adr/ADR-010-token-optimisation-and-metrics.md) | Token optimisation and metrics: size budgets and loading order, checkpoint format, concise CI output, review-loop cost, metrics tiers, baseline and regression | Accepted (2026-11-20, merge of the CR-45 design PR #46, decisions Q1 to Q15 applied; amends ADR-003 section 7 and ADR-008); status line corrected to Accepted by CR-57 follow-up R-1 (PR 59 merged 2026-11-23) |
+| [ADR-001](adr/ADR-001-trust-model-and-execution.md) | Trust model, execution hosts, credential placement, guardrails | Accepted; amended by ADR-011, CR-57 (ADR-012, lab setup and the token step), and CR-57 follow-up R-2 (user-level deny layer) |
+| [ADR-002](adr/ADR-002-infrastructure-deployment-pipeline.md) | Infrastructure deployment pipeline | Superseded by CR-57 |
+| [ADR-003](adr/ADR-003-pr-centric-workflow.md) | PR-centric workflow, change classes, `pr-contract` | Accepted; PC-8 reads `operator_paths` (CR-57 follow-up R-1) |
+| [ADR-005](adr/ADR-005-toolchain.md) | Toolchain manifest, profiles, install sources | Accepted; `lab` and `operator` profiles on Debian 13, amd64 only (CR-57) |
+| [ADR-008](adr/ADR-008-software-template.md) | Software template: structure, `CLAUDE.md`, rules, Skills, template-sync, template gate | Accepted (CR-39) |
+| [ADR-009](adr/ADR-009-security-and-ci-baseline.md) | Security and CI baseline: required checks, Actions hardening, rulesets, check catalogue | Accepted (CR-43) |
+| [ADR-010](adr/ADR-010-token-optimisation-and-metrics.md) | Token optimisation and metrics: size budgets, loading order, checkpoint format, metrics tiers | Accepted (CR-45) |
+| [ADR-011](adr/ADR-011-operator-tier.md) | Operator tier: rules for credentialed and extended-permission scripts | Accepted; amended by CR-57 (the lab operator machine, cloud provisioning, and the Ubuntu profile dropped) |
+| [ADR-012](adr/ADR-012-host-model.md) | Host model: AI lab, operator machine, lab host; credentials, accounts and keys, LC-1 to LC-16, OC-1 to OC-12, lab setup, token step, project toolchains | Accepted (CR-57); decision 14 and LC-16 by follow-up R-2 |
 
-ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 section 7 and were never written; baseline v0.2 withdraws them (CR-57, PA-38) and their numbers are not reused.
+ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 and never written; baseline v0.2 withdraws them.
 
 ## Change requests
 
 | CR | Summary | Status |
 |---|---|---|
-| [CR-2](cr/CR-2/README.md) | Stage 1 workspace foundation: toolchain, restore, quality gate, `pr-contract`, CI | Implemented in six PRs; closes with the last one. The timed reset test (AC1-7) is run by the approver |
-| [CR-18](cr/CR-18/README.md) | Operator tier: two dedicated machines run reviewed scripts for credentialed and extended-permission tasks (facts, GitHub setup, acceptance tests) | Design approved (ADR-011 Accepted). PRs 1 to 5 merged (release v0.4.4); PR 7a (runbook and evidence table, #38) merged 2026-11-19. The lab operator VM, PR 6 (`acceptance`), and PR 7b wait for the OCI VMs, which are postponed (approver, 2026-11-19). Open until PR 7b merges. CR-57 (design PR 58 merged 2026-11-23): to be closed by PR comment, the approver's step U-1 of the CR-57 plan (whether it is done is not recorded here) (Q6); its generic parts are carried by ADR-012 (operator contract) and the amended ADR-011 |
-| [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section required for changes to operator code | Implemented (design PR #22 and implementation PR #24 merged, 2026-11-18) |
-| [CR-39](cr/CR-39/README.md) | Software template design (ADR-008): structure, `CLAUDE.md`, rules, Skills, template-sync, template gate and CI, Stage 5 dry run | Design merged (PR #40, 2026-11-19) with the approver's decisions Q1 to Q14 applied. Also amends ADR-003 and ADR-005 |
-| [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009): required checks, Actions hardening, GitHub Free feature matrix, fork PRs, evidence line, rulesets, check catalogue, rule sharing | Design merged (PR #44, 2026-11-20); also amended ADR-001, ADR-003, ADR-005, and ADR-008. Nothing is implemented |
-| [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010): budgets, loading order, checkpoint format, CI output, review-loop cost, metrics tiers, baseline and regression | Design merged (PR #46, 2026-11-20) with the approver's decisions Q1 to Q15 applied. Also amends ADR-003 and ADR-008. Nothing is implemented |
-| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: preconfigured AI and integrated GitHub workflows, per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, OCI discarded | Design merged (PR 58, 2026-11-23) with the approver's decisions of rounds 1 to 5. Adds ADR-012 and baseline v0.2, supersedes ADR-002, amends ADR-001, ADR-005, and ADR-011. Follow-up R-1 merged (PR 59: corrections of ADR-003, ADR-009, and ADR-010). Implementation PRs 0 to 4 merged (PR 4 is #64, release tag `v0.7.0`); PRs 5 to 10 not started. Follow-up R-2 (design PR 65, Proposed): a user-level deny layer for AI labs where an organisation policy outranks the managed file (design section 13, PA-47 to PA-57, plan PR 4a) |
+| [CR-2](cr/CR-2/README.md) | Stage 1 foundation: toolchain, quality gate, `pr-contract`, CI | Implemented; the timed reset test (AC1-7) is the approver's |
+| [CR-18](cr/CR-18/README.md) | Operator tier: reviewed scripts for credentialed tasks (facts, GitHub setup) | PRs 1 to 5 and 7a merged; the rest is carried by ADR-012 and ADR-011; to be closed by the approver (CR-57 step U-1) |
+| [CR-21](cr/CR-21/README.md) | ADR-003 rule PC-8: operator script review section | Implemented |
+| [CR-39](cr/CR-39/README.md) | Software template design (ADR-008) | Design merged |
+| [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009) | Design merged; nothing implemented |
+| [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010) | Design merged; nothing implemented |
+| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, no cloud provisioning | Design merged (PR 58); implementation PRs 0 to 8 and 4a merged, PR 9 (runbooks and `CLAUDE.md`) in review, PR 10 not started |
 
 ## Operations
 
 | Document | Purpose | Status |
 |---|---|---|
-| [Operator machines](operations/operator.md) | Runbook for the operator machine: platform operator VM, tokens T2 and T3, rollback | Platform operator VM sections active. Break-glass section not written |
-| [GitHub setup](operations/github-setup.md) | Stage 0 runbook: accounts, repositories, rulesets, token; the scripted parts point at `github-setup`, the manual steps they replaced are in Appendix A | Executed (Stage 0 complete); shortened by CR-18 |
+| [AI host](operations/ai-host.md) | Hosts the AI user needs, the lab and operator contracts, the user-level deny layer (LC-16), the manual probe | Active |
+| [AI lab runbook](operations/lab.md) | Lab setup, token step, lab check, project toolchains, what the PA-A38 check showed, pre-disposal | Active |
+| [New project](operations/new-project.md) | Repository, AI lab, token step, `initialize-project`, operator scripts, allowlist audit, the two-prompt probe | Active |
+| [Operator machine](operations/operator.md) | Operator configuration, projects, tokens T2 and T3, separation test, rollback | Active |
+| [GitHub setup](operations/github-setup.md) | Stage 0 runbook: accounts, repositories, rulesets, token; scripted parts point at `github-setup`, replaced manual steps are in Appendix A | Executed; shortened by CR-18 |
 
-## Configuration and workflow files
+## Configuration, workflow, and tooling
 
-| File | Purpose | Status |
-|---|---|---|
-| [CLAUDE.md](../CLAUDE.md) | Instructions for Claude Code in this repository | Active |
-| [config/project.yaml](../config/project.yaml) | Approver and machine account logins, and the `architectures` with their runner labels (read from the base commit by rule PC-9), read by scripts | Active |
-| [.claude/settings.json](../.claude/settings.json) | Claude Code project guardrails (ADR-001 section 5) | Active |
-| [.github/PULL_REQUEST_TEMPLATE/](../.github/PULL_REQUEST_TEMPLATE/) | PR templates per type (ADR-003 rule PC-1) | Active |
-| [.github/ISSUE_TEMPLATE/cr.md](../.github/ISSUE_TEMPLATE/cr.md) | Change request intake | Active |
-
-## Tooling and automation (Stage 1)
-
-| Path | Purpose | Status |
-|---|---|---|
-| [scripts/quality-gate.sh](../scripts/quality-gate.sh) | Quality gate: the checks in `scripts/checks/` (same entry point locally and in CI) | Active |
-| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-9 (run from the base checkout in CI); PR body skeleton from a template | Active |
-| [scripts/gate-evidence](../scripts/gate-evidence) | Runs the quality gate on a host and prints the one evidence line for an architecture with no runner (rule PC-9) | Active |
-| [scripts/toolchain](../scripts/toolchain) | Install engine for the toolchain manifest: `check`, `list`, `install`, `verify` | Active |
-| [toolchain/manifest.toml](../toolchain/manifest.toml) | Tools, exact versions, per-architecture URLs and checksums (ADR-005) | Active |
-| [ansible/](../ansible/) | The `lab` and `operator` profiles (Debian 13, x86-64; CR-57), the shared SSH hardening role, the release check, and the managed settings | Active |
-| [workspace/claude-user/](../workspace/claude-user/) | User-level Claude Code settings (the source of the managed settings of lab setup), the required deny list, and the remaining user-level instructions | Active |
-| [scripts/operator/machine-profiles.toml](../scripts/operator/machine-profiles.toml) | Architecture, OS, memory, CPU, disk, and bandwidth of the operator machine, no identifiers (CR-18; created by the `operator-lib` PR) | Active. The platform operator VM entry holds architecture and OS only (its measured memory, CPU, and disk are not in the file yet) |
-| [.github/workflows/](../.github/workflows/) | `ci.yml` (`quality-gate`, `toolchain-amd64`, `host-profiles`, `operator-profile`) and `pr-contract.yml` | Active |
-| [.github/dependabot.yml](../.github/dependabot.yml) | Weekly version updates for the pinned Actions and the Python lock | Active |
+| Path | Purpose |
+|---|---|
+| [CLAUDE.md](../CLAUDE.md) | Instructions for Claude Code in this repository |
+| [config/project.yaml](../config/project.yaml) | Logins, `architectures`, `operator_paths`, `operator_endpoints`; read by scripts and by `pr-contract` from the base commit |
+| [.claude/settings.json](../.claude/settings.json) | Claude Code project guardrails (ADR-001 section 5) |
+| [.github/PULL_REQUEST_TEMPLATE/](../.github/PULL_REQUEST_TEMPLATE/), [.github/ISSUE_TEMPLATE/cr.md](../.github/ISSUE_TEMPLATE/cr.md) | PR templates per type (ADR-003 PC-1); change request intake |
+| [scripts/quality-gate.sh](../scripts/quality-gate.sh) | Quality gate: the checks in `scripts/checks/` (same entry point locally and in CI) |
+| [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-9; PR body skeleton from a template |
+| [scripts/gate-evidence](../scripts/gate-evidence) | Prints the evidence line for an architecture with no runner (rule PC-9) |
+| [scripts/toolchain](../scripts/toolchain), [toolchain/manifest.toml](../toolchain/manifest.toml) | Install engine (`check`, `list`, `install`, `verify`); tools, exact versions, URLs, checksums (ADR-005) |
+| [ansible/](../ansible/) | The `lab` and `operator` profiles (Debian 13, x86-64), the shared SSH hardening role, the release check, managed settings, the deny layer, project toolchains |
+| [workspace/claude-user/](../workspace/claude-user/) | User-level settings (the source of the managed settings), the required deny list, user-level instructions |
+| [scripts/operator/](../scripts/operator/) | Operator scripts (`facts`, `github-setup`) and `machine-profiles.toml` (sizes of the operator machine, no identifiers) |
+| [.github/workflows/](../.github/workflows/), [.github/dependabot.yml](../.github/dependabot.yml) | `ci.yml` and `pr-contract.yml`; weekly updates for the pinned Actions and the Python lock |
