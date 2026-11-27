@@ -8,8 +8,8 @@
 # installed lab check as the AI user: the gap lab setup still leaves, a complete lab, failures a container can show, the pre-disposal
 # mode; the tree hash is unchanged), deny-probe (plan PR 4a, PA-56: does the filesystem of /home take the immutable attribute here?),
 # deny-layer (the user-level deny layer: with the attribute the write attempts of the AI user all fail and each root change makes LC-16
-# fail; without it the fail-closed fixture runs and the job says `immutability not testable here`). A real sshd restart, `sshd -T` of a
-# running daemon, and the unattended-upgrade units are PA-A33.
+# fail; without it the fail-closed fixture runs and the job says `immutability not testable here`), project (plan PR 8, see below). A
+# real sshd restart, `sshd -T` of a running daemon, and the unattended-upgrade units are PA-A33.
 # The operator half of the PA-28 job is pa28-operator.sh in a second container: the two profiles own the same sshd drop-in.
 # The script changes /etc, so it runs only as root on a disposable host.
 set -euo pipefail
@@ -623,6 +623,172 @@ deny_fail_closed() {
   ok "mode both fails closed without the attribute, names the errno, and leaves no file"
 }
 
+# project: plan PR 8, PA-34, PA-A23, PA-A31 (I-7, O-18, O-22, R-2). A project repository owned by the AI user (a merged-by-choice commit
+# the user supplies, with the project's CI manifest, a package list, a seeded .claude/deny.platform.txt, and a planted scripts/toolchain
+# that writes a sentinel when run). The dry run prints every package name and version and changes nothing; the apply needs the digest of
+# that dry run; the tools land root-owned in /opt/ai-lab/project; the smoke test prints the AI user's own name; the AI user cannot change
+# the tools or the records; the project's scripts/toolchain never runs; a second run changes nothing; one list feeds deny.txt, the managed
+# settings, and the layer; a third-party apt source is refused before anything changes; the lab check passes and then fails for a listed
+# path that the project's file does not cover.
+readonly PROJECT_TOOLS=/opt/ai-lab/project RECORD=/opt/ai-lab/lab/project
+project_commit() { # project_commit MESSAGE: commit the working tree of the fixture project as the AI user, print the SHA
+  # shellcheck disable=SC2016 # the command is for the inner shell, which expands ~ and $1
+  as_ai bash -c 'cd ~/work/project-fixture && git add -A && git -c user.name=ci -c user.email=noreply commit -q -m "$1" && git rev-parse HEAD' _ "$1"
+}
+project_fixture() {
+  local sentinel=$WORK/planted-ran
+  rm -f "$sentinel"
+  as_ai bash -c 'rm -rf ~/work/project-fixture && mkdir -p ~/work/project-fixture/toolchain ~/work/project-fixture/.claude ~/work/project-fixture/scripts ~/work/project-fixture/docs ~/.config/svc &&
+    git -C ~/work/project-fixture init -q -b main && : >~/.config/svc/token && chmod 0600 ~/.config/svc/token'
+  # The project's CI manifest: one download tool (the artifact and checksum of the platform manifest's yq, so no new pin is needed here)
+  # whose smoke command prints the account that runs it.
+  python3 -I - "$LAB/toolchain/manifest.toml" "$AI" >"$WORK/project-manifest.toml" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as handle:
+    tool = tomllib.load(handle)["tools"]["yq"]
+artifact = tool["artifacts"]["amd64"]
+print(f"""schema_version = 1
+
+[tools.yq]
+version     = "{tool["version"]}"
+profiles    = ["lab"]
+source      = "download"
+format      = "binary"
+binaries    = ["yq"]
+smoke       = ["id", "-un"]
+smoke_match = "{sys.argv[2]}"
+max_bytes   = 104857600
+
+[tools.yq.artifacts.amd64]
+url    = "{artifact["url"]}"
+sha256 = "{artifact["sha256"]}"
+""")
+PY
+  install -m 0644 -o "$AI" -g "$AI" "$WORK/project-manifest.toml" "/home/$AI/work/project-fixture/toolchain/manifest.toml"
+  printf '# the project package list\nhello\n' | as_ai tee "/home/$AI/work/project-fixture/toolchain/lab-packages.txt" >/dev/null
+  printf '# the project seeded list\nRead(~/.config/svc/**)\n' | as_ai tee "/home/$AI/work/project-fixture/.claude/deny.platform.txt" >/dev/null
+  # shellcheck disable=SC2016 # backticks are Markdown here
+  printf '## Credential paths\n\n- `~/.config/svc/token` - a test credential\n' | as_ai tee "/home/$AI/work/project-fixture/docs/PROJECT.md" >/dev/null
+  printf '#!/bin/sh\n: >%s\n' "$sentinel" | as_ai tee "/home/$AI/work/project-fixture/scripts/toolchain" >/dev/null
+  as_ai chmod 0755 "/home/$AI/work/project-fixture/scripts/toolchain"
+}
+
+project() {
+  complete_lab
+  local repo=/home/$AI/work/project-fixture sentinel=$WORK/planted-ran sha digest before after homes_before homes_after attempt entry
+  project_fixture
+  sha=$(project_commit "A: the project's toolchain, package list, and deny list")
+  local -a args=(-e "lab_project_clone=$repo" -e "lab_project_sha=$sha" -e ssh_second_login_confirmed=true)
+
+  # 1. The dry run reads the project, prints every package name and version and the tools it would install, and changes nothing.
+  before=$(tree_hash)
+  homes_before=$(home_hash)
+  playbook "$LAB" --check --diff "${args[@]}" >"$WORK/project-dry.txt" 2>&1 || { cat "$WORK/project-dry.txt"; fail "the dry run with a project failed"; }
+  cat "$WORK/project-dry.txt"
+  after=$(tree_hash)
+  homes_after=$(home_hash)
+  [[ $before == "$after" && $homes_before == "$homes_after" ]] || fail "the dry run with a project changed the machine"
+  grep -Eq 'hello [0-9][^ ]* Debian' "$WORK/project-dry.txt" || fail "the dry run does not print the name, version, and origin of the package"
+  grep -q 'would install' "$WORK/project-dry.txt" || fail "the dry run does not say what the toolchain would install"
+  digest=$(grep -o 'plan_sha256=[0-9a-f]\{64\}' "$WORK/project-dry.txt" | head -n 1 | cut -d= -f2)
+  [[ -n $digest ]] || fail "the dry run prints no plan digest"
+  [[ ! -e $PROJECT_TOOLS && ! -e $RECORD ]] || fail "the dry run created the project tools or records"
+  ok "project dry run: every package name and version printed, tree and homes unchanged"
+
+  # 2. The package list is applied only after the dry run was read: no digest, no change (the play stops before any role has written).
+  refused "a package list is not applied without the digest of its dry run" "$LAB" "lab_project_packages_reviewed" -e lab_apply=true "${args[@]}"
+  ! dpkg -s hello >/dev/null 2>&1 || fail "the package was installed without the digest"
+  [[ ! -e $PROJECT_TOOLS ]] || fail "the tools were installed before the package list was accepted"
+  refused "a digest that is not the digest of the plan is refused" "$LAB" "changed since" -e lab_apply=true "${args[@]}" -e "lab_project_packages_reviewed=$(printf '0%.0s' {1..64})"
+
+  # 3. The apply with the digest: tools, packages, records, and the one deny list in three places.
+  playbook "$LAB" -e lab_apply=true "${args[@]}" -e "lab_project_packages_reviewed=$digest" | tee "$WORK/project-apply.txt"
+  dpkg -s hello >/dev/null 2>&1 || fail "the package of the list is not installed"
+  [[ $(stat -c '%U:%G %a' "$PROJECT_TOOLS" "$PROJECT_TOOLS/bin" "$RECORD" | sort -u) == 'root:root 755' ]] || fail "the project directories are not root-owned 0755"
+  [[ -L $PROJECT_TOOLS/bin/yq && -x $PROJECT_TOOLS/bin/yq ]] || fail "the project tool is not linked into $PROJECT_TOOLS/bin"
+  [[ -z $(find "$PROJECT_TOOLS" "$RECORD" \( ! -user root -o -perm /022 \) -not -type l -print -quit) ]] || fail "something under the project directories is not root-owned or is writable by others"
+  for entry in manifest.toml packages.txt deny.platform.txt SOURCE; do
+    [[ $(stat -c '%U:%G %a' "$RECORD/$entry") == 'root:root 644' ]] || fail "$RECORD/$entry is not a root-owned 0644 file"
+  done
+  grep -qx "kind=supplied-sha" "$RECORD/SOURCE" || fail "the record does not name the supplied-SHA channel"
+  grep -qx "commit=$sha" "$RECORD/SOURCE" || fail "the record does not name the supplied commit"
+  [[ ! -e $sentinel ]] || fail "the project's own scripts/toolchain was run"
+  [[ -z $(find "$RECORD" "$PROJECT_TOOLS" -name toolchain -path '*scripts*') ]] || fail "the project's scripts/toolchain was copied to the machine"
+  entry='Read(~/.config/svc/**)'
+  grep -qxF "$entry" "$TOOLS/deny.txt" || fail "deny.txt lacks the project's entry"
+  jq -e --arg e "$entry" '.permissions.deny | index($e) != null' /etc/claude-code/managed-settings.json >/dev/null || fail "the managed settings lack the project's entry"
+  # The managed settings may also hold entries of the merge step (a foreign file is merged, never replaced), so they are compared as a set.
+  [[ -z $(comm -13 <(jq -r '.permissions.deny[]' /etc/claude-code/managed-settings.json | LC_ALL=C sort -u) \
+    <(grep -vE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt" | LC_ALL=C sort -u)) ]] || fail "the managed settings lack an entry of the lab-wide list"
+  [[ $(grep -vcE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt") -eq 91 ]] || fail "deny.txt does not hold the core list and one project entry"
+  if [[ $(deny_mode) != managed ]]; then
+    diff <(jq -r '.permissions.deny[]' "/home/$AI/.claude/settings.json") <(grep -vE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt") >/dev/null ||
+      fail "the layer is not the lab-wide list entry by entry and in order"
+    [[ $(jq '.permissions.deny | length' "/home/$AI/.claude/settings.json") -eq 91 ]] || fail "the layer does not hold the core list and one project entry"
+    lsattr -d "/home/$AI/.claude/settings.json" | awk '{print $1}' | grep -q i || fail "the layer is not immutable"
+  fi
+  diff <(head -n 90 <(grep -vE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt")) <(grep -vE '^[[:space:]]*(#|$)' "$LAB/workspace/claude-user/required-deny.txt") >/dev/null ||
+    fail "the core entries of deny.txt are not the 90 entries of required-deny.txt in order"
+  ok "project apply: tools root-owned, package installed, the records, and one deny list in deny.txt, the managed settings, and the layer"
+
+  # 4. Smoke tests run as the AI user, with the installed engine, and print its name.
+  as_ai python3 -I "$TOOLS/engine/scripts/toolchain" --manifest "$RECORD/manifest.toml" --root "$RECORD" verify --profile lab \
+    --prefix "$PROJECT_TOOLS" --arch amd64 --source download >"$WORK/project-smoke.txt" 2>&1 || { cat "$WORK/project-smoke.txt"; fail "the smoke test failed as the AI user"; }
+  grep -q "ok ($AI)" "$WORK/project-smoke.txt" || { cat "$WORK/project-smoke.txt"; fail "the smoke test did not print the AI user's name"; }
+  grep -q "ok ($AI)" "$WORK/project-apply.txt" || fail "lab setup did not run the smoke test as the AI user"
+  # shellcheck disable=SC2016 # the command is for the inner login shell, which expands $PATH
+  [[ $(as_ai bash -lc 'printf %s "${PATH##*:}"') == "$PROJECT_TOOLS/bin" ]] || fail "the project tools are not last on the AI user's PATH"
+  ok "smoke tests: run as the AI user and print its name"
+
+  # 5. The AI user cannot change the installed tools or the records.
+  local target
+  for target in "$PROJECT_TOOLS" "$PROJECT_TOOLS/bin" "$PROJECT_TOOLS/bin/yq" "$(readlink -f "$PROJECT_TOOLS/bin/yq")" "$RECORD" "$RECORD/manifest.toml" "$RECORD/deny.platform.txt" "$RECORD/SOURCE"; do
+    # shellcheck disable=SC2016 # the attempts are for the inner shell, which expands $1
+    for attempt in 'printf x >>"$1"' ': >"$1"' 'rm -rf -- "$1"' 'mv -- "$1" "$1.off"' 'chmod 0777 -- "$1"' 'touch -- "$1/new"'; do
+      if as_ai bash -c "$attempt" _ "$target" 2>/dev/null; then fail "the AI user succeeded with '$attempt' on $target"; fi
+    done
+  done
+  ok "the AI user cannot write, move, remove, or chmod the project tools or records"
+
+  # 6. A second run, with and without the project variables, changes nothing; the recorded deny list is kept.
+  playbook "$LAB" -e lab_apply=true "${args[@]}" | tee "$WORK/project-second.txt"
+  grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/project-second.txt" || fail "the second run with the project changed something"
+  playbook "$LAB" -e lab_apply=true -e ssh_second_login_confirmed=true | tee "$WORK/project-recorded.txt"
+  grep -Eq 'changed=0 +unreachable=0 +failed=0' "$WORK/project-recorded.txt" || fail "a run with no project selected changed something (the recorded deny entries must be kept)"
+  grep -qxF "$entry" "$TOOLS/deny.txt" || fail "a run with no project selected dropped the project's deny entry"
+  ok "second run: zero changes, with the project variables and without them (the recorded entries are kept)"
+
+  # 7. The lab check passes with the entry that arrived from the project, and fails for a listed path that the file does not cover.
+  lab_run --gh "$LAB_GH"
+  expect_failing "the lab check passes: the credential path is covered by the entry that lab setup merged (PA-A31)" ""
+  # shellcheck disable=SC2016 # backticks are Markdown here
+  printf '## Credential paths\n\n- `~/.config/svc/token` - a test credential\n- `~/.config/other/key` - one the project forgot\n' |
+    as_ai tee "$repo/docs/PROJECT.md" >/dev/null
+  lab_run --gh "$LAB_GH"
+  expect_failing "a listed path that deny.platform.txt does not cover fails PA-43" "PA-43"
+  # shellcheck disable=SC2088 # the text is the message, with the tilde as written in PROJECT.md
+  mentions "$WORK/lab-check.txt" '~/.config/other/key is not covered' || fail "PA-43 does not name the uncovered path"
+
+  # 8. A third-party apt source in the package list is refused before anything changes; so is a pip tool.
+  printf '# a package list that adds a source\ndeb http://example.org/debian trixie main\n' | as_ai tee "$repo/toolchain/lab-packages.txt" >/dev/null
+  sha=$(project_commit "B: a third-party apt source")
+  refused "a third-party apt source is refused" "$LAB" "third-party apt source" -e lab_apply=true -e "lab_project_clone=$repo" -e "lab_project_sha=$sha" -e ssh_second_login_confirmed=true
+  refused "a third-party apt source is refused in the dry run too" "$LAB" "third-party apt source" --check --diff -e "lab_project_clone=$repo" -e "lab_project_sha=$sha"
+  ok "a third-party apt source is refused before anything changes"
+
+  # 9. The anonymous channel, for real, in a dry run: a tag of this repository on GitHub (merged by definition: a release tag).
+  if [[ -n ${GITHUB_REPOSITORY:-} ]]; then
+    playbook "$LAB" --check --diff -e "lab_project_repo=https://github.com/$GITHUB_REPOSITORY" -e lab_project_ref=v0.9.0 >"$WORK/project-anonymous.txt" 2>&1 ||
+      { cat "$WORK/project-anonymous.txt"; fail "the anonymous channel did not read the tag"; }
+    ok "anonymous channel: a release tag of this repository was read in a dry run"
+  else
+    printf 'anonymous channel not exercised here: GITHUB_REPOSITORY is not set\n' >>"$WORK/attribute.txt"
+  fi
+  as_ai bash -c 'rm -rf ~/work ~/.config/svc ~/.config/other' || true
+}
+
 case ${1:-} in
   prepare) prepare "${2:-}" ;;
   refusals) refusals ;;
@@ -637,8 +803,9 @@ case ${1:-} in
   deny-probe) deny_probe ;;
   deny-layer) deny_layer ;;
   deny-fail-closed) deny_fail_closed ;;
+  project) project ;;
   *)
-    echo "usage: pa28-lab.sh prepare SOURCE | deny-probe | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check | deny-layer | deny-fail-closed" >&2
+    echo "usage: pa28-lab.sh prepare SOURCE | deny-probe | refusals | unconfirmed | first-run | second-run | dry-run | verify | merge | token-step | lab-check | deny-layer | deny-fail-closed | project" >&2
     exit 2
     ;;
 esac

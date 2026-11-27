@@ -14,3 +14,9 @@ claude_managed_settings_source: "{{ repo_root }}/workspace/claude-user/settings.
 claude_managed_role_settings:
   disableClaudeAiConnectors: true
   enableArtifact: false
+# The lab-wide deny list (plan PR 8, I-7, R-2): the core list followed by a project's deny.platform.txt entries, merged over the deny list
+# of the source above. With no project it holds the same entries as the source. The managed settings, deny.txt, and the user-level layer
+# are all written from this one list, so a project's credential-path entry is in every layer or in none.
+claude_managed_lab_wide_deny:
+  permissions:
+    deny: "{{ lab_deny_entries }}"

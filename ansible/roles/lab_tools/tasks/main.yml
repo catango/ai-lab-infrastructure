@@ -51,9 +51,9 @@
     label: "{{ item.dest }}"
   become: "{{ ai_lab_become }}"
 
-- name: Install the lab-wide deny list beside lab.conf (a byte copy of the source, root-owned; the lab check reads it, PA-54, PA-55)
+- name: Install the lab-wide deny list beside lab.conf (the core list byte for byte, then a project's entries; root-owned; the lab check reads it, PA-54, PA-55)
   ansible.builtin.copy:
-    src: "{{ lab_deny_list_source }}"
+    content: "{{ lab_deny_text }}"
     dest: "{{ lab_tools_dir }}/deny.txt"
     owner: root
     group: root

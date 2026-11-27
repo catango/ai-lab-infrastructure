@@ -278,6 +278,10 @@ jobs:
         shell: bash
         run: tests/ansible/pa28-lab.sh deny-layer
 
+      - name: Project toolchain, package list, and deny list through the project input channel (PA-34, PA-A23, PA-A31)
+        shell: bash
+        run: tests/ansible/pa28-lab.sh project
+
       - name: Job summary
         if: always()
         shell: bash

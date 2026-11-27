@@ -111,5 +111,26 @@ class VerifyDownload(Base):
         self.assertEqual(self.fetcher.calls, [ARM64_URL])
 
 
+class VerifySource(Base):
+    """CR-57 plan PR 8: `verify --source download` runs the smoke commands of the downloaded tools only, so a project manifest's apt
+    entries (installed through the package list) and the engine copy that the AI user runs need nothing else."""
+
+    def setUp(self):
+        super().setUp()
+        self.calls = []
+        self.assertEqual(self.install()[0], 0)
+
+    def test_the_source_filter_leaves_apt_tools_out(self):
+        code, out, err = self.run_cli("verify", "--profile", "lab", "--prefix", str(self.prefix), "--source", "download", runner=hybrid(self.calls))
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("alpha 1.2.3: ok", out)
+        self.assertNotIn("gitlike", out)
+        self.assertFalse([c for c in self.calls if c[0][0] in ("dpkg", "dpkg-query")])
+
+    def test_an_unknown_source_is_a_usage_error(self):
+        code, _, err = self.run_cli("verify", "--profile", "lab", "--prefix", str(self.prefix), "--source", "bogus", runner=hybrid(self.calls))
+        self.assertEqual(code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

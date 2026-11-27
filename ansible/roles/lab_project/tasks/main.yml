@@ -1,0 +1,168 @@
+# Apply the project selected by tasks/input.yml (PA-34): the package list first, then the tools that
+# the project's CI manifest names, then the root-owned record, the smoke tests as the AI user, and the PATH of the AI lab.
+# Everything here belongs to root and the AI user cannot change it. The tools are installed by the engine of the release clone, which
+# is the root-owned platform engine; nothing the project ships is executed, because only three project files were read (see the helper)
+# and none of them is code. The smoke commands of the manifest run as the AI user, never as root.
+# The package plan, and the check that a real run carries the digest of the dry run that was read, are in tasks/input.yml (a pre-task), so
+# a refusal there stops the play before any role has written anything. The dry run (check mode) also prints every tool with its source.
+- name: Apply the project package list (only with the plan_sha256 of the dry run that was read)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ lab_project_helper }}"
+      - packages
+      - --file
+      - "{{ lab_project_stage }}/packages.txt"
+      - --apply
+      - --reviewed
+      - "{{ lab_project_packages_reviewed }}"
+    chdir: /
+  register: lab_project_packages_result
+  changed_when: "'changed=0' not in lab_project_packages_result.stdout_lines"
+  when: not ansible_check_mode and lab_project_selected and (lab_project_input.packages | length > 0)
+  become: "{{ ai_lab_become }}"
+
+- name: The project tools directory exists, owned by root
+  ansible.builtin.file:
+    path: "{{ lab_project_prefix }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: lab_project_selected and lab_project_input.manifest_present
+  become: "{{ ai_lab_become }}"
+
+- name: Plan the project tools (dry run; nothing is downloaded or installed)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - --manifest
+      - "{{ lab_project_stage }}/manifest.toml"
+      - --root
+      - "{{ lab_project_stage }}"
+      - install
+      - --profile
+      - lab
+      - --prefix
+      - "{{ lab_project_prefix }}"
+      - --arch
+      - "{{ lab_project_arch }}"
+      - --source
+      - download
+      - --dry-run
+    chdir: /
+  register: lab_project_tools_plan
+  changed_when: "'changed=0' not in lab_project_tools_plan.stdout_lines"
+  check_mode: false
+  when: ansible_check_mode and lab_project_selected and lab_project_input.manifest_present
+  become: "{{ ai_lab_become }}"
+
+- name: Show the tool plan
+  ansible.builtin.debug:
+    var: lab_project_tools_plan.stdout_lines
+  when: ansible_check_mode and lab_project_selected and lab_project_input.manifest_present
+
+- name: Install the project tools (checksum-verified before extraction, download tools only, amd64)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ toolchain_engine }}"
+      - --manifest
+      - "{{ lab_project_stage }}/manifest.toml"
+      - --root
+      - "{{ lab_project_stage }}"
+      - install
+      - --profile
+      - lab
+      - --prefix
+      - "{{ lab_project_prefix }}"
+      - --arch
+      - "{{ lab_project_arch }}"
+      - --source
+      - download
+    chdir: /
+  register: lab_project_tools_result
+  changed_when: "'changed=0' not in lab_project_tools_result.stdout_lines"
+  when: not ansible_check_mode and lab_project_selected and lab_project_input.manifest_present
+  become: "{{ ai_lab_become }}"
+
+- name: The record directory exists, owned by root
+  ansible.builtin.file:
+    path: "{{ lab_project_record_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: lab_project_selected
+  become: "{{ ai_lab_become }}"
+
+- name: Record the project files that were read, and where they came from
+  ansible.builtin.copy:
+    dest: "{{ lab_project_record_dir }}/{{ item.name }}"
+    content: "{{ item.text }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {name: manifest.toml, text: "{{ lab_project_input.manifest_text }}", present: "{{ lab_project_input.manifest_text is not none }}"}
+    - {name: packages.txt, text: "{{ lab_project_input.packages_text }}", present: "{{ lab_project_input.packages_text is not none }}"}
+    - {name: deny.platform.txt, text: "{{ lab_project_input.deny_platform_text }}", present: "{{ lab_project_input.deny_platform_text is not none }}"}
+    - {name: SOURCE, text: "{{ lab_project_input.source_text }}", present: true}
+  loop_control:
+    label: "{{ item.name }}"
+  when: lab_project_selected and item.present | bool
+  become: "{{ ai_lab_become }}"
+
+- name: Smoke tests of the project tools, run as the AI user with the installed engine (never as root)
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ lab_ai_user }}"
+      - --
+      - python3
+      - -I
+      - "{{ lab_project_engine }}"
+      - --manifest
+      - "{{ lab_project_record_dir }}/manifest.toml"
+      - --root
+      - "{{ lab_project_record_dir }}"
+      - verify
+      - --profile
+      - lab
+      - --prefix
+      - "{{ lab_project_prefix }}"
+      - --arch
+      - "{{ lab_project_arch }}"
+      - --source
+      - download
+    chdir: /
+  register: lab_project_smoke
+  changed_when: false
+  when: not ansible_check_mode and lab_project_selected and lab_project_input.manifest_present
+  become: "{{ ai_lab_become }}"
+
+- name: Show the smoke tests
+  ansible.builtin.debug:
+    var: lab_project_smoke.stdout_lines
+  when: not ansible_check_mode and lab_project_selected and lab_project_input.manifest_present
+
+- name: Put the project tools last on the PATH of login shells (after every system and gate tool, so none is shadowed)
+  ansible.builtin.copy:
+    dest: /etc/profile.d/ai-lab-project.sh
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ai-lab-infrastructure (lab_project role). Do not edit.
+      case ":${PATH}:" in
+        *":{{ lab_project_prefix }}/bin:"*) ;;
+        *) PATH="${PATH}:{{ lab_project_prefix }}/bin" ;;
+      esac
+      export PATH
+  when: lab_project_selected and lab_project_input.manifest_present
+  become: "{{ ai_lab_become }}"

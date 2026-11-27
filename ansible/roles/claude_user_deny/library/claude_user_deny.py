@@ -26,7 +26,14 @@ options:
     type: str
     choices: [write, probe]
     default: write
-  deny_list: {description: The lab-wide deny list (one entry per line, comments with #), type: path, required: false}
+  deny_list: {description: The lab-wide deny list as a file (one entry per line, comments with #), type: path, required: false}
+  deny_entries:
+    description: >-
+      The lab-wide deny list as the list itself, in order (lab setup passes the core list followed by a project's entries, plan PR 8).
+      Exactly one of deny_list and deny_entries is given for action write.
+    type: list
+    elements: str
+    required: false
 """
 
 FS_IMMUTABLE_FL = 0x10
@@ -70,14 +77,23 @@ class Ops:
 
 
 # ---------------------------------------------------------------------------------------------------------------- the content
-def parse_deny_list(text):
-    """The entries of the lab-wide list in order: one per line, blank lines and lines starting with # skipped."""
-    entries = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+def check_entries(entries):
+    """The entries of the lab-wide list, validated: plain rule lines, at least one, none twice. Returns them as a new list."""
+    entries = list(entries)
+    for entry in entries:
+        if (not isinstance(entry, str) or not entry or entry != entry.strip() or "\n" in entry or "\r" in entry
+                or entry.startswith("#")):
+            raise Refusal("the lab-wide deny list holds an entry that is not a plain rule line")
     if not entries:
         raise Refusal("the lab-wide deny list holds no entry")
     if len(set(entries)) != len(entries):
         raise Refusal("the lab-wide deny list names an entry twice")
     return entries
+
+
+def parse_deny_list(text):
+    """The entries of the lab-wide list in order: one per line, blank lines and lines starting with # skipped."""
+    return check_entries(line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#"))
 
 
 def canonical_content(entries):
@@ -385,7 +401,8 @@ def main():
     module = AnsibleModule(
         argument_spec={"user": {"type": "str", "required": True},
                        "action": {"type": "str", "default": "write", "choices": ["write", "probe"]},
-                       "deny_list": {"type": "path", "required": False}},
+                       "deny_list": {"type": "path", "required": False},
+                       "deny_entries": {"type": "list", "elements": "str", "required": False}},
         supports_check_mode=True)
     user = module.params["user"]
     try:
@@ -398,11 +415,15 @@ def main():
     try:
         if module.params["action"] == "probe":
             module.exit_json(changed=False, msg=probe_attribute(ops, user, entry.pw_dir))
-        if not module.params["deny_list"]:
-            module.fail_json(msg="deny_list is required for action write")
-        fd = os.open(module.params["deny_list"], FILE_READ)
-        with os.fdopen(fd, "rb") as handle:
-            entries = parse_deny_list(handle.read(1 << 20).decode("utf-8"))
+        given = [name for name in ("deny_list", "deny_entries") if module.params[name] is not None]
+        if len(given) != 1:
+            module.fail_json(msg="exactly one of deny_list and deny_entries is required for action write")
+        if module.params["deny_entries"] is not None:
+            entries = check_entries(module.params["deny_entries"])
+        else:
+            fd = os.open(module.params["deny_list"], FILE_READ)
+            with os.fdopen(fd, "rb") as handle:
+                entries = parse_deny_list(handle.read(1 << 20).decode("utf-8"))
         result = place_layer(ops, user, entry.pw_uid, entry.pw_gid, entry.pw_dir, canonical_content(entries), module.check_mode)
     except (Refusal, OSError, UnicodeDecodeError) as error:
         module.fail_json(msg=str(error))

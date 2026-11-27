@@ -4,6 +4,7 @@ The drift checks of the old workspace restore tests (deleted in plan PR 7), re-c
 The managed settings take their deny list from workspace/claude-user/settings.json (roles/claude_managed_settings), so the third
 copy is also the managed list; the PA-28 job compares the installed managed settings with required-deny.txt.
 """
+import importlib.machinery
 import importlib.util
 import json
 import pathlib
@@ -54,6 +55,16 @@ class Pa19(unittest.TestCase):
 MODULE = ROOT / "ansible" / "roles" / "claude_user_deny" / "library" / "claude_user_deny.py"
 
 
+def load_helper():
+    path = ROOT / "ansible" / "roles" / "lab_project" / "files" / "lab-project-input"
+    loader = importlib.machinery.SourceFileLoader("lab_project_input", str(path))
+    spec = importlib.util.spec_from_loader("lab_project_input", loader)
+    module = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    loader.exec_module(module)
+    return module
+
+
 def layer_module():
     spec = importlib.util.spec_from_file_location("claude_user_deny", MODULE)
     module = importlib.util.module_from_spec(spec)
@@ -71,12 +82,26 @@ class UserLayerDrift(unittest.TestCase):
         return json.loads(module.canonical_content(module.parse_deny_list(text)))
 
     def test_the_role_takes_its_list_from_required_deny_txt(self):
+        """Plan PR 8: the layer, the managed settings, and deny.txt read one list, `lab_deny_entries`, which is the core list of
+        required-deny.txt (`lab_deny_list_source`) plus a project's deny.platform.txt entries; with no project it is the core list."""
         variables = (ROOT / "ansible" / "group_vars" / "all.yml").read_text()
         self.assertIn('lab_deny_list_source: "{{ repo_root }}/workspace/claude-user/required-deny.txt"', variables)
-        for role, task in (("claude_user_deny", "main.yml"), ("lab_tools", "main.yml")):
+        self.assertIn("lookup('ansible.builtin.file', lab_deny_list_source, rstrip=False)", variables)
+        for role, task, needle in (("claude_user_deny", "main.yml", "lab_deny_entries"), ("lab_tools", "main.yml", "lab_deny_text")):
             text = (ROOT / "ansible" / "roles" / role / "tasks" / task).read_text()
-            self.assertIn("lab_deny_list_source", text, f"{role}/{task}")
+            self.assertIn(needle, text, f"{role}/{task}")
             self.assertNotIn("claude-user/settings.json", text, f"{role}/{task}")
+        project = (ROOT / "ansible" / "roles" / "lab_project" / "tasks" / "input.yml").read_text()
+        self.assertIn("lab_deny_list_source", project)
+
+    def test_the_merge_keeps_the_core_list_first_and_adds_only(self):
+        helper = load_helper()
+        text = (ROOT / "workspace" / "claude-user" / "required-deny.txt").read_text()
+        merged, entries, added = helper.merge_deny(text, "Read(~/.config/svc/**)\n", "owner/project", "c" * 40)
+        self.assertEqual(entries[:90], required())
+        self.assertEqual(added, ["Read(~/.config/svc/**)"])
+        self.assertEqual(len(entries), len(set(entries)))
+        self.assertTrue(merged.startswith(text))
 
     def test_the_generated_layer_has_the_entries_and_the_count_of_each_of_the_three_copies(self):
         generated = self.generated()["permissions"]["deny"]

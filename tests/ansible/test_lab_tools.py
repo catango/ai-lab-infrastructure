@@ -101,14 +101,15 @@ class DenyLayerRole(unittest.TestCase):
         tasks = (ROLE / "tasks" / "main.yml").read_text()
         self.assertIn("deny_layer={{ lab_deny_layer }}", tasks)
 
-    def test_lab_setup_installs_the_lab_wide_list_root_owned_beside_lab_conf_as_a_byte_copy(self):
+    def test_lab_setup_installs_the_lab_wide_list_root_owned_beside_lab_conf_from_the_merged_list(self):
+        """Plan PR 4a installed a byte copy of the core list; plan PR 8 installs the core list followed by a project's entries (the
+        text is the core list byte for byte when no project is selected, see tests/lab/test_project_input.py)."""
         tasks = (ROLE / "tasks" / "main.yml").read_text()
         block = tasks[tasks.index("- name: Install the lab-wide deny list"):]
         block = block[:block.index("\n- name:", 1)] if "\n- name:" in block[1:] else block
-        for needle in ("ansible.builtin.copy", 'src: "{{ lab_deny_list_source }}"', 'dest: "{{ lab_tools_dir }}/deny.txt"', "owner: root",
+        for needle in ("ansible.builtin.copy", 'content: "{{ lab_deny_text }}"', 'dest: "{{ lab_tools_dir }}/deny.txt"', "owner: root",
                        'mode: "0644"', 'become: "{{ ai_lab_become }}"'):
             self.assertIn(needle, block, needle)
-        self.assertNotIn("content:", block)
 
     def test_the_variable_is_checked_before_anything_changes_and_the_probe_is_a_pre_task(self):
         text = (ROOT / "ansible" / "lab.yml").read_text()

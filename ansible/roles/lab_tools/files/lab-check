@@ -238,6 +238,14 @@ class Lab:
                 data = json.loads(self.read(settings))
                 if not isinstance(data, dict) or not isinstance(data.get("permissions", {}).get("deny"), list) or not data["permissions"]["deny"]:
                     problems.append("managed settings hold no deny list")
+                else:
+                    # Plan PR 8 (I-7): the lab-wide list, which holds a project's deny.platform.txt entries after the core, feeds the
+                    # managed settings too. An older lab with no deny.txt yet is left to LC-16.
+                    reference, _ = self.lab_wide_list()
+                    missing = [rule for rule in reference or [] if rule not in data["permissions"]["deny"]]
+                    if missing:
+                        problems.append(f"managed settings lack {len(missing)} entry(ies) of the lab-wide deny list: "
+                                        + ", ".join(missing[:5]) + (f" and {len(missing) - 5} more" if len(missing) > 5 else ""))
             except (OSError, ValueError, AttributeError):
                 problems.append("managed settings are not a JSON object")
         claude_md = os.path.join(directory, "CLAUDE.md")
@@ -627,6 +635,7 @@ class Lab:
         if not listed:
             return [("PASS", "no project credential path is listed")]
         rules = self.deny_rules()
+        where = "the managed settings or the user-level layer" if self.conf.get("deny_layer") in ("both", "user") else "the managed settings"
         problems = []
         for name, path in listed:
             real = os.path.join(self.home, path[2:]) if path.startswith("~/") else self.p(path)
@@ -642,7 +651,7 @@ class Lab:
                 elif mode_of(info) != 0o600:
                     problems.append(f"{name}: {path} is not mode 0600")
             if not self.covered(path, rules):
-                problems.append(f"{name}: {path} is not covered by a Read deny rule in the managed settings")
+                problems.append(f"{name}: {path} is not covered by a Read deny rule in {where}")
         return [("FAIL", "; ".join(sorted(set(problems))))] if problems else [("PASS", f"{len(listed)} listed credential path(s): mode 0600 and denied")]
 
     # ------------------------------------------------------------------ the whole check and the pre-disposal mode

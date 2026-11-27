@@ -512,7 +512,8 @@ class Main(Case):
         fake = types.SimpleNamespace(AnsibleModule=FakeModule)
         modules = {"ansible": types.ModuleType("ansible"), "ansible.module_utils": types.ModuleType("ansible.module_utils"),
                    "ansible.module_utils.basic": fake}
-        with unittest.mock.patch.dict(sys.modules, modules), unittest.mock.patch.object(mod.pwd, "getpwnam", lookup):
+        with (unittest.mock.patch.dict(sys.modules, modules), unittest.mock.patch.object(mod.pwd, "getpwnam", lookup),
+              unittest.mock.patch.object(mod, "Ops", lambda: self.ops)):
             with self.assertRaises(SystemExit):
                 mod.main()
 
@@ -559,6 +560,42 @@ class Main(Case):
         self.assertEqual(os.listdir(self.home), [])
 
 
+class MainEntries(Main):
+    """Plan PR 8 (PA-34, R-2): lab setup merges a project's deny.platform.txt entries into the lab-wide list before the layer is written,
+    so the module also takes the merged list itself (`deny_entries`); `deny_list` stays for a plain file."""
+
+    def test_the_merged_list_is_written_as_given_in_order(self):
+        merged = ENTRIES + ["Read(~/.config/svc/**)"]
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_entries": merged})
+        self.assertEqual((out["changed"], out["entries"]), (True, len(merged)))
+        written = json.loads((self.claude / "settings.json").read_text())
+        self.assertEqual(written["permissions"]["deny"], merged)
+        self.assertEqual(sorted(written), ["enableAllProjectMcpServers", "permissions"])
+
+    def test_the_entries_give_the_same_file_as_the_same_list_in_a_file(self):
+        self.result({"user": ACCOUNT, "action": "write", "deny_entries": ENTRIES})
+        from_entries = (self.claude / "settings.json").read_bytes()
+        self.assertEqual(from_entries, mod.canonical_content(mod.parse_deny_list(pathlib.Path(self.deny_file()).read_text())))
+
+    def test_a_dry_run_with_entries_writes_nothing(self):
+        before = tree_hash(self.base)
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_entries": ENTRIES}, check_mode=True)
+        self.assertTrue(out["changed"])
+        self.assertEqual(tree_hash(self.base), before)
+
+    def test_a_second_run_with_the_same_entries_changes_nothing(self):
+        self.result({"user": ACCOUNT, "action": "write", "deny_entries": ENTRIES})
+        out = self.result({"user": ACCOUNT, "action": "write", "deny_entries": ENTRIES})
+        self.assertFalse(out["changed"])
+
+    def test_both_sources_and_a_bad_list_are_refused_and_write_nothing(self):
+        for params in ({"deny_entries": ENTRIES, "deny_list": self.deny_file()}, {"deny_entries": []}, {"deny_entries": ["a", "a"]},
+                       {"deny_entries": ["# comment"]}, {"deny_entries": ["two\nlines"]}, {"deny_entries": [""]}, {"deny_entries": [3]}):
+            out = self.result({"user": ACCOUNT, "action": "write", **params})
+            self.assertTrue(out["failed"], params)
+        self.assertEqual(os.listdir(self.home), [])
+
+
 class Static(unittest.TestCase):
     text = MODULE.read_text()
 
@@ -576,7 +613,7 @@ class Static(unittest.TestCase):
             self.assertIn(needed, self.text, needed)
 
     def test_the_documentation_names_the_parameters(self):
-        for name in ("user", "action", "deny_list"):
+        for name in ("user", "action", "deny_list", "deny_entries"):
             self.assertRegex(self.text, rf"(?m)^  {name}:", name)
 
     def test_the_home_comes_from_the_account_database_not_the_environment(self):

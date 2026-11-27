@@ -26,6 +26,11 @@ lab_apply: false
 lab_deny_layer: both
 # The one source of the lab-wide deny list (PA-55): the layer and the root-owned deny.txt beside lab.conf are generated from it.
 lab_deny_list_source: "{{ repo_root }}/workspace/claude-user/required-deny.txt"
+# The lab-wide deny list that the layer, the managed settings, and deny.txt are all written from (plan PR 8, I-7, R-2): the core list, byte
+# for byte, followed by the entries of a project's seeded .claude/deny.platform.txt. With no project these defaults stand; the project
+# input (roles/lab_project/tasks/input.yml) replaces them for the run.
+lab_deny_text: "{{ lookup('ansible.builtin.file', lab_deny_list_source, rstrip=False) }}"
+lab_deny_entries: "{{ lab_deny_text.splitlines() | map('trim') | reject('equalto', '') | reject('match', '#') | list }}"
 
 # The operator profile (CR-57, ADR-012): Debian 13, x86-64, the operator machine. A real run needs the explicit apply variable (a dry
 # run is the default); the names of the two managed accounts are passed with -e operator_user and -e operator_admin_user.

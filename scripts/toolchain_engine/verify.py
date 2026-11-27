@@ -64,12 +64,14 @@ def _checksum(tool, arch, fetcher):
     return True, "checksum ok"
 
 
-def verify(manifest, profile, prefix, arch, download, skip_smoke, fetcher, runner, out, skip_apt=False):
+def verify(manifest, profile, prefix, arch, download, skip_smoke, fetcher, runner, out, skip_apt=False, source=None):
     prefix = Path(prefix)
     ok = failed = 0
     for tool in manifest.for_profile(profile):
         label = f"{tool.name} {tool.version}" if tool.version else tool.name
         if skip_apt and tool.source == "apt":
+            continue
+        if source and tool.source != source:
             continue
         if not skip_smoke:
             good, detail = _smoke(tool, prefix, runner)

@@ -164,7 +164,9 @@ class ManagedSettingsPA18(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tmp)
         (tmp / "existing.json").write_text(json.dumps(existing))
         out = tmp / "out.json"
+        # group_vars/all.yml gives `lab_deny_entries` (the core list: no project is read here, plan PR 8).
         text = ("  vars_files:\n    - " + str(ANSIBLE / "roles" / "claude_managed_settings" / "defaults" / "main.yml") + "\n"
+                "    - " + str(ANSIBLE / "group_vars" / "all.yml") + "\n"
                 "  vars:\n"
                 f"    claude_managed_existing: \"{{{{ lookup('ansible.builtin.file', '{tmp}/existing.json') | from_json }}}}\"\n"
                 "    claude_managed_ours: \"{{ lookup('ansible.builtin.file', claude_managed_settings_source) | from_json }}\"\n"
