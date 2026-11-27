@@ -1,4 +1,4 @@
-# CLAUDE.md: ai-lab-infrastructure
+# CLAUDE.md: ai-lab-platform
 
 This repository provisions, configures, and maintains the AI engineering platform. It covers the toolchain, the setup of AI labs and of the operator machine (Debian 13, x86-64), and the operator scripts. It is public.
 

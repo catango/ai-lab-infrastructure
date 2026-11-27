@@ -1,2 +1,2 @@
-# ai-lab-infrastructure
+# ai-lab-platform
 AI engineering lab: infrastructure, toolchain, lifecycle
