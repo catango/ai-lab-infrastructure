@@ -15,7 +15,7 @@ Starts only after the design PR is merged (ADR-003 section 4) **and** the entry 
 | 5 | `cr-templates` | `docs/cr/_template/`, `docs/adr/_template.md`, `scripts/new-cr`, `cr-layout`, the `docs/README.md` seed | PR 4 | T-7 |
 | 6 | `skills-core` | `prepare-cr-context`, `implement-approved-cr`, `review-implementation`, `resume-work`, `initialize-project`, `start-cr`, and the scripts `cr-context`, `cr-criteria`, `pr-checkpoint` | PR 5 | T-12, T-13 |
 | 7 | `review-feedback` | `address-review-feedback` and `scripts/review-threads` | PR 6; GitHub semantics for edited comments verified | T-11 |
-| 8 | `template-sync` | `scripts/template-sync`, `sync-template`, `overrides.toml` and `state.toml` handling, check `owned-drift`, the `sync` test | PR 7; the `owned-drift` reading for `uses:` changes confirmed | T-9, T-10, T-17 |
+| 8 | `template-sync` | `scripts/template-sync`, `sync-template`, `overrides.toml` and `state.toml` handling, check `owned-drift`, the `sync` test; `.claude/settings.json` regenerated on overwrite from the core list plus the seeded `deny.platform.txt` (design section 4, step 3) | PR 7; the `owned-drift` reading for `uses:` changes confirmed | T-9, T-10, T-17 |
 | 9 | `dry-run` | `template-dev/dry-run.sh`, the `generate`, `sync`, `skills` jobs on both architectures with two configurations, the dry-run report, the design section 11 check, the release checklist | PR 8 | T-2, T-3, T-14, T-16 (a), T-21 |
 
 ## 2. Checklist (each PR keeps its own)
