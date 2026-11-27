@@ -103,7 +103,8 @@ rg --hidden -n -i -w -e 'oci' -e 'terraform' -e 'tofu' -e 'opentofu' -e 'lab vm'
   --glob '!scripts/checks/operator_contract.py' --glob '!tests/operator/test_contract_check.py' \
   --glob '!tests/pr-contract/fixtures/recorded/**' \
   --glob '!.claude/settings.json' --glob '!workspace/claude-user/settings.json' \
-  --glob '!workspace/claude-user/required-deny.txt' --glob '!CLAUDE.md'
+  --glob '!workspace/claude-user/required-deny.txt' --glob '!CLAUDE.md' \
+  --glob '!ansible/roles/lab_tools/files/lab-check' --glob '!tests/lab/test_lab_check.py'
 ```
 
 **Excluded generic files** (confirmed by the approver in round 2, O-11; step 1's inventory records the final set at its commit, and per X-2 includes any Terraform gate check, fixture, or catalogue row, of which none exists at `85360e8`):
@@ -116,6 +117,8 @@ rg --hidden -n -i -w -e 'oci' -e 'terraform' -e 'tofu' -e 'opentofu' -e 'lab vm'
 | `tests/pr-contract/fixtures/recorded/` | Recorded API payloads, data |
 | `.claude/settings.json`, `workspace/claude-user/settings.json`, `workspace/claude-user/required-deny.txt` | The generic infrastructure-apply deny entries stay in the core list (PA-5) |
 | `CLAUDE.md` | The Never line that names the denied infrastructure tools |
+| `ansible/roles/lab_tools/files/lab-check` (line 32) | The LC-10 detector of leftover production and infrastructure credentials: it names the credential directories of a cloud CLI and of the infrastructure tool (`.oci`, `.terraform.d`) so that an AI lab holding one fails the check. Kept on purpose; not OCI or Terraform content |
+| `tests/lab/test_lab_check.py` (lines 387, 392, 393, 395) | The fixtures of the LC-10 detector: they create and remove those directories (`.oci`, `.terraform.d/credentials.tfrc.json`) to show the check fails and passes. Kept on purpose, with the detector |
 
 At `85360e8` the search without the generic-file exclusions matches 38 files outside the three record directories, and 28 files remain with the exclusions (the recorded command re-run at `85360e8`) (the OCI scope of `facts` and its tests, `docs/operations/gate-0-audit.md`, `docs/operations/operator.md`, `docs/operations/github-setup.md`, `docs/operations/workspace-restore.md`, `docs/README.md`, the manifest and the OCI lock, `README.md`, `.gitignore`, the Ubuntu operator profile files, `workspace/verify.sh`, and `tests/workspace/run.sh`); the removal PRs delete or edit them. Files such as `.github/PULL_REQUEST_TEMPLATE/infra.md` match only without `-w` and are not in the count.
 
