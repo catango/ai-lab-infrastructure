@@ -203,7 +203,8 @@ class CheckModeRun(unittest.TestCase):
         self.repo = self.tmp / "project"
         (self.repo / "toolchain").mkdir(parents=True)
         (self.repo / ".claude").mkdir()
-        (self.repo / "toolchain" / "manifest.toml").write_text(MANIFEST)
+        (self.repo / "toolchain" / "manifest.toml").write_text(
+            MANIFEST + '[tools.git]\nprofiles = ["lab"]\nsource = "apt"\nversion_min = "2.0"\npackage = "git"\nsmoke = ["git", "--version"]\n')
         (self.repo / ".claude" / "deny.platform.txt").write_text("# seeded\nRead(~/.config/svc/**)\n")
         self.git("init", "-q", "-b", "main")
         self.git("add", "-A")
@@ -272,6 +273,8 @@ class CheckModeRun(unittest.TestCase):
         self.assertEqual(len(entries), 91)
         self.assertIn("would install", out)
         self.assertIn("demo 1.0.0", out)
+        self.assertIn("Not installed from the project manifest", out, "the apt entry that is left out is reported")
+        self.assertIn("git apt", out)
         self.assertFalse((self.tmp / "opt").exists(), "a check-mode run wrote")
 
     def test_an_unmerged_or_malformed_choice_stops_the_play_before_anything_else(self):

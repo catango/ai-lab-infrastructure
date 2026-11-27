@@ -50,6 +50,13 @@
     lab_deny_text: "{{ (lab_project_result.stdout | from_json).deny_text }}"
     lab_deny_entries: "{{ (lab_project_result.stdout | from_json).deny_entries }}"
 
+- name: Show what the project manifest leaves out (v1 installs download tools only)
+  ansible.builtin.debug:
+    msg: >-
+      Not installed from the project manifest (v1 installs download tools only; apt entries belong to the package list, pip is not
+      supported): {{ lab_project_input.manifest_skipped | map('join', ' ') | list }}
+  when: lab_project_input.manifest_skipped | length > 0
+
 - name: Plan the project package list (the apt simulation prints every package name and version; nothing is installed)
   ansible.builtin.command:
     argv:

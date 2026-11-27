@@ -4,7 +4,7 @@
 Lab setup runs this as root, from the release clone of the lab admin. It never runs anything that belongs to a project. It reads
 three files of a project and nothing else:
 
-  toolchain/manifest.toml       the project's CI manifest ("the tools CI uses"); the root-owned engine installs from it
+  toolchain/manifest.toml       the project's CI manifest ("the tools CI uses"); the root-owned engine installs its download tools
   toolchain/lab-packages.txt    the project's package list (Debian archive packages, one name per line)
   .claude/deny.platform.txt     the project's seeded deny entries (merged into the lab-wide list after the core entries)
 
@@ -121,9 +121,15 @@ def merge_deny(core_text, project_text, repo_label, commit):
     return text, core + added, added
 
 
-def check_manifest(text):
-    """A light check of the project's CI manifest. The engine validates it in full when it installs; this refuses what v1 does not
-    take at all: a pip tool needs a lock file that is not staged, and apt tools belong to the package list."""
+TOOL_HEADER = re.compile(r"^\s*\[\[?\s*tools\.([A-Za-z0-9_-]+)\s*(?:\.|\]\]?)")
+ANY_HEADER = re.compile(r"^\s*\[")
+
+
+def filter_manifest(text):
+    """(manifest text for the engine or None, [(name, source)] left out). The project's CI manifest lists "the tools CI uses", which in a
+    template-seeded project includes apt and pip tools. v1 installs the download tools only: apt entries belong to the package list, and
+    a pip tool needs a lock file that is not one of the three paths read. The tables of those tools are cut out, and the result must
+    parse to exactly the download tools of the original, or the layout is refused (one table per tool is the layout of the engine)."""
     try:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
@@ -131,9 +137,28 @@ def check_manifest(text):
     tools = raw.get("tools")
     if not isinstance(tools, dict) or not tools:
         raise Refusal("the project manifest has no tools")
-    for name, entry in tools.items():
-        if isinstance(entry, dict) and entry.get("source") == "pip":
-            raise Refusal(f"tools.{name}: source pip is not supported for project toolchains in v1 (download tools only)")
+    skipped = sorted((name, entry.get("source")) for name, entry in tools.items() if isinstance(entry, dict) and entry.get("source") != "download")
+    if not skipped:
+        return text, []
+    drop = {name for name, _ in skipped}
+    kept, dropping = [], False
+    for line in text.splitlines(keepends=True):
+        header = TOOL_HEADER.match(line)
+        if header:
+            dropping = header.group(1) in drop
+        elif ANY_HEADER.match(line):
+            dropping = False
+        if not dropping:
+            kept.append(line)
+    filtered = "".join(kept)
+    try:
+        again = tomllib.loads(filtered)
+    except tomllib.TOMLDecodeError:
+        again = None
+    expected = {name: entry for name, entry in tools.items() if name not in drop}
+    if again is None or again.get("tools", {}) != expected or {k: v for k, v in again.items() if k != "tools"} != {k: v for k, v in raw.items() if k != "tools"}:
+        raise Refusal("the project manifest cannot be reduced to its download tools (use one [tools.<name>] table per tool, as the engine does)")
+    return (filtered if expected else None), skipped
 
 
 # ------------------------------------------------------------------------------------------------------------ the archive
@@ -299,7 +324,7 @@ def stage(args, clone=clone_bare, run=run_command):
     """The result dictionary of the stage command; stages the files only when every check has passed."""
     with open(args.core, "rb") as handle:
         core_text = handle.read(MAX_FILE).decode("utf-8")
-    result = {"source": None, "manifest_present": False, "packages": [], "package_list_present": False}
+    result = {"source": None, "manifest_present": False, "manifest_skipped": [], "packages": [], "package_list_present": False}
     files, project_deny, commit, label = {}, None, None, None
     if args.repo:
         commit, data = fetch_anonymous(args.repo, args.ref, args.out, clone=clone, run=run)
@@ -318,7 +343,14 @@ def stage(args, clone=clone_bare, run=run_command):
     if data is not None:
         files = extract_tar(data)
         if "manifest.toml" in files:
-            check_manifest(files["manifest.toml"])
+            original = files["manifest.toml"]
+            reduced, skipped = filter_manifest(original)
+            result["manifest_skipped"] = [list(item) for item in skipped]
+            if reduced is None:
+                del files["manifest.toml"]
+            else:
+                files["manifest.toml"] = reduced
+            result["manifest_original_sha256"] = _digest(original)
         result["manifest_present"] = "manifest.toml" in files
         if "packages.txt" in files:
             result["packages"] = parse_packages(files["packages.txt"])
@@ -333,7 +365,7 @@ def stage(args, clone=clone_bare, run=run_command):
         result["source_text"] = (
             "# Written by lab setup (ansible/roles/lab_project). Do not edit.\n"
             f"kind={source['kind']}\nrepo={source['repo'] or ''}\nref={source['ref'] or ''}\ncommit={source['commit']}\n"
-            f"manifest_sha256={_digest(files.get('manifest.toml'))}\npackages_sha256={_digest(files.get('packages.txt'))}\n"
+            f"manifest_sha256={result.get('manifest_original_sha256', 'none')}\npackages_sha256={_digest(files.get('packages.txt'))}\n"
             f"deny_platform_sha256={_digest(files.get('deny.platform.txt'))}\n")
     else:
         result["source_text"] = None

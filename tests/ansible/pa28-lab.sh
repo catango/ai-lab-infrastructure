@@ -719,7 +719,10 @@ project() {
   entry='Read(~/.config/svc/**)'
   grep -qxF "$entry" "$TOOLS/deny.txt" || fail "deny.txt lacks the project's entry"
   jq -e --arg e "$entry" '.permissions.deny | index($e) != null' /etc/claude-code/managed-settings.json >/dev/null || fail "the managed settings lack the project's entry"
-  [[ $(jq '.permissions.deny | length' /etc/claude-code/managed-settings.json) -eq 91 ]] || fail "the managed settings do not hold the core list and one project entry"
+  # The managed settings may also hold entries of the merge step (a foreign file is merged, never replaced), so they are compared as a set.
+  [[ -z $(comm -13 <(jq -r '.permissions.deny[]' /etc/claude-code/managed-settings.json | LC_ALL=C sort -u) \
+    <(grep -vE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt" | LC_ALL=C sort -u)) ]] || fail "the managed settings lack an entry of the lab-wide list"
+  [[ $(grep -vcE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt") -eq 91 ]] || fail "deny.txt does not hold the core list and one project entry"
   if [[ $(deny_mode) != managed ]]; then
     diff <(jq -r '.permissions.deny[]' "/home/$AI/.claude/settings.json") <(grep -vE '^[[:space:]]*(#|$)' "$TOOLS/deny.txt") >/dev/null ||
       fail "the layer is not the lab-wide list entry by entry and in order"

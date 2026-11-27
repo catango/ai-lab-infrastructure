@@ -152,24 +152,55 @@ class DenyEntries(unittest.TestCase):
         self.assertTrue(text.startswith(core))
 
 
-class ManifestCheck(unittest.TestCase):
+APT_TOOL = '[tools.git]\nprofiles = ["lab"]\nsource = "apt"\nversion_min = "2.0"\npackage = "git"\nsmoke = ["git", "--version"]\n'
+PIP_TOOL = ('# a pip tool\n[tools.lint]\nprofiles = ["lab"]\nsource = "pip"\nlockfile = "x.lock"\nbinaries = ["lint"]\nsmoke = ["lint"]\n'
+            'smoke_match = "1"\n')
+
+
+class ManifestFilter(unittest.TestCase):
+    """The project's CI manifest is "the tools CI uses": a template-seeded one lists the gate tools, apt and pip entries included. The
+    engine installs download tools only in v1, so the manifest that is staged and recorded holds those, and the rest is reported."""
+
     def setUp(self):
         self.mod = load("lab_project_input", HELPER)
 
-    def test_a_download_manifest_passes(self):
-        self.mod.check_manifest(MANIFEST)
+    def test_a_download_manifest_is_kept_as_it_is(self):
+        self.assertEqual(self.mod.filter_manifest(MANIFEST), (MANIFEST, []))
 
-    def test_apt_entries_pass_and_are_left_to_the_package_list(self):
-        self.mod.check_manifest(MANIFEST + '[tools.git]\nprofiles = ["lab"]\nsource = "apt"\nversion_min = "2.0"\npackage = "git"\nsmoke = ["git", "--version"]\n')
+    def test_apt_and_pip_entries_are_left_out_and_reported_and_the_rest_stays_valid(self):
+        text, skipped = self.mod.filter_manifest("schema_version = 1\n" + PIP_TOOL + APT_TOOL + MANIFEST[len("schema_version = 1\n"):])
+        self.assertEqual(sorted(skipped), [("git", "apt"), ("lint", "pip")])
+        import tomllib
+        parsed = tomllib.loads(text)
+        self.assertEqual(sorted(parsed["tools"]), ["demo"])
+        self.assertEqual(parsed["tools"]["demo"]["artifacts"]["amd64"]["sha256"], "0" * 64)
+        self.assertNotIn("lockfile", text)
+        self.assertNotIn('source = "apt"', text)
+        self.assertNotIn('source = "pip"', text)
 
-    def test_a_pip_entry_is_refused_in_v1(self):
-        with self.assertRaises(self.mod.Refusal) as caught:
-            self.mod.check_manifest(MANIFEST + '[tools.lint]\nprofiles = ["lab"]\nsource = "pip"\nlockfile = "x.lock"\nbinaries = ["lint"]\nsmoke = ["lint"]\nsmoke_match = "1"\n')
-        self.assertIn("pip", str(caught.exception))
+    def test_the_real_manifest_of_this_repository_is_filtered_to_its_download_tools(self):
+        import tomllib
+        original = (ROOT / "toolchain" / "manifest.toml").read_text()
+        text, skipped = self.mod.filter_manifest(original)
+        kept = tomllib.loads(text)["tools"]
+        expected = {name for name, tool in tomllib.loads(original)["tools"].items() if tool["source"] == "download"}
+        self.assertEqual(set(kept), expected)
+        self.assertEqual({name for name, _ in skipped}, set(tomllib.loads(original)["tools"]) - expected)
+        for name in kept:
+            self.assertEqual(kept[name], tomllib.loads(original)["tools"][name])
 
-    def test_invalid_toml_is_refused(self):
+    def test_a_manifest_with_no_download_tool_has_nothing_to_install(self):
+        self.assertEqual(self.mod.filter_manifest("schema_version = 1\n" + APT_TOOL)[0], None)
+
+    def test_a_layout_that_cannot_be_filtered_is_refused_and_not_guessed(self):
+        dotted = 'schema_version = 1\ntools.demo.version = "1.0.0"\ntools.demo.source = "download"\ntools.git.source = "apt"\n'
         with self.assertRaises(self.mod.Refusal):
-            self.mod.check_manifest("tools = [")
+            self.mod.filter_manifest(dotted)
+
+    def test_invalid_toml_and_a_manifest_without_tools_are_refused(self):
+        for text in ("tools = [", "schema_version = 1\n"):
+            with self.assertRaises(self.mod.Refusal, msg=text):
+                self.mod.filter_manifest(text)
 
 
 class Archive(unittest.TestCase):
@@ -315,6 +346,7 @@ class Stage(Fixture):
             self.assertEqual(path.stat().st_mode & 0o077, 0, path.name)
         self.assertIn("Read(~/.config/svc/**)", result["deny_text"])
         self.assertEqual(result["manifest_present"], True)
+        self.assertEqual(result["manifest_skipped"], [])
 
     def test_an_anonymous_tag_reports_repo_ref_and_commit(self):
         code, out, _ = self.run_cli(self.args("--repo", "https://github.com/owner/project", "--ref", "v1.0.0"))
