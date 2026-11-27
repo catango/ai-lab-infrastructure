@@ -39,7 +39,7 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 and never written; ba
 | [CR-39](cr/CR-39/README.md) | Software template design (ADR-008) | Design merged |
 | [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009) | Design merged; nothing implemented |
 | [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010) | Design merged; nothing implemented |
-| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, no cloud provisioning | Design merged (PR 58); implementation PRs 0 to 9 and 4a merged, PR 10 (the preset for the template) in review |
+| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, no cloud provisioning | Design merged (PR 58); implementation PRs 0 to 10 and 4a merged (PR 10 is #76; issue #57 closed), rename follow-up merged (#77, #78) |
 
 ## Operations
 
