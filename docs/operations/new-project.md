@@ -70,8 +70,8 @@ limit of T3 (ADR-012 decision 12). Create T3 for the run, enter it only at the p
 ([operator.md](operator.md) section 5).
 
 ```bash
-operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-infrastructure --repo ai-software-template --repo <new-repository>             # dry run: lists the checks
-operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-infrastructure --repo ai-software-template --repo <new-repository> --apply --use-token   # asks for T3
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-platform --repo ai-software-template --repo <new-repository>             # dry run: lists the checks
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-platform --repo ai-software-template --repo <new-repository> --apply --use-token   # asks for T3
 ```
 
 Compare the repositories the machine account can reach with the documented allowlist. Report yes or no: the new repository is in the list

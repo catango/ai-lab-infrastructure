@@ -3,6 +3,9 @@
 Open only the document and section relevant to the task. Decision status is tracked in the
 [decision index](architecture/baseline-v0.2.md#4-decision-index) of the baseline; the status cells here are short.
 
+This repository was named `ai-lab-infrastructure` before the rename to `ai-lab-platform`. Accepted ADRs, approved CR records and
+baseline v0.1 keep the old name as history; GitHub redirects the old URLs.
+
 ## Architecture
 
 | Document | Purpose | Status |

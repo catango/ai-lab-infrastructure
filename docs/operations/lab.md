@@ -38,8 +38,8 @@ account names, hostnames, keys, or tokens.
 3. An anonymous clone at the release tag, owned by the lab admin:
 
    ```bash
-   git -c advice.detachedHead=false clone --branch <release-tag> https://github.com/<owner>/ai-lab-infrastructure.git
-   cd ai-lab-infrastructure
+   git -c advice.detachedHead=false clone --branch <release-tag> https://github.com/<owner>/ai-lab-platform.git
+   cd ai-lab-platform
    ```
 
    Lab setup refuses to run unless HEAD is a release tag contained in `origin/main` and the clone has no local changes. Nothing skips
