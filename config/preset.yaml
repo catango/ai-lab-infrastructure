@@ -11,7 +11,7 @@ platform:
   # The approver renames the repository after CR-57 PR 10; the follow-up change PR (plan row C, I-12) updates `repository` here and
   # `project.name` in config/project.yaml, and the qualified references in docs/PLATFORM.md (tests/ci/test_preset.py fails until all agree).
   owner: catango
-  repository: ai-lab-infrastructure
+  repository: ai-lab-platform
 seeded_files:
   platform_md: docs/PLATFORM.md
   deny_platform: .claude/deny.platform.txt
