@@ -36,7 +36,7 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 and never written; ba
 | [CR-39](cr/CR-39/README.md) | Software template design (ADR-008) | Design merged |
 | [CR-43](cr/CR-43/README.md) | Security and CI baseline design (ADR-009) | Design merged; nothing implemented |
 | [CR-45](cr/CR-45/README.md) | Token optimisation and metrics design (ADR-010) | Design merged; nothing implemented |
-| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, no cloud provisioning | Design merged (PR 58); implementation PRs 0 to 8 and 4a merged, PR 9 (runbooks and `CLAUDE.md`) in review, PR 10 not started |
+| [CR-57](cr/CR-57/README.md) | Platform-agnostic AI workflow platform: per-project AI labs reached through Claude Desktop SSH sessions, a separate operator machine, no cloud provisioning | Design merged (PR 58); implementation PRs 0 to 9 and 4a merged, PR 10 (the preset for the template) in review |
 
 ## Operations
 
@@ -55,6 +55,7 @@ ADR-004, ADR-006, and ADR-007 were listed in baseline v0.1 and never written; ba
 | [CLAUDE.md](../CLAUDE.md) | Instructions for Claude Code in this repository |
 | [config/project.yaml](../config/project.yaml) | Logins, `architectures`, `operator_paths`, `operator_endpoints`; read by scripts and by `pr-contract` from the base commit |
 | [.claude/settings.json](../.claude/settings.json) | Claude Code project guardrails (ADR-001 section 5) |
+| [docs/PLATFORM.md](PLATFORM.md), [.claude/deny.platform.txt](../.claude/deny.platform.txt), [config/preset.yaml](../config/preset.yaml) | This platform's preset for the template (ADR-008 decision 14): the seeded platform rules, the seeded platform deny rules, and the preset configuration; Claude Code does not load them in this repository |
 | [.github/PULL_REQUEST_TEMPLATE/](../.github/PULL_REQUEST_TEMPLATE/), [.github/ISSUE_TEMPLATE/cr.md](../.github/ISSUE_TEMPLATE/cr.md) | PR templates per type (ADR-003 PC-1); change request intake |
 | [scripts/quality-gate.sh](../scripts/quality-gate.sh) | Quality gate: the checks in `scripts/checks/` (same entry point locally and in CI) |
 | [scripts/pr-contract](../scripts/pr-contract), [scripts/pr-body](../scripts/pr-body) | PR rules PC-1 to PC-9; PR body skeleton from a template |

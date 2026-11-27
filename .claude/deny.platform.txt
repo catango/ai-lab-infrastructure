@@ -1,0 +1,12 @@
+# Source of the seeded `.claude/deny.platform.txt` of this platform's preset (ADR-008 decision 14; CR-57 plan PR 10).
+# Platform-specific deny rules only: the platform runs a project's operator scripts on the operator machine, and Claude Code never runs
+# them (docs/PLATFORM.md). The generic rules (merge, review, tags, pushes to main, onward SSH, credential paths, infrastructure tools)
+# are the template's owned core list `.claude/required-deny.txt` (design I-6, template CR T), not this file.
+# A project adds the deny entries for its own credential paths here (PA-43, I-7). Lab setup merges them after the core list.
+# Rule: every entry below is already in this repository's three deny files, so the preset adds no rule here and weakens none (PA-A10).
+Bash(scripts/operator/*)
+Bash(./scripts/operator/*)
+Bash(bash *scripts/operator/*)
+Bash(sh *scripts/operator/*)
+Bash(python *scripts/operator/*)
+Bash(python3 *scripts/operator/*)

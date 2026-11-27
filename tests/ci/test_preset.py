@@ -75,10 +75,18 @@ class Pa9NoRemovedSubjects(unittest.TestCase):
         for rel in PRESET_FILES:
             self.assertEqual(FIXED_WINDOW.findall(read(rel)), [], rel)
 
-    def test_no_preset_file_names_an_account_of_the_configuration(self):
+    def test_no_preset_file_names_an_account_but_the_owner_of_the_repository_path(self):
+        """The machine account is named nowhere. The owner login of the platform repository (the approver's account at this revision) is
+        only the owner part of a public repository path: inside a qualified reference of PLATFORM.md and on the `owner:` line of the
+        configuration."""
+        owner, repo = project_value("github", "owner"), project_value("project", "name")
         for rel in PRESET_FILES:
-            for key in ("approver_login", "machine_login"):
-                self.assertNotIn(project_value("github", key), read(rel), f"{rel}: {key}")
+            text = read(rel)
+            self.assertNotIn(project_value("github", "machine_login"), text, rel)
+            text = re.sub(rf"{re.escape(owner)}/{re.escape(repo)}:ADR-[0-9]+", "", text)
+            text = re.sub(rf"^[ \t]*owner:[ \t]*{re.escape(owner)}[ \t]*$", "", text, flags=re.M)
+            self.assertNotIn(project_value("github", "approver_login"), text, rel)
+            self.assertNotIn(owner, text, rel)
 
 
 class Budget(unittest.TestCase):
