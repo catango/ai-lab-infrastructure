@@ -1,7 +1,7 @@
 # config/project.yaml — read by scripts (pr-contract, address-review-feedback, labctl verify)
 schema_version: 1
 project:
-  name: ai-lab-infrastructure
+  name: ai-lab-platform
   type: platform-infrastructure
 github:
   owner: "catango"                 # personal GitHub account that owns the repository
