@@ -1,6 +1,6 @@
 # CR-57 Implementation plan
 
-Starts only after the design PR is merged (ADR-003 section 4). Each PR runs in its own session, in `ai-lab-infrastructure` unless stated, branch `impl/CR-57-<slug>`, and declares `Implements: #57` and `Design:` with the design PR number (the last PR carries `Closes #57`, section 4). Slugs and file lists are proposals read from `main` at `85360e8`; each PR starts with an inventory that corrects them. No ADR, `design.md`, or acceptance file is edited in an implementation PR (PC-5); a needed change is a new design PR. ADR-012 is written in the design PR, not in an implementation PR.
+Starts only after the design PR is merged (ADR-003 section 4). Each PR runs in its own session, in `ai-lab-platform` unless stated, branch `impl/CR-57-<slug>`, and declares `Implements: #57` and `Design:` with the design PR number (the last PR carries `Closes #57`, section 4). Slugs and file lists are proposals read from `main` at `85360e8`; each PR starts with an inventory that corrects them. No ADR, `design.md`, or acceptance file is edited in an implementation PR (PC-5); a needed change is a new design PR. ADR-012 is written in the design PR, not in an implementation PR.
 
 ## 1. Order and rules
 

@@ -6,7 +6,7 @@
 | Date | 2026-11-23 |
 | Replaces | [Baseline v0.1](baseline-v0.1.md), which stays as history with a "superseded by v0.2" banner so that existing links survive |
 | Change request | CR-57 (issue #57), PA-38, PA-40 |
-| Governs | `ai-lab-infrastructure`, `ai-software-template`, all application repositories created from the template |
+| Governs | `ai-lab-platform`, `ai-software-template`, all application repositories created from the template |
 
 ## 1. What approving this baseline means
 
@@ -32,7 +32,7 @@
 | AI lab (one per project) | Disposable Debian 13 x86-64 VM on the lab host; AI user and lab admin | Develops one project's repositories; lab profile; managed settings; token step; lab check | ADR-001, ADR-012 | Designed (CR-57) |
 | Operator machine | Long-lived Debian 13 x86-64 VM; operator user and operator admin | Runs reviewed operator scripts (`github-setup`, `facts`) per project from release tags; holds T2, T3, production credentials only during runs | ADR-011, ADR-012 | Designed (CR-57) |
 | Lab host | Jump host and hypervisor of the AI labs, outside the platform | Carries the AI lab; full control of it | ADR-012 (zone Z8) | Outside the platform |
-| Toolchain manifest and Ansible profiles | `ai-lab-infrastructure` | Pinned, verified tools; `lab` and `operator` profiles; amd64 only | ADR-005 (amended) | Designed (CR-57) |
+| Toolchain manifest and Ansible profiles | `ai-lab-platform` | Pinned, verified tools; `lab` and `operator` profiles; amd64 only | ADR-005 (amended) | Designed (CR-57) |
 | PR workflow and `pr-contract` | All repositories | PR as unit of work, approval, and audit trail | ADR-003 | Designed |
 | Software template | `ai-software-template` | CLAUDE.md, rules, Skills, CR and ADR templates, workflows, quality gate | ADR-008 | Designed (implementation pending) |
 | Security and CI baseline | All repositories | Public-repo security features, Actions hardening, quality gates | ADR-009 | Designed |

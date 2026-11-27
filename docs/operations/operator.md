@@ -60,8 +60,8 @@ Done by the operator admin from a clone the admin owns, at a release tag. Steps 
 2. **Anonymous clone at the release tag**, in the operator admin's home:
 
    ```bash
-   git -c advice.detachedHead=false clone --branch <release-tag> https://github.com/<owner>/ai-lab-infrastructure.git
-   cd ai-lab-infrastructure
+   git -c advice.detachedHead=false clone --branch <release-tag> https://github.com/<owner>/ai-lab-platform.git
+   cd ai-lab-platform
    ```
 
    The configuration refuses to run unless HEAD is a release tag contained in `origin/main` with no local changes, and unless it is run
@@ -151,8 +151,8 @@ If a token was ever typed outside a prompt, or you are unsure, revoke it and rem
 ```bash
 operator-run ai-lab-infrastructure scripts/operator/facts                                              # dry run: lists the host checks, runs none
 operator-run ai-lab-infrastructure scripts/operator/facts --apply                                      # host scope
-operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-infrastructure --repo ai-software-template            # dry run
-operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-infrastructure --repo ai-software-template --apply --use-token   # asks for T3
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-platform --repo ai-software-template            # dry run
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <owner> --repo ai-lab-platform --repo ai-software-template --apply --use-token   # asks for T3
 operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <owner> --collaborator <bot>             # dry run, asks for T3, shows current against wanted
 operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <owner> --collaborator <bot> --apply     # asks for T2
 ```

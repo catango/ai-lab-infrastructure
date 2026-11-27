@@ -5,7 +5,7 @@
 | Status | **Executed** 2026-11-17 (Stage 0 complete). Since CR-18, repository settings, security features, rulesets, and the collaborator are applied by `scripts/operator/github-setup`; the manual steps it replaced are in Appendix A |
 | Date | 2026-11-17 |
 | Updated | 2026-11-19 (CR-18, PR 7a) |
-| Target location | `ai-lab-infrastructure/docs/operations/github-setup.md` |
+| Target location | `ai-lab-platform/docs/operations/github-setup.md` |
 | Implements | ADR-001 (D8/D13, D14, D16, D17), ADR-003, ADR-011, preparation for ADR-002 |
 | Performed by | You, in the browser and in one plain SSH terminal to the workspace; the scripted parts on the operator machine |
 
@@ -45,7 +45,7 @@ needs token T3 and the apply needs T2; both are created for the run and revoked 
 ```bash
 operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <you> --collaborator <bot>            # dry run (T3): current against wanted, no write call
 operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <you> --collaborator <bot> --apply    # apply (T2)
-operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <you> --repo ai-lab-infrastructure --repo ai-software-template --apply --use-token   # facts (T3)
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <you> --repo ai-lab-platform --repo ai-software-template --apply --use-token   # facts (T3)
 ```
 
 The script cannot set Dependabot grouped updates, discussions, sponsorships, LFS in archives, or the chat integration. Those stay
@@ -92,7 +92,7 @@ Do all of Part 2 in the **machine-account browser profile**. GitHub's Terms of S
 
 In your **personal** browser profile: **+** → **New repository**, once for each repository.
 
-| Field | `ai-lab-infrastructure` | `ai-software-template` |
+| Field | `ai-lab-platform` | `ai-software-template` |
 |---|---|---|
 | Owner | `<you>` | `<you>` |
 | Visibility | **Public** | **Public** |
@@ -164,7 +164,7 @@ Per D17, chat gets **read-only** access to the public repositories through Claud
 3. In the machine-account profile, open **Settings** → **Applications** → **Authorized GitHub Apps** and confirm the Claude entry is there.
 4. In your personal profile, open **Settings** → **Applications** (all three tabs) and confirm **no** Claude entry exists. Revoke any that does.
 5. Switch your default browser back to your personal GitHub session.
-6. Create a Claude Enterprise **Project** for the platform. Add `ai-lab-infrastructure` as project knowledge, selecting only `docs/` and `CLAUDE.md` once they exist. Use **Sync now** before each architecture session.
+6. Create a Claude Enterprise **Project** for the platform. Add `ai-lab-platform` as project knowledge, selecting only `docs/` and `CLAUDE.md` once they exist. Use **Sync now** before each architecture session.
 
 ## Part 12: First login on the workspace (10 min)
 
@@ -204,12 +204,12 @@ gh auth status
 gh api user --jq .login                           # expect: <bot>
 
 # V2  Collaborator with push but no admin rights
-for r in ai-lab-infrastructure ai-software-template; do
+for r in ai-lab-platform ai-software-template; do
   gh api "repos/<you>/$r" --jq "\"$r: \" + (.permissions|tostring)"
 done                                               # expect: admin:false, push:true
 
 # V4  Direct push to main is rejected (no change results)
-cd /tmp && rm -rf v4 && gh repo clone "<you>/ai-lab-infrastructure" v4 && cd v4
+cd /tmp && rm -rf v4 && gh repo clone "<you>/ai-lab-platform" v4 && cd v4
 git commit --allow-empty -m "verification: must be rejected"
 git push origin HEAD:main                          # expect: rejected by ruleset
 git reset --hard origin/main
@@ -219,7 +219,7 @@ git tag v0.0.0-verify && git push origin v0.0.0-verify   # expect: rejected
 git tag -d v0.0.0-verify
 
 # V6  Settings change is rejected (value matches the current setting, so no effect if it wrongly succeeded)
-gh api -X PATCH "repos/<you>/ai-lab-infrastructure" -F has_wiki=false   # expect: 403 or 404
+gh api -X PATCH "repos/<you>/ai-lab-platform" -F has_wiki=false   # expect: 403 or 404
 cd ~ && rm -rf /tmp/v4
 ```
 
@@ -261,7 +261,7 @@ Repository → **Settings** → **General**. Apply to **both** repositories.
 
 | Section | Setting | Value | Why |
 |---|---|---|---|
-| Template repository | "Template repository" | `ai-software-template`: **on**. `ai-lab-infrastructure`: off. | Template use |
+| Template repository | "Template repository" | `ai-software-template`: **on**. `ai-lab-platform`: off. | Template use |
 | Features | Wikis | Off | Docs live in the repo |
 | | Issues | **On** | CR identity (ADR-003) |
 | | Sponsorships, Discussions, Projects | Off | Not used in v1 |
@@ -330,7 +330,7 @@ Repository → **Settings** → **Rules** → **Rulesets**. Create both rulesets
 
 **Break-glass:** if you must change `main` without a machine-account PR, temporarily set the ruleset to **Disabled**, make the change, and re-enable it. Record the reason in an issue. Do not add yourself to the bypass list permanently.
 
-### A.5 Part 8: Environments for `ai-lab-infrastructure` (none)
+### A.5 Part 8: Environments for `ai-lab-platform` (none)
 
 Do not create any. The platform provisions no infrastructure (ADR-002 is superseded by CR-57), so the two deployment environments that this
 section once listed do not exist, and `github-setup` declares none.
@@ -345,7 +345,7 @@ section once listed do not exist, and `github-setup` declares none.
 
 ```bash
 # V3  Rulesets visible and active
-gh api "repos/<you>/ai-lab-infrastructure/rulesets" --jq '.[].name'   # expect: main-protection, release-tags
+gh api "repos/<you>/ai-lab-platform/rulesets" --jq '.[].name'   # expect: main-protection, release-tags
 ```
 
 | # | Check | Expected |
