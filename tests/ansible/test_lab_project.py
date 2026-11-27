@@ -122,13 +122,19 @@ class Tasks(unittest.TestCase):
         self.assertNotIn("{{ toolchain_engine }}", task, "the clone of the lab admin is not readable by the AI user; the installed copy runs")
 
     def test_a_package_list_is_applied_only_with_the_digest_of_the_dry_run_and_the_dry_run_is_shown(self):
+        """O-22: the plan is printed in the pre-task, so a dry run shows it and a real run without the digest stops before any role has
+        changed anything (the deny entries of the project are written by roles that run before this one)."""
+        self.assertIn("ansible.builtin.debug", self.stage)
+        self.assertIn("lab_project_packages_plan.stdout_lines", self.stage)
+        self.assertIn("ansible.builtin.assert", self.stage)
+        self.assertIn("lab_project_packages_reviewed", self.stage)
+        self.assertIn("not ansible_check_mode", self.stage[self.stage.index("ansible.builtin.assert"):])
+        self.assertLess(self.stage.index("lab_project_packages_plan.stdout_lines"), self.stage.index("ansible.builtin.assert"),
+                        "the plan is shown before the check")
+        self.assertIn("changed since", self.stage)
         self.assertIn("--reviewed", self.main)
         self.assertIn("{{ lab_project_packages_reviewed }}", self.main)
         self.assertIn("--apply", self.main)
-        self.assertIn("ansible.builtin.debug", self.main)
-        self.assertIn("lab_project_packages_plan.stdout_lines", self.main)
-        self.assertLess(self.main.index("lab_project_packages_plan.stdout_lines"), self.main.index("--apply"),
-                        "the plan is shown before anything is installed")
 
     def test_the_project_files_are_recorded_root_owned_beside_the_lab_tools(self):
         for name in ("manifest.toml", "packages.txt", "deny.platform.txt", "SOURCE"):
@@ -152,7 +158,7 @@ class Tasks(unittest.TestCase):
     def test_the_staging_never_counts_as_a_change_so_a_second_run_reports_zero(self):
         """PA-A23 (second run changes nothing): the temporary directory is created and removed on every run, and must not be a change."""
         for task in tasks_of(ROLE / "tasks" / "input.yml"):
-            if "ansible.builtin.set_fact" not in task:
+            if not any(module in task for module in ("ansible.builtin.set_fact", "ansible.builtin.debug", "ansible.builtin.assert")):
                 self.assertIn("changed_when: false", task, task.splitlines()[0])
         lab = (ANSIBLE / "lab.yml").read_text()
         post = lab[lab.index("  post_tasks:"):]
@@ -228,6 +234,28 @@ class CheckModeRun(unittest.TestCase):
         match = re.search(r'ENTRIES=(\[.*?\])"', out.replace('\\"', '"'))
         self.assertIsNotNone(match, out[-1500:])
         return json.loads(match.group(1))
+
+    def test_the_digest_check_of_the_pre_task_accepts_an_empty_plan_or_the_reviewed_digest_and_stops_on_anything_else(self):
+        """The assert of tasks/input.yml, as written, over three plans: nothing to install, the digest of the dry run, a stale digest."""
+        stage = (ROLE / "tasks" / "input.yml").read_text()
+        expression = re.search(r'that:\n\s+- "(.+?)"\n', stage[stage.index("ansible.builtin.assert"):]).group(1)
+        digest = "a" * 64
+        cases = [("nothing", ["x", "changed=0"], "", True), ("reviewed", ["demo 1 Debian:13/stable", f"plan_sha256={digest}", "changed=1"], digest, True),
+                 ("stale", ["demo 1 Debian:13/stable", f"plan_sha256={digest}", "changed=1"], "b" * 64, False),
+                 ("none", ["demo 1 Debian:13/stable", f"plan_sha256={digest}", "changed=1"], "", False)]
+        lines = ["- hosts: all", "  connection: local", "  gather_facts: false", "  tasks:"]
+        for name, plan, reviewed, _ in cases:
+            lines += [f"    - ansible.builtin.set_fact: {{lab_project_packages_plan: {{stdout_lines: {json.dumps(plan)}}}, lab_project_packages_reviewed: '{reviewed}'}}",
+                      "    - block:", "        - ansible.builtin.assert:", "            that:", f"              - \"{expression}\"",
+                      f"        - ansible.builtin.debug: {{msg: 'CASE {name} PASSED'}}", "      rescue:", f"        - ansible.builtin.debug: {{msg: 'CASE {name} STOPPED'}}"]
+        play = self.tmp / "digest.yml"
+        play.write_text("\n".join(lines) + "\n")
+        env = {"PATH": os.environ["PATH"], "HOME": str(self.tmp), "ANSIBLE_HOME": str(self.tmp), "ANSIBLE_LOCAL_TEMP": str(self.tmp), "ANSIBLE_NOCOLOR": "1", "LC_ALL": "C.UTF-8"}
+        done = subprocess.run(["ansible-playbook", "-i", str(ANSIBLE / "inventory" / "localhost.yml"), str(play)], capture_output=True, text=True, env=env,
+                              cwd=self.tmp, timeout=120, check=False)
+        out = done.stdout + done.stderr
+        for name, _, _, passes in cases:
+            self.assertIn(f"CASE {name} {'PASSED' if passes else 'STOPPED'}", out, name + "\n" + out[-1500:])
 
     def test_without_a_project_the_list_is_the_core_list_and_the_role_does_nothing(self):
         code, out = self.play()

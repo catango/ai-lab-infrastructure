@@ -697,7 +697,7 @@ project() {
   [[ ! -e $PROJECT_TOOLS && ! -e $RECORD ]] || fail "the dry run created the project tools or records"
   ok "project dry run: every package name and version printed, tree and homes unchanged"
 
-  # 2. The package list is applied only after the dry run was read: no digest, no change.
+  # 2. The package list is applied only after the dry run was read: no digest, no change (the play stops before any role has written).
   refused "a package list is not applied without the digest of its dry run" "$LAB" "lab_project_packages_reviewed" -e lab_apply=true "${args[@]}"
   ! dpkg -s hello >/dev/null 2>&1 || fail "the package was installed without the digest"
   [[ ! -e $PROJECT_TOOLS ]] || fail "the tools were installed before the package list was accepted"

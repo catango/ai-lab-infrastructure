@@ -350,7 +350,8 @@ def plan_packages(names, run=run_command):
     text = out.decode("utf-8", "replace")
     if code != 0:
         problem = next((line for line in text.splitlines() if line.startswith("E:")), "apt-get could not simulate the install")
-        raise Refusal(f"apt cannot plan the package list: {problem[:160]}")
+        hint = " (is the package index empty or old on this machine? run `apt-get update` as root first)" if "Unable to locate" in text else ""
+        raise Refusal(f"apt cannot plan the package list: {problem[:160]}{hint}")
     plan = []
     for line in text.splitlines():
         if line.startswith(("Remv ", "Purg ")):

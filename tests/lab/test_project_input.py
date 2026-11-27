@@ -433,6 +433,11 @@ class Plan(unittest.TestCase):
         with self.assertRaises(self.mod.Refusal):
             self.mod.plan_packages(["nope"], run=self.run_fake("E: Unable to locate package nope\n", code=100))
 
+    def test_an_empty_package_index_says_what_to_do(self):
+        with self.assertRaises(self.mod.Refusal) as caught:
+            self.mod.plan_packages(["demo"], run=self.run_fake("E: Unable to locate package demo\n", code=100))
+        self.assertIn("apt-get update", str(caught.exception))
+
     def test_the_digest_covers_names_and_versions_and_not_the_order(self):
         one = self.mod.plan_digest([("a", "1", "Debian:13/stable"), ("b", "2", "Debian:13/stable")])
         two = self.mod.plan_digest([("b", "2", "Debian:13/stable"), ("a", "1", "Debian:13/stable")])

@@ -49,3 +49,35 @@
     lab_project_selected: "{{ (lab_project_result.stdout | from_json).source is not none and (lab_project_result.stdout | from_json).source.kind != 'recorded' }}"
     lab_deny_text: "{{ (lab_project_result.stdout | from_json).deny_text }}"
     lab_deny_entries: "{{ (lab_project_result.stdout | from_json).deny_entries }}"
+
+- name: Plan the project package list (the apt simulation prints every package name and version; nothing is installed)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - "{{ lab_project_helper }}"
+      - packages
+      - --file
+      - "{{ lab_project_stage_dir.path }}/packages.txt"
+    chdir: /
+  register: lab_project_packages_plan
+  changed_when: false
+  check_mode: false
+  when: lab_project_input.packages | length > 0
+  become: "{{ ai_lab_become }}"
+
+- name: Show the package plan (the lab admin reads this before applying the list)
+  ansible.builtin.debug:
+    var: lab_project_packages_plan.stdout_lines
+  when: lab_project_input.packages | length > 0
+
+- name: A real run applies the list only with the plan_sha256 of the dry run that was read (stops before any role has written anything)
+  ansible.builtin.assert:
+    that:
+      - "'changed=0' in lab_project_packages_plan.stdout_lines or ('plan_sha256=' ~ lab_project_packages_reviewed) in lab_project_packages_plan.stdout_lines"
+    quiet: true
+    fail_msg: >-
+      the package list is applied only after the dry run was read: run lab setup with --check --diff, read the package plan, and pass
+      -e lab_project_packages_reviewed=<the plan_sha256 of that dry run>. A digest that is not the plan_sha256 above means the plan
+      changed since the dry run that was read (the package index moved), so run the dry run again and read it
+  when: not ansible_check_mode and lab_project_input.packages | length > 0
