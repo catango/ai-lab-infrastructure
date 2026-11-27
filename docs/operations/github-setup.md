@@ -7,7 +7,7 @@
 | Updated | 2026-11-19 (CR-18, PR 7a) |
 | Target location | `ai-lab-infrastructure/docs/operations/github-setup.md` |
 | Implements | ADR-001 (D8/D13, D14, D16, D17), ADR-003, ADR-011, preparation for ADR-002 |
-| Performed by | You, in the browser and in one plain SSH terminal to the workspace; the scripted parts on the platform operator VM |
+| Performed by | You, in the browser and in one plain SSH terminal to the workspace; the scripted parts on the operator machine |
 
 > Executing this runbook is your explicit authorization of the actions it describes:
 > account creation, repository creation, settings, token creation, and connecting the chat GitHub Integration.
@@ -33,19 +33,19 @@
 | 4, 5, 6 (settings, Actions, security features) | **Script**: `github-setup`. Manual steps in Appendix A.1 to A.3 |
 | 7.1 (`main-protection`) | **Script**. Manual steps in Appendix A.4 |
 | 7.2 (`release-tags`) | **Manual the first time** (the first release tag needs it, and the approver applies it), below. The script keeps it in the wanted state afterwards |
-| 8 (environments) | Declared, deferred to Stage 4. Appendix A.5 |
+| 8 (environments) | None are created: the platform provisions no infrastructure. Appendix A.5 |
 | 9 (collaborator) | **Script** sends the invitation; **accepting it stays manual**, below. Appendix A.6 |
 | 10, 11, 12 (token T1, chat integration, first login) | **Manual**, below |
 | 13 (verification) | V3, V7, V8, V9 are covered by the script's dry run and `facts --scope github`; the others stay manual, below |
 
-Run the scripted parts on the platform operator VM, as described in [operator.md](operator.md) (sections 3 and 4). The dry run
+Run the scripted parts on the operator machine, as described in [operator.md](operator.md) (sections 4 and 5). The dry run
 needs token T3 and the apply needs T2; both are created for the run and revoked after it. The wanted state is the data file
 `scripts/operator/github-desired-state.toml` (its comments name the Parts it implements).
 
 ```bash
-scripts/operator/github-setup --owner <you> --collaborator <bot>            # dry run (T3): current against wanted, no write call
-scripts/operator/github-setup --owner <you> --collaborator <bot> --apply    # apply (T2)
-scripts/operator/facts --scope github --owner <you> --repo ai-lab-infrastructure --repo ai-software-template --apply --use-token   # facts (T3)
+operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <you> --collaborator <bot>            # dry run (T3): current against wanted, no write call
+operator-run ai-lab-infrastructure scripts/operator/github-setup --owner <you> --collaborator <bot> --apply    # apply (T2)
+operator-run ai-lab-infrastructure scripts/operator/facts --scope github --owner <you> --repo ai-lab-infrastructure --repo ai-software-template --apply --use-token   # facts (T3)
 ```
 
 The script cannot set Dependabot grouped updates, discussions, sponsorships, LFS in archives, or the chat integration. Those stay
@@ -96,7 +96,7 @@ In your **personal** browser profile: **+** → **New repository**, once for eac
 |---|---|---|
 | Owner | `<you>` | `<you>` |
 | Visibility | **Public** | **Public** |
-| Description | "OCI Always Free AI engineering lab: infrastructure, toolchain, lifecycle" | "Template for AI-assisted, specification-driven projects" |
+| Description | "AI engineering platform: AI labs, toolchain, operator scripts" | "Template for AI-assisted, specification-driven projects" |
 | Add README | **Yes** (creates `main`, required for rulesets) | **Yes** |
 | .gitignore | None (Claude Code adds it) | None |
 | License | Your choice from Part 0.4 | Same |
@@ -113,7 +113,7 @@ By `github-setup`. The Console steps are in Appendix A.1 to A.3.
 
 ### 7.2 Tag ruleset `release-tags`
 
-Protects release tags. The lab VM and workspace restore pull only reviewed tags.
+Protects release tags. Lab setup and the operator configuration run only at a release tag that is contained in `main`.
 
 **New ruleset** → **New tag ruleset**.
 
@@ -130,7 +130,7 @@ Protects release tags. The lab VM and workspace restore pull only reviewed tags.
 
 ## Part 8: Environments
 
-Declared and deferred to Stage 4. See Appendix A.5.
+No environment is created. See Appendix A.5.
 
 ## Part 9: Add the machine account as collaborator
 
@@ -330,14 +330,10 @@ Repository → **Settings** → **Rules** → **Rulesets**. Create both rulesets
 
 **Break-glass:** if you must change `main` without a machine-account PR, temporarily set the ruleset to **Disabled**, make the change, and re-enable it. Record the reason in an issue. Do not add yourself to the bypass list permanently.
 
-### A.5 Part 8: Environments for `ai-lab-infrastructure` (defer to Stage 4)
+### A.5 Part 8: Environments for `ai-lab-infrastructure` (none)
 
-Do not create them yet. ADR-002 workflows and Spike S2 come first. They are listed here for completeness.
-
-| Environment | Deployment branches | Required reviewers | Prevent self-review | Allow admins to bypass |
-|---|---|---|---|---|
-| `oci-plan` | Selected branches: `main` | None | — | **Off** |
-| `oci-apply` | Selected branches: `main` | **`<you>` only** | **Off** (you merge and approve) | **Off** |
+Do not create any. The platform provisions no infrastructure (ADR-002 is superseded by CR-57), so the two deployment environments that this
+section once listed do not exist, and `github-setup` declares none.
 
 ### A.6 Part 9, step 1 and 3: collaborator invitation
 
