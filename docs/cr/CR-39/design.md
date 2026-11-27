@@ -6,7 +6,7 @@
 | Governing records | Baseline v0.1 (sections 3, 6, 7, 8), ADR-001 (decisions 6 to 8, section 5), ADR-003 (sections 3 to 8), ADR-005 (decisions 1 and 3 to 7), ADR-011 (decision 17) |
 | Record produced | [ADR-008](../../adr/ADR-008-software-template.md), status Proposed. Amended in this PR: [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Q8) and [ADR-005](../../adr/ADR-005-toolchain.md) (Q7), each with an "Amended by" row |
 | Scope | Design only. Nothing is implemented, and the `ai-software-template` repository is not touched |
-| State | The approver's decisions Q1 to Q14 of the architecture discussion (review on PR #40, 2026-11-19) are applied in this file, in ADR-008, and in the other CR-39 files. Section 13 records them. Section 14 lists what stays open. Amended after the merge of PR #40 (design PR `design/CR-39-provenance-location`): the provenance of the seeded generic code is recorded in a template-only file, not in the payload manifest (sections 3, 4, and 14) |
+| State | The approver's decisions Q1 to Q14 of the architecture discussion (review on PR #40, 2026-11-19) are applied in this file, in ADR-008, and in the other CR-39 files. Section 13 records them. Section 14 lists what stays open. Amended after the merge of PR #40 (design PR `design/CR-39-provenance-location`): the provenance of the seeded generic code is recorded in a template-only file, not in the payload manifest (sections 3, 4, and 14). Amended again (design PR `design/CR-39-tc-amendments`, the approver's decisions of 2026-11-27, Q15 and Q16): a template-sync PR may also add a new `seeded` path, and an init PR may append the preset's entries to `permissions.deny` of `.claude/settings.json` (sections 3, 4, 5, 13, and 14) |
 
 ## 1. Scope and boundaries
 
@@ -53,7 +53,7 @@ Class: O = owned (template-owned, synced), S = seeded (written once by `initiali
 | `.template/state.toml` | S, then written by sync and init only | Template version and tag commit last synced, SHA-256 of each owned file as synced, entries recorded as `override` |
 | `.template/overrides.toml` | S | Declared divergences from owned files: path, reason, PR reference. Written by the project; never by sync |
 | `.template/budgets.toml` | O | Size budgets (values from ADR-010, section 11) |
-| `.claude/settings.json` | O | Guardrails (section 5). A project addition is a divergence and needs an override entry |
+| `.claude/settings.json` | O | Guardrails (section 5). A project addition is a divergence and needs an override entry. Its `permissions.deny` is the core list plus the seeded `deny.platform.txt`: `initialize-project` appends the preset's entries (TC-2), and a sync keeps them (section 4, step 3) |
 | `.claude/required-deny.txt` | O | Generic core deny list |
 | `.claude/deny.platform.txt` | S | From the preset |
 | `.claude/rules/*.md`, `.claude/skills/<name>/SKILL.md` | O | Sections 5 and 6 |
@@ -81,16 +81,17 @@ Class: O = owned (template-owned, synced), S = seeded (written once by `initiali
 3. Compare `.template/state.toml` with the tag's manifest and files:
    - an `owned` file is **overwritten**, added, or removed, **including a locally changed one**, unless `.template/overrides.toml` lists it; listed entries are honoured, listed in the PR body, and recorded as `override` in `state.toml`;
    - drift limited to `uses:` lines in owned workflows (Dependabot pin bumps) is overwritten and listed;
-   - a `seeded` file is never changed; a seeded file that is new in the tag and absent locally is added once and listed;
+   - a `seeded` file is never changed or removed; a seeded file that is new in the tag and absent from the base commit is added once and listed in the PR body (section "Changed files by class");
+   - the owned `.claude/settings.json` is overwritten with the tag's version, and every entry of the project's seeded `.claude/deny.platform.txt` that the tag's list lacks is appended to `permissions.deny`, so the file is a function of the core list plus the seeded list;
    - `.template/overrides.toml` is never changed by sync.
 4. Update `.template/state.toml` (version, tag commit, hashes), commit, push, open a **draft** PR with `gh pr create --draft --body-file` from `scripts/pr-body template-sync`. The body lists the versions, the changed files by class, the overrides honoured, the `uses:`-only drift, a link to the release notes, and, when `.github/workflows/` changed, the section "Workflow change justification" (PC-6).
 5. The approver reviews and merges like any PR.
 
 `--dry-run` prints the plan and writes nothing. There is no schedule, event trigger, or workflow that runs the script. The lag between the repository's version and the newest tag is reported read-only by `resume-work` and `prepare-cr-context` (`template-sync --check`) and by the template's release checklist; nothing more.
 
-**Rule TC-1 (template-sync paths).** A template-sync PR may change or remove only paths that are `owned` in the **base** manifest, may add only paths that are new and `owned` in the **head** manifest, updates `.template/state.toml` with a version equal to the branch version, and never changes `.template/overrides.toml`.
+**Rule TC-1 (template-sync paths).** A template-sync PR may change or remove only paths that are `owned` in the **base** manifest, may add only paths that are new in the **head** manifest and either `owned` or `seeded`, updates `.template/state.toml` with a version equal to the branch version, and never changes `.template/overrides.toml`. A new `seeded` path is only added (a sync never modifies or removes a seeded path), must be absent from the base commit, and is listed in the PR body (section "Changed files by class"). A seeded file that exists in the base is never changed.
 
-**Init PR** (`init/v<MAJOR>.<MINOR>.<PATCH>`, the first change after "Use this template", ST-15). **Rule TC-2 (init).** An init PR may only delete `template-only` paths and write `seeded` files, the configuration file, and `.template/state.toml`. It fails if the base branch already has `.template/state.toml`. PC-6 applies. `initialize-project` prints the post-init actions of the configuration. For this platform (preset): add the machine account as a collaborator, update the AC1-1 allowlist by a change PR in `ai-lab-infrastructure`, and apply the printed branch and tag rulesets **before the init PR merges**. The script creates no label, ruleset, repository, collaborator, or setting.
+**Init PR** (`init/v<MAJOR>.<MINOR>.<PATCH>`, the first change after "Use this template", ST-15). **Rule TC-2 (init).** An init PR may only delete `template-only` paths and write `seeded` files, the configuration file, and `.template/state.toml`. One exception, for `.claude/settings.json` only: an init PR may append entries to `permissions.deny`, and every appended entry must be listed in the head's `.claude/deny.platform.txt`; nothing else in that file may change, and no entry may be removed or reordered (gate check `deny-list` requires every entry of the seeded list in the owned file, so `initialize-project` appends them). It fails if the base branch already has `.template/state.toml`. PC-6 applies. `initialize-project` prints the post-init actions of the configuration. For this platform (preset): add the machine account as a collaborator, update the AC1-1 allowlist by a change PR in `ai-lab-infrastructure`, and apply the printed branch and tag rulesets **before the init PR merges**. The script creates no label, ruleset, repository, collaborator, or setting.
 
 TC-1 and TC-2 are defined by the template (this section and ADR-008). ADR-003 requires that application repositories enforce a contract that implements PC-1 to PC-8 and may add rules (ADR-003 section 6, as amended).
 
@@ -117,7 +118,7 @@ TC-1 and TC-2 are defined by the template (this section and ADR-008). ADR-003 re
 | `multi-arch.md` | dependency files, Dockerfiles, `scripts/**` | A download, image, or wheel change needs an artifact and checksum for every configured architecture (section 9) |
 | `operator.md` | paths in `operator_paths` | The generic operator rules (section 12) |
 
-**Guardrails.** `.claude/settings.json` (owned) carries the deny rules. `.claude/required-deny.txt` (owned) is the **generic core** list; `.claude/deny.platform.txt` (seeded from the preset) holds the platform-specific entries (for this platform: the OCI and Terraform rules of ADR-001 section 5). Gate check `deny-list` verifies that `settings.json` contains every entry of both. A project addition to `settings.json` is a divergence and goes through `overrides.toml`.
+**Guardrails.** `.claude/settings.json` (owned) carries the deny rules. `.claude/required-deny.txt` (owned) is the **generic core** list; `.claude/deny.platform.txt` (seeded from the preset) holds the platform-specific entries (for this platform: the OCI and Terraform rules of ADR-001 section 5). Gate check `deny-list` verifies that `settings.json` contains every entry of both; `initialize-project` appends the seeded entries to the owned file (the one exception of TC-2) and a sync keeps them (section 4, step 3). A project addition to `settings.json` is a divergence and goes through `overrides.toml`.
 
 Deny rules match only Claude's own commands, not what a script runs. Gate check **`forbidden-api`** therefore rejects, in every script, the REST calls and GraphQL mutations for merge, review submission, auto-merge, rulesets, collaborators, and repository settings. Replying on a review thread and marking a PR ready are not in that list. That the core list plus this platform's list equals ADR-001 section 5 is a check in `ai-lab-infrastructure` (section 14), which is not decided here.
 
@@ -242,9 +243,9 @@ Listed, not decided.
 - Gate check `operator-contract`, on `operator_paths`: rejects `shell=True`, `os.system`, `eval`, `exec`, a token read from `argv` or the environment, a subprocess outside the configured allowlist, and a missing dry-run default. Inactive when `operator_paths` is empty.
 - `scripts/lib/operator_guard.py` refuses an apply run unless `HEAD` equals a release tag contained in the default branch.
 
-## 13. Decisions of the approver (architecture discussion, 2026-11-19)
+## 13. Decisions of the approver (2026-11-19 and 2026-11-27)
 
-Recorded from the approver's review on PR #40. Wording is condensed; each decision is applied in the section named.
+Q1 to Q14 are recorded from the approver's review on PR #40 (architecture discussion, 2026-11-19); Q15 and Q16 from the approver's decisions of 2026-11-27. Wording is condensed; each decision is applied in the section named.
 
 | # | Decision | Applied in |
 |---|---|---|
@@ -263,6 +264,11 @@ Recorded from the approver's review on PR #40. Wording is condensed; each decisi
 | Q13 | New init PR type `init/v<MAJOR>.<MINOR>.<PATCH>` with TC-2; `initialize-project` prints the configured post-init actions | ST-15, sections 3 and 4, T-20 |
 | Q14 | The template is decoupled from `ai-lab-infrastructure` and configurable (approver requirement); the preset lives in `ai-lab-infrastructure` (change PR outside CR-39); `host: workspace` becomes a constraint of this platform's preset | ST-13, sections 1, 3, 9, 11, T-21 |
 
+| Q15 | Decision of 2026-11-27, option B (TC-1). A template-sync PR may also add paths that are new and `seeded` in the head manifest, in addition to new `owned` paths. Such a path is only ever added, must be absent from the base commit, and is listed in the PR body (section "Changed files by class"). Seeded files that exist in the base are never changed. The rest of TC-1 is unchanged. Section 4 step 3 and the rule now agree | Section 4 (step 3, TC-1), ADR-008 decision 4, T-9 |
+| Q16 | Decision of 2026-11-27, option 1 (TC-2). An init PR may append entries to `permissions.deny` of `.claude/settings.json`, and only there; every appended entry must be listed in the head's `.claude/deny.platform.txt`; nothing else in the file may change and no entry may be removed or reordered. A sync that overwrites the owned `settings.json` produces the tag's version plus every entry of the project's seeded list that the tag's list lacks, appended to `permissions.deny`; TC-1 already allows it because the file is owned in the base manifest. The gate check `deny-list` is unchanged | Section 3 (`settings.json`), section 4 (step 3, TC-2), section 5, ADR-008 decision 4, T-20, plan row 8 |
+
+Q15 and Q16 are applied by the design PR `design/CR-39-tc-amendments`.
+
 Two consequences I derived and the approver may correct: the rule `arm64.md` of the first draft is `multi-arch.md` because the payload must not name an architecture (Q14), and the OCI and Terraform entries of the Never list moved to `deny.platform.txt` and `docs/PLATFORM.md` for the same reason.
 
 ## 14. Still open
@@ -274,6 +280,7 @@ Two consequences I derived and the approver may correct: the rule `arm64.md` of 
 | Whether `ai-lab-infrastructure` later adopts the template's generic code | Approver (a later CR) | After Stage 5 |
 | **This repository does not yet implement ADR-003 as amended:** `config/project.yaml` has no `approver_id`, `design_repos`, or `operator_paths`, and `scripts/pr_contract` hard-codes the PC-8 paths, accepts only same-repository PC-3 references, and has no `template-sync` or `init` type. The amendment text states these rules; this repository follows through the preset or adoption PR | Approver (form of the change) | With the preset PR |
 | Provenance location (found while preparing implementation PR 1): the first design put the provenance of the seeded generic code in the payload manifest, which T-21 forbids from naming another repository. Resolved by the approver on 2026-11-19, following the recommendation: `template-dev/provenance.toml`, a template-only file | Closed by this amendment | This PR |
+| TC-1 and TC-2 against the template's own design (found while preparing implementation PR 3): TC-1 allowed only new `owned` paths while section 4 step 3 adds a new seeded file; TC-2 rejected the append of the preset's entries to the owned `settings.json` that `deny-list` requires. Resolved by the approver on 2026-11-27 (Q15, Q16): TC-1 also allows a new `seeded` path; TC-2 has one exception for `permissions.deny` of `.claude/settings.json` | Closed by this amendment | This PR |
 | ADR-003 header state: the amendment row of CR-21 said "Proposed" at `b7257f7`. I checked: the CR-21 design PR (#22) and implementation PR (#24) are merged, so PC-8 is in force and enforced. The header row now says so | Closed by the amendment | This PR |
 | `owned-drift` and `uses:`-only changes (Dependabot pin bumps): my reading in section 8, to be confirmed | Approver | In implementation PR 8 |
 | Verification items for implementation, recorded in the PRs: `CLAUDE.md` import behaviour (two imports, no nesting); GitHub semantics for editing other users' comments and the editor fields; current availability of hosted ARM64 runners for private repositories; T-12 on the lab VM, deferred to Stage 6 | Claude Code | Implementation PRs |
