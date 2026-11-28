@@ -4,7 +4,7 @@
 |---|---|
 | Issue | #39 |
 | Class | 3 |
-| Status | Design with the approver's decisions Q1 to Q14 applied (architecture discussion, 2026-11-19), amended by Q15 and Q16 (2026-11-27). In review. Nothing is implemented |
+| Status | Design with the approver's decisions Q1 to Q14 applied (architecture discussion, 2026-11-19), amended by Q15 and Q16 (2026-11-27) and by Q17 to Q20 (2026-11-28). In review. Nothing is implemented |
 | ADR | [ADR-008](../../adr/ADR-008-software-template.md) (Proposed). This PR also amends [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Q8) and [ADR-005](../../adr/ADR-005-toolchain.md) (Q7) |
 | Origin | Baseline v0.1 Stage 5 (software template), which runs first since Stages 2 to 4 are postponed (baseline section 6, 2026-11-19) |
 
@@ -19,7 +19,7 @@ Stage 5 entry needs ADR-008, ADR-009, and ADR-010 approved. This CR delivers ADR
 | File | Purpose |
 |---|---|
 | [impact-analysis.md](impact-analysis.md) | What changes, security impact, rollback, alternatives |
-| [design.md](design.md) | Decisions ST-1 to ST-15, the structure, template-sync and init, Skills, gate and CI, architectures, the Stage 5 exit, the approver's decisions Q1 to Q16, and what is still open |
+| [design.md](design.md) | Decisions ST-1 to ST-15, the structure, template-sync and init, Skills, gate and CI, architectures, the Stage 5 exit, the approver's decisions Q1 to Q20, and what is still open |
 | [acceptance-criteria.md](acceptance-criteria.md) | Criteria T-1 to T-22 (T-18 unused) with evidence; T-16 is the Stage 5 exit criterion |
 | [implementation-plan.md](implementation-plan.md) | Nine proposed implementation PRs in `ai-software-template`, the preset outside CR-39, preconditions, and user-only actions |
 
