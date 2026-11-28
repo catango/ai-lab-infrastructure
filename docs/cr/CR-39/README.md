@@ -4,7 +4,7 @@
 |---|---|
 | Issue | #39 |
 | Class | 3 |
-| Status | Design with the approver's decisions Q1 to Q14 applied (architecture discussion, 2026-11-19), amended by Q15 and Q16 (2026-11-27) and by Q17 to Q20 (2026-11-28). In review. Nothing is implemented |
+| Status | Design with the approver's decisions Q1 to Q14 applied (architecture discussion, 2026-11-19), amended by Q15 and Q16 (2026-11-27) and by Q17 to Q20 (2026-11-28). The template is implemented and merged in `ai-software-template`. This amendment is in review |
 | ADR | [ADR-008](../../adr/ADR-008-software-template.md) (Proposed). This PR also amends [ADR-003](../../adr/ADR-003-pr-centric-workflow.md) (Q8) and [ADR-005](../../adr/ADR-005-toolchain.md) (Q7) |
 | Origin | Baseline v0.1 Stage 5 (software template), which runs first since Stages 2 to 4 are postponed (baseline section 6, 2026-11-19) |
 
